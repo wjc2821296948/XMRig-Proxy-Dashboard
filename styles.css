@@ -36,6 +36,12 @@
 
   --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', monospace;
+
+  /* Text on accent backgrounds */
+  --text-on-accent-green: #000;
+  --text-on-accent-red: #fff;
+  --text-on-accent-yellow: #000;
+  --text-on-accent-blue: #fff;
 }
 
 /* Light theme */
@@ -54,6 +60,12 @@
   --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
   --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
   --shadow-lg: 0 8px 16px rgba(0,0,0,0.12);
+
+  /* Text on accent backgrounds for light theme */
+  --text-on-accent-green: #000;
+  --text-on-accent-red: #fff;
+  --text-on-accent-yellow: #000;
+  --text-on-accent-blue: #fff;
 }
 
 /* Theme transition */
@@ -111,7 +123,7 @@ header {
 h1 {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
   display: flex;
   align-items: center;
@@ -158,7 +170,7 @@ h1 {
 }
 
 .status-online { background: var(--accent-green); color: #000; }
-.status-offline { background: var(--accent-red); color: #fff; }
+.status-offline { background: var(--accent-red); color: var(--text-on-accent, #fff); }
 .status-warning { background: var(--accent-yellow); color: #000; }
 
 /* ==========================================================================
@@ -197,7 +209,7 @@ h1 {
 .card-value {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 0.2rem;
   font-family: var(--font-mono);
 }
@@ -229,7 +241,7 @@ h1 {
 .stat-row:last-child { border-bottom: none; }
 
 .stat-label { color: var(--text-secondary); font-size: 0.75rem; }
-.stat-value { color: #fff; font-weight: 600; font-size: 0.75rem; font-family: var(--font-mono); }
+.stat-value { color: var(--text-primary); font-weight: 600; font-size: 0.75rem; font-family: var(--font-mono); }
 
 /* ==========================================================================
    Progress Bar
@@ -268,7 +280,7 @@ h1 {
 .metric-value {
   font-size: 1rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 0.15rem;
   font-family: var(--font-mono);
 }
@@ -281,54 +293,56 @@ h1 {
 }
 
 /* ==========================================================================
-   Hashrate Chart (Bar Visualization)
+   Hashrate Line Chart
    ========================================================================== */
 .hashrate-chart {
-  display: flex;
-  align-items: flex-end;
-  height: 40px;
-  gap: 2px;
+  width: 100%;
+  height: 60px;
   margin-top: 0.5rem;
 }
 
-.hashrate-bar {
-  flex: 1;
-  background: linear-gradient(to top, var(--accent-green), var(--accent-green-light));
-  border-radius: 3px 3px 0 0;
-  min-height: 4px;
-  transition: height var(--transition-normal), opacity var(--transition-fast);
-  position: relative;
+.hashrate-line-chart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chart-grid {
+  stroke: var(--border-light);
+}
+
+.chart-line {
+  stroke: var(--accent-green);
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  fill: url(#lineGradient);
+}
+
+.chart-point {
+  fill: var(--accent-green);
+  stroke: var(--bg-card);
+  stroke-width: 2;
+  transition: r var(--transition-fast);
   cursor: pointer;
 }
 
-.hashrate-bar:hover {
-  opacity: 0.8;
+.chart-point:hover {
+  r: 5;
 }
 
-.hashrate-bar::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.3rem 0.5rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  font-size: 0.65rem;
-  color: var(--text-primary);
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--transition-fast), visibility var(--transition-fast);
+.chart-label {
+  font-size: 0.55rem;
+  fill: var(--text-muted);
   pointer-events: none;
-  z-index: 100;
-  box-shadow: var(--shadow-md);
 }
 
-.hashrate-bar:hover::after {
-  opacity: 1;
-  visibility: visible;
+.hashrate-chart {
+  position: relative;
 }
 
 /* ==========================================================================
@@ -362,7 +376,7 @@ h1 {
 
 .btn-danger {
   background: var(--accent-red);
-  color: #fff;
+  color: var(--text-on-accent-red);
 }
 .btn-danger:hover { background: var(--accent-red-light); }
 
@@ -400,6 +414,13 @@ h1 {
 }
 .input-field::placeholder { color: var(--text-muted); }
 
+.input-hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.55rem;
+  color: var(--text-muted);
+}
+
 .checkbox-group {
   display: flex;
   align-items: center;
@@ -428,7 +449,7 @@ h1 {
 .config-title {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 1.5rem;
   text-align: center;
 }
@@ -575,10 +596,10 @@ h1 {
 }
 .toast.show { transform: translateX(0); opacity: 1; }
 
-.toast-info { background: var(--accent-blue); color: #fff; }
-.toast-success { background: var(--accent-green); color: #000; }
-.toast-warning { background: var(--accent-yellow); color: #000; }
-.toast-error { background: var(--accent-red); color: #fff; }
+.toast-info { background: var(--accent-blue); color: var(--text-on-accent-blue); }
+.toast-success { background: var(--accent-green); color: var(--text-on-accent-green); }
+.toast-warning { background: var(--accent-yellow); color: var(--text-on-accent-yellow); }
+.toast-error { background: var(--accent-red); color: var(--text-on-accent-red); }
 
 /* ==========================================================================
    Responsive

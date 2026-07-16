@@ -151,7 +151,79 @@ function renderDashboard(data) {
   const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
   const maxHr = Math.max(...hashrates, 1);
   const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
-  const hrBars = hashrates.map((h, i) => `<div class="hashrate-bar" style="height:${(h/maxHr*100).toFixed(1)}%" data-tooltip="${timeLabels[i]}: ${formatHashrate(h)}"></div>`).join("");
+
+  // Build line chart SVG
+  const chartWidth = 100;
+  const chartHeight = 40;
+  const padding = 10;
+  const points = hashrates.map((h, i) => {
+    const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
+    const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
+    return { x, y, value: h, label: timeLabels[i] };
+  });
+
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+  const lineChart = `
+    <svg class="hashrate-line-chart" width="${chartWidth}" height="${chartHeight}" viewBox="0 0 ${chartWidth} ${chartHeight}">
+      <defs>
+        <linearGradient id="lineGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stop-color="var(--accent-green)" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="var(--accent-green-light)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path class="chart-area" d="${linePath} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z" fill="url(#lineGradient)"></path>
+      <path class="chart-line" d="${linePath}" stroke="var(--accent-green)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+      ${points.map(p => `
+        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="3"
+                data-tooltip="${p.label}: ${formatHashrate(p.value)}"
+                fill="var(--accent-green)" stroke="var(--bg-card)" stroke-width="2"></circle>
+      `).join('')}
+    </svg>
+  `;
+
+  // Line chart data points for SVG
+  const chartWidth = 280;
+  const chartHeight = 60;
+  const padding = 20;
+  const points = hashrates.map((h, i) => {
+    const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
+    const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
+    return { x, y, value: formatHashrate(h), label: timeLabels[i] };
+  });
+  const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const lineChart = `
+    <svg class="hashrate-line-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="100%" height="100%">
+      <defs>
+        <linearGradient id="hrGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stop-color="var(--accent-green-light)" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="var(--accent-green)" stop-opacity="0.8"/>
+        </linearGradient>
+      </defs>
+      <!-- Grid lines -->
+      <g class="chart-grid" stroke="var(--border-light)" stroke-width="0.5">
+        <line x1="${padding}" y1="${padding}" x2="${chartWidth - padding}" y2="${padding}"/>
+        <line x1="${padding}" y1="${chartHeight / 2}" x2="${chartWidth - padding}" y2="${chartHeight / 2}"/>
+        <line x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}"/>
+      </g>
+      <!-- Area under curve -->
+      <path d="${pathData} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z"
+            fill="url(#hrGradient)" stroke="none"/>
+      <!-- Line -->
+      <path d="${pathData}" stroke="var(--accent-green)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Data points -->
+      ${points.map(p => `
+        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
+                fill="var(--accent-green)" stroke="var(--bg-card)" stroke-width="2"
+                data-tooltip="${p.label}: ${p.value}" />
+      `).join('')}
+      <!-- X-axis labels -->
+      ${points.map(p => `
+        <text x="${p.x}" y="${chartHeight - 4}" text-anchor="middle"
+              font-size="0.55rem" fill="var(--text-muted)" class="chart-label">${p.label}</text>
+      `).join('')}
+    </svg>
+  `;
 
   // Memory usage
   const memUsed = data.resources?.memory?.total - data.resources?.memory?.free || 0;
@@ -174,7 +246,7 @@ function renderDashboard(data) {
         <div class="card-title">当前算力</div>
         <div class="card-value highlight-green">${formatHashrate(hashrates[0])}</div>
         <div class="card-label">10秒平均</div>
-        <div class="hashrate-chart">${hrBars}</div>
+        <div class="hashrate-chart">${lineChart}</div>
       </div>
 
       <div class="card">
@@ -256,7 +328,7 @@ function renderDashboard(data) {
    Settings Modal
    ========================================================================== */
 function openSettingsModal() {
-  const cfg = getConfig() || { apiUrl: "", apiToken: "", remember: true };
+  const cfg = getConfig() || { apiUrl: "", apiToken: "", remember: true, refreshInterval: 10, theme: 'dark' };
   const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -273,6 +345,11 @@ function openSettingsModal() {
           <div class="input-group">
             <label class="input-label" for="sApiToken">Access Token</label>
             <input type="password" class="input-field" id="sApiToken" value="${escapeHtml(cfg.apiToken)}" autocomplete="password">
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="sRefreshInterval">自动刷新间隔 (秒)</label>
+            <input type="number" class="input-field" id="sRefreshInterval" value="${cfg.refreshInterval || 10}" min="1" max="120" required>
+            <span class="input-hint">最小 1 秒，最大 120 秒</span>
           </div>
           <div class="checkbox-group">
             <input type="checkbox" id="sRemember" ${cfg.remember ? "checked" : ""}>
@@ -312,11 +389,13 @@ function openSettingsModal() {
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
     const theme = document.getElementById("sTheme").checked ? 'dark' : 'light';
+    const refreshInterval = parseInt(document.getElementById("sRefreshInterval")?.value || "10", 10);
 
     if (!url) { showToast("请输入 API URL", "error"); return; }
     try { new URL(url); } catch { showToast("无效的 URL", "error"); return; }
+    if (refreshInterval < 1 || refreshInterval > 120) { showToast("刷新间隔必须在 1-120 秒之间", "error"); return; }
 
-    saveConfig({ apiUrl: url, apiToken: token, remember });
+    saveConfig({ apiUrl: url, apiToken: token, remember, refreshInterval, theme });
     // Save theme preference
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -379,7 +458,9 @@ async function fetchAndRender() {
 
 function startAutoRefresh() {
   stopAutoRefresh();
-  refreshInterval = setInterval(fetchAndRender, 10000);
+  const cfg = getConfig();
+  const interval = (cfg?.refreshInterval || 10) * 1000; // Convert seconds to ms
+  refreshInterval = setInterval(fetchAndRender, Math.max(1000, Math.min(120000, interval)));
 }
 
 function stopAutoRefresh() {
