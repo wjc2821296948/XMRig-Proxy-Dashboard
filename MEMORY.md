@@ -1,0 +1,1 @@
+- [项目设计原则](.claude/projects/D--Github-Clone-XMRig-Proxy-UI-Panel/memory/project-design-principles.md) — 记录项目定位、架构与长期开发原则

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XMRig Proxy Dashboard</title>
+  <meta name="description" content="纯前端 XMRig Proxy 实时监控面板 - Zero Knowledge 架构">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Content Security Policy: 仅允许同源脚本、内联样式、同源字体/图片 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src *;">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        XMRig Proxy Dashboard
+        <span id="statusBadge" class="status-badge status-warning">加载中…</span>
+      </h1>
+      <div class="subtitle">
+        <span id="workerId">初始化…</span>
+        <span class="edit-url" id="editUrl" aria-label="设置">⚙ 设置</span>
+        <span class="refresh-time">最后更新: <span id="lastUpdate">--</span></span>
+      </div>
+    </header>
+
+    <main id="dashboard" class="loading" role="main" aria-live="polite">
+      <p>正在初始化…</p>
+    </main>
+  </div>
+
+  <!-- Application entry point as ES Module -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
