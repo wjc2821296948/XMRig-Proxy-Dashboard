@@ -2,10 +2,6 @@
 
 > **纯前端、零知识、静态部署** 的 XMRig Proxy 实时监控面板。
 
-<p align="center">
-  <img src="panel.png" alt="Dashboard 预览" width="800">
-</p>
-
 ---
 
 ## ✨ 核心特性
