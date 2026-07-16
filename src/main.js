@@ -1,4 +1,4 @@
-/**
+﻿/**
  * main.js – Application bootstrap and core logic.
  *
  * Responsibilities:
@@ -392,7 +392,7 @@ function escapeHtml(str) {
     .replace(/&/g, "&")
     .replace(/</g, "<")
     .replace(/>/g, ">")
-    .replace(/"/g, """)
+    .replace(/\"/g, "\"")
     .replace(/'/g, "&#039;");
 }
 
