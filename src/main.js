@@ -152,36 +152,6 @@ function renderDashboard(data) {
   const maxHr = Math.max(...hashrates, 1);
   const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
 
-  // Build line chart SVG
-  const chartWidth = 100;
-  const chartHeight = 40;
-  const padding = 10;
-  const points = hashrates.map((h, i) => {
-    const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
-    const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
-    return { x, y, value: h, label: timeLabels[i] };
-  });
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-
-  const lineChart = `
-    <svg class="hashrate-line-chart" width="${chartWidth}" height="${chartHeight}" viewBox="0 0 ${chartWidth} ${chartHeight}">
-      <defs>
-        <linearGradient id="lineGradient" x1="0%" y1="100%" x2="0%" y2="0%">
-          <stop offset="0%" stop-color="var(--accent-green)" stop-opacity="0.3"/>
-          <stop offset="100%" stop-color="var(--accent-green-light)" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <path class="chart-area" d="${linePath} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z" fill="url(#lineGradient)"></path>
-      <path class="chart-line" d="${linePath}" stroke="var(--accent-green)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
-      ${points.map(p => `
-        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="3"
-                data-tooltip="${p.label}: ${formatHashrate(p.value)}"
-                fill="var(--accent-green)" stroke="var(--bg-card)" stroke-width="2"></circle>
-      `).join('')}
-    </svg>
-  `;
-
   // Line chart data points for SVG
   const chartWidth = 280;
   const chartHeight = 60;
