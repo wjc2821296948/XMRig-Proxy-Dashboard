@@ -26,6 +26,22 @@ let refreshInterval = null;
 let isFetching = false;
 
 /* ==========================================================================
+   Theme Management
+   ========================================================================== */
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  showToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}模式`, 'info');
+}
+
+/* ==========================================================================
    DOM Element References (cached)
    ========================================================================== */
 const els = {
@@ -134,7 +150,8 @@ function renderDashboard(data) {
   // Hashrate data
   const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
   const maxHr = Math.max(...hashrates, 1);
-  const hrBars = hashrates.map(h => `<div class="hashrate-bar" style="height:${(h/maxHr*100).toFixed(1)}%"></div>`).join("");
+  const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
+  const hrBars = hashrates.map((h, i) => `<div class="hashrate-bar" style="height:${(h/maxHr*100).toFixed(1)}%" data-tooltip="${timeLabels[i]}: ${formatHashrate(h)}"></div>`).join("");
 
   // Memory usage
   const memUsed = data.resources?.memory?.total - data.resources?.memory?.free || 0;
@@ -240,6 +257,7 @@ function renderDashboard(data) {
    ========================================================================== */
 function openSettingsModal() {
   const cfg = getConfig() || { apiUrl: "", apiToken: "", remember: true };
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
       <div class="modal">
@@ -259,6 +277,10 @@ function openSettingsModal() {
           <div class="checkbox-group">
             <input type="checkbox" id="sRemember" ${cfg.remember ? "checked" : ""}>
             <label for="sRemember">记住我 (localStorage)</label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="sTheme" ${currentTheme === 'dark' ? "checked" : ""}>
+            <label for="sTheme">深色模式</label>
           </div>
           <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
             <button class="btn btn-secondary" id="cancelSettings">取消</button>
@@ -289,11 +311,16 @@ function openSettingsModal() {
     const url = document.getElementById("sApiUrl").value.trim();
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
+    const theme = document.getElementById("sTheme").checked ? 'dark' : 'light';
 
     if (!url) { showToast("请输入 API URL", "error"); return; }
     try { new URL(url); } catch { showToast("无效的 URL", "error"); return; }
 
     saveConfig({ apiUrl: url, apiToken: token, remember });
+    // Save theme preference
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+
     closeModal(overlay);
     showToast("设置已保存，正在重新连接...", "info");
 
@@ -366,6 +393,9 @@ function stopAutoRefresh() {
    Initialization
    ========================================================================== */
 function init() {
+  // Initialize theme
+  initTheme();
+
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
 
