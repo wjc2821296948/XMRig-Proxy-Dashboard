@@ -185,7 +185,7 @@ function renderDashboard(data) {
       ${points.map(p => `
         <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
                 fill="var(--accent-green)" stroke="var(--bg-card)" stroke-width="2"
-                data-tooltip="${p.label}: ${p.value}" />
+                data-label="${p.label}" data-value="${p.value}" />
       `).join('')}
       <!-- X-axis labels -->
       ${points.map(p => `
@@ -292,6 +292,45 @@ function renderDashboard(data) {
 
   els.dashboard.innerHTML = html;
   els.dashboard.className = "";
+
+  // Initialize chart point tooltips
+  initChartTooltips();
+}
+
+/**
+ * Initialize chart point tooltips - shows detailed info on hover
+ */
+function initChartTooltips() {
+  const chartContainer = document.querySelector('.hashrate-chart');
+  if (!chartContainer) return;
+
+  const points = chartContainer.querySelectorAll('.chart-point');
+  let tooltip = chartContainer.querySelector('.chart-point-tooltip');
+
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'chart-point-tooltip';
+    chartContainer.appendChild(tooltip);
+  }
+
+  points.forEach(point => {
+    point.addEventListener('mouseenter', (e) => {
+      const label = point.dataset.label;
+      const value = point.dataset.value;
+      tooltip.textContent = `${label}: ${value}`;
+      tooltip.classList.add('visible');
+
+      // Position tooltip above the point
+      const rect = point.getBoundingClientRect();
+      const containerRect = chartContainer.getBoundingClientRect();
+      tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+      tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
+    });
+
+    point.addEventListener('mouseleave', () => {
+      tooltip.classList.remove('visible');
+    });
+  });
 }
 
 /* ==========================================================================
