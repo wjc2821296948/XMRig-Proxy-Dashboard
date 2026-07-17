@@ -34,7 +34,7 @@ export function loadConfig() {
       return {
         apiUrl: config.apiUrl || "",
         apiToken: config.apiToken || "",
-        remember: config.remember ?? true,
+        remember: config.remember !== undefined ? config.remember : true,
         refreshInterval: config.refreshInterval || 10,
         theme: config.theme || 'dark'
       };
@@ -50,7 +50,7 @@ export function loadConfig() {
       return {
         apiUrl: config.apiUrl || "",
         apiToken: config.apiToken || "",
-        remember: config.remember ?? true,
+        remember: config.remember !== undefined ? config.remember : true,
         refreshInterval: config.refreshInterval || 10,
         theme: config.theme || 'dark'
       };
