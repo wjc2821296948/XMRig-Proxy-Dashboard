@@ -311,20 +311,7 @@ h1 {
   stroke: var(--border-light);
 }
 
-.chart-line {
-  stroke: var(--accent-green);
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.chart-area {
-  fill: url(#lineGradient);
-}
-
 .chart-point {
-  fill: var(--accent-green);
   stroke: var(--bg-card);
   stroke-width: 2;
   transition: r var(--transition-fast);
