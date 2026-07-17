@@ -6,14 +6,14 @@
  *   - false → sessionStorage (cleared when the tab/window is closed)
  *
  * The stored object shape:
- *   { apiUrl: string, apiToken: string, remember: boolean }
+ *   { apiUrl: string, apiToken: string, remember: boolean, refreshInterval: number, theme: string }
  */
 
 const STORAGE_KEY = "xmrig_proxy_config";
 
 /**
  * Save configuration to the chosen storage.
- * @param {{apiUrl:string, apiToken:string, remember:boolean}} cfg
+ * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}} cfg
  */
 export function saveConfig(cfg) {
   const target = cfg.remember ? localStorage : sessionStorage;
@@ -22,14 +22,22 @@ export function saveConfig(cfg) {
 
 /**
  * Load configuration from localStorage first, then sessionStorage.
- * @returns {{apiUrl:string, apiToken:string, remember:boolean}|null}
+ * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}|null}
  */
 export function loadConfig() {
   // localStorage takes precedence (user explicitly chose "Remember Me")
   let raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
-      return JSON.parse(raw);
+      const config = JSON.parse(raw);
+      // Ensure backward compatibility with defaults
+      return {
+        apiUrl: config.apiUrl || "",
+        apiToken: config.apiToken || "",
+        remember: config.remember ?? true,
+        refreshInterval: config.refreshInterval || 10,
+        theme: config.theme || 'dark'
+      };
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -38,7 +46,14 @@ export function loadConfig() {
   raw = sessionStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
-      return JSON.parse(raw);
+      const config = JSON.parse(raw);
+      return {
+        apiUrl: config.apiUrl || "",
+        apiToken: config.apiToken || "",
+        remember: config.remember ?? true,
+        refreshInterval: config.refreshInterval || 10,
+        theme: config.theme || 'dark'
+      };
     } catch {
       sessionStorage.removeItem(STORAGE_KEY);
     }
@@ -57,7 +72,7 @@ export function clearConfig() {
 /**
  * Reactive getter used by other modules.
  * Always reads the latest value from storage.
- * @returns {{apiUrl:string, apiToken:string, remember:boolean}|null}
+ * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}|null}
  */
 export function getConfig() {
   return loadConfig();
