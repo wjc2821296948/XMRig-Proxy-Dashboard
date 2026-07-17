@@ -152,6 +152,16 @@ function renderDashboard(data) {
   const maxHr = Math.max(...hashrates, 1);
   const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
 
+  // Color palette for different time periods
+  const chartColors = [
+    "#3b82f6", // 10秒 - blue
+    "#8b5cf6", // 1分钟 - purple
+    "#06b6d4", // 15分钟 - cyan
+    "#22c55e", // 1小时 - green
+    "#eab308", // 12小时 - yellow
+    "#ef4444"  // 24小时 - red (warning)
+  ];
+
   // Line chart data points for SVG
   const chartWidth = 280;
   const chartHeight = 60;
@@ -159,7 +169,7 @@ function renderDashboard(data) {
   const points = hashrates.map((h, i) => {
     const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
     const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
-    return { x, y, value: formatHashrate(h), label: timeLabels[i] };
+    return { x, y, value: formatHashrate(h), label: timeLabels[i], color: chartColors[i] };
   });
   const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const lineChart = `
@@ -169,6 +179,12 @@ function renderDashboard(data) {
           <stop offset="0%" stop-color="var(--accent-green-light)" stop-opacity="0.3"/>
           <stop offset="100%" stop-color="var(--accent-green)" stop-opacity="0.8"/>
         </linearGradient>
+        ${points.map((p, i) => `
+          <linearGradient id="pointGradient${i}" x1="0%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stop-color="${p.color}" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="${p.color}" stop-opacity="0.8"/>
+          </linearGradient>
+        `).join('')}
       </defs>
       <!-- Grid lines -->
       <g class="chart-grid" stroke="var(--border-light)" stroke-width="0.5">
@@ -179,13 +195,15 @@ function renderDashboard(data) {
       <!-- Area under curve -->
       <path d="${pathData} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z"
             fill="url(#hrGradient)" stroke="none"/>
-      <!-- Line -->
-      <path d="${pathData}" stroke="var(--accent-green)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <!-- Data points -->
-      ${points.map(p => `
+      <!-- Line segments with different colors -->
+      ${points.slice(1).map((p, i) => `
+        <path d="M ${points[i].x} ${points[i].y} L ${p.x} ${p.y}" stroke="${p.color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      `).join('')}
+      <!-- Data points with individual colors -->
+      ${points.map((p, i) => `
         <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
-                fill="var(--accent-green)" stroke="var(--bg-card)" stroke-width="2"
-                data-tooltip="${p.label}: ${p.value}" />
+                fill="${p.color}" stroke="var(--bg-card)" stroke-width="2"
+                data-label="${p.label}" data-value="${p.value}" />
       `).join('')}
       <!-- X-axis labels -->
       ${points.map(p => `
