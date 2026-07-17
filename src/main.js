@@ -392,7 +392,7 @@ function escapeHtml(str) {
     .replace(/&/g, "&")
     .replace(/</g, "<")
     .replace(/>/g, ">")
-    .replace(/"/g, """)
+    .replace(/"/g, "&#34;");
     .replace(/'/g, "&#039;");
 }
 
