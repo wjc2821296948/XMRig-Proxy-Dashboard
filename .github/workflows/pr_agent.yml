@@ -34,31 +34,28 @@ jobs:
 
 
     env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-        OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-        OPENAI_API_BASE: https://litellm.lrate.top/v1
-      
-        OPENAI__KEY: ${{ secrets.OPENAI_KEY }}
-        OPENAI__API_BASE: https://litellm.lrate.top/v1
-      
-        config.model: "gpt-oss-120b"
-        config.fallback_models: '["gpt-oss-120b"]'
-        config.custom_model_max_tokens: "131072"
-        config.custom_reasoning_model: "true"
-      
-        github_action_config.auto_review: "true"
-        github_action_config.auto_describe: "true"
-        github_action_config.auto_improve: "true"
-      
-        github_action_config.pr_actions: '["opened","reopened","ready_for_review","review_requested","synchronize"]'
-      
-        pr_reviewer.require_score_review: "true"
-        pr_reviewer.require_tests_review: "true"
-        pr_reviewer.require_security_review: "true"
-      
-        config.verbosity_level: "2"
-
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+      OPENAI__KEY: ${{ secrets.OPENAI_KEY }}
+      OPENAI__API_BASE: https://litellm.lrate.top/v1
+    
+      config.model: "nvidia_nim/openai/gpt-oss-120b"
+      config.fallback_models: '["nvidia_nim/openai/gpt-oss-120b"]'
+    
+      config.custom_model_max_tokens: "131072"
+      config.custom_reasoning_model: "true"
+    
+      github_action_config.auto_review: "true"
+      github_action_config.auto_describe: "true"
+      github_action_config.auto_improve: "true"
+    
+      github_action_config.pr_actions: '["opened","reopened","ready_for_review","review_requested","synchronize"]'
+    
+      pr_reviewer.require_score_review: "true"
+      pr_reviewer.require_tests_review: "true"
+      pr_reviewer.require_security_review: "true"
+    
+      config.verbosity_level: "2"
     steps:
 
       - name: Run PR-Agent
