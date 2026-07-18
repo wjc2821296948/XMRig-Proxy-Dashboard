@@ -1,62 +1,23 @@
-name: PR-Agent
-
 on:
   pull_request:
-    types:
-      - opened
-      - reopened
-      - ready_for_review
-      - synchronize
-      - review_requested
-
+    types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:
-    types:
-      - created
-
-  workflow_dispatch:
-
-
 jobs:
   pr_agent_job:
-
     if: ${{ github.event.sender.type != 'Bot' }}
-
     runs-on: ubuntu-latest
-
     permissions:
-      contents: write
       issues: write
       pull-requests: write
+      contents: write
       checks: write
-
-
-    name: PR-Agent Review
-
-
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-      OPENAI__KEY: ${{ secrets.OPENAI_KEY }}
-      OPENAI__API_BASE: https://litellm.lrate.top/v1
-    
-      config.model: "nvidia_nim/openai/gpt-oss-120b"
-      config.fallback_models: '["nvidia_nim/openai/gpt-oss-120b"]'
-    
-      config.custom_model_max_tokens: "131072"
-      config.custom_reasoning_model: "true"
-    
-      github_action_config.auto_review: "true"
-      github_action_config.auto_describe: "true"
-      github_action_config.auto_improve: "true"
-    
-      github_action_config.pr_actions: '["opened","reopened","ready_for_review","review_requested","synchronize"]'
-    
-      pr_reviewer.require_score_review: "true"
-      pr_reviewer.require_tests_review: "true"
-      pr_reviewer.require_security_review: "true"
-    
-      config.verbosity_level: "2"
+    name: Run pr agent on every pull request, respond to user comments
     steps:
-
-      - name: Run PR-Agent
+      - name: PR Agent action step
+        id: pragent
         uses: the-pr-agent/pr-agent@main
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          base_url = "https://litellm.lrate.top/v1"
+          model="gpt-oss-120b"
