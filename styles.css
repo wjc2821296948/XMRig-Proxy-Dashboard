@@ -345,6 +345,28 @@ h1 {
   position: relative;
 }
 
+.chart-point-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-fast), visibility var(--transition-fast);
+  z-index: 10;
+}
+
+.chart-point-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* ==========================================================================
    Buttons
    ========================================================================== */
