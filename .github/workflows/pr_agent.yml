@@ -18,13 +18,14 @@ jobs:
       - name: PR Agent
         uses: the-pr-agent/pr-agent@main
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-
+          OPENAI__KEY: ${{ secrets.OPENAI_KEY }}
           OPENAI__API_BASE: https://litellm.lrate.top/v1
-
+        
           config.model: "gpt-oss-120b"
-
-          github_action_config.pr_actions: '["opened","reopened","ready_for_review","review_requested","synchronize"]'
-
-          pr_reviewer.require_score_review: "true"
+          config.fallback_models: '["gpt-oss-120b"]'
+        
+          # 关键配置
+          config.custom_model_max_tokens: "131072"
+        
+          # GPT-OSS 属于推理模型，建议开启
+          config.custom_reasoning_model: "true"
