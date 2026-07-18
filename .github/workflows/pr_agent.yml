@@ -16,8 +16,16 @@ jobs:
       - name: PR Agent action step
         id: pragent
         uses: the-pr-agent/pr-agent@main
-        env:
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          base_url = "https://litellm.lrate.top/v1"
-          model="gpt-oss-120b"
+    env:
+      OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Set the model to a local Ollama model
+      config.model: "gpt-oss-120b"
+      config.fallback_models: '["gpt-oss-120b"]'
+      config.custom_model_max_tokens: "131072"
+      # Ollama configuration
+      OLLAMA.API_BASE: "https://litellm.lrate.top"
+      # Tool configuration
+      github_action_config.auto_review: "true"
+      github_action_config.auto_describe: "true"
+      github_action_config.auto_improve: "true"
