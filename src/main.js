@@ -241,7 +241,7 @@ function renderDashboard(data) {
         <div class="card-title">活跃矿工</div>
         <div class="card-value ${data.miners?.now > 0 ? "highlight-green" : "highlight-red"}">${formatNumber(data.miners?.now || 0)}</div>
         <div class="card-label">峰值: ${formatNumber(data.miners?.max || 0)} 矿工</div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${data.miners?.max ? (data.miners.now/data.miners.max*100).toFixed(1) : 0}%"></div></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${(data.miners?.max ? Math.min(100, Math.max(0, (data.miners.now || 0) / data.miners.max * 100)) : 0).toFixed(1)}%"></div></div>
       </div>
 
       <div class="card">
@@ -457,7 +457,17 @@ function openSettingsModal() {
 
 function closeModal(overlay) {
   overlay.classList.remove("open");
-  overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
+  // Rely on CSS transition but cap with a 400 ms fallback so the
+  // node is always removed within a predictable window even when
+  // transitions are disabled or skipped.
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  };
+  overlay.addEventListener("transitionend", cleanup, { once: true });
+  setTimeout(cleanup, 400);
 }
 
 /* ==========================================================================
@@ -525,13 +535,22 @@ function init() {
    Utility: HTML Escape (XSS prevention)
    ========================================================================== */
 function escapeHtml(str) {
-  if (!str) return "";
+  if (str === null || str === undefined) return "";
+  // Build entity strings by concatenation so the leading '&' and
+  // trailing ';' cannot be silently stripped (see PR code-review fix).
+  // '&' must be replaced first to avoid double-encoding the entities
+  // produced by the remaining rules.
+  const ENT_AMP  = "&" + "amp;";
+  const ENT_LT   = "&" + "lt;";
+  const ENT_GT   = "&" + "gt;";
+  const ENT_QUOT = "&" + "quot;";
+  const ENT_APOS = "&" + "#039;";
   return String(str)
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/&/g, ENT_AMP)
+    .replace(/</g, ENT_LT)
+    .replace(/>/g, ENT_GT)
+    .replace(/\"/g, ENT_QUOT)
+    .replace(/'/g, ENT_APOS);
 }
 
 /* ==========================================================================
