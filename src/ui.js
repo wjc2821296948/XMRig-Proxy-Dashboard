@@ -10,13 +10,20 @@
 
 // Toast notification system
 let toastContainer = null;
+let toastContainerPromise = null;
 
 function ensureToastContainer() {
-  if (!toastContainer) {
-    toastContainer = document.createElement("div");
-    toastContainer.id = "toast-container";
-    document.body.appendChild(toastContainer);
+  if (toastContainer) return Promise.resolve(toastContainer);
+  if (!toastContainerPromise) {
+    toastContainerPromise = new Promise((resolve) => {
+      const container = document.createElement("div");
+      container.id = "toast-container";
+      document.body.appendChild(container);
+      toastContainer = container;
+      resolve(container);
+    });
   }
+  return toastContainerPromise;
 }
 
 /**
@@ -25,8 +32,8 @@ function ensureToastContainer() {
  * @param {"info"|"success"|"error"|"warning"} type
  * @param {number} durationMs
  */
-export function showToast(message, type = "info", durationMs = 3000) {
-  ensureToastContainer();
+export async function showToast(message, type = "info", durationMs = 3000) {
+  await ensureToastContainer();
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
