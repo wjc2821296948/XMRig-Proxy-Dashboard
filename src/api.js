@@ -14,10 +14,14 @@ import { getConfig } from "./storage.js";
 /**
  * Helper to create a timeout‑aware promise.
  */
-function timeoutPromise(ms) {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Request timed out")), ms)
-  );
+function createTimeoutController(ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  // Caller is responsible for clearTimeout in the finally block via the
+  // `timer` we expose on the controller -- wrap separately so the timer
+  // is always cleaned up.
+  controller._timer = timer;
+  return controller;
 }
 
 /**
@@ -36,7 +40,9 @@ export async function request(path, options = {}) {
   const url = new URL(path, cfg.apiUrl).toString();
   const headers = new Headers(options.headers || {});
   // Mask token in logs – do not expose raw value.
-  const maskedToken = cfg.apiToken.replace(/./g, "*");
+  // Fixed-length mask: a per-char '*' reveals the token length to anyone
+  // who happens to scrape the console. Keep this constant.
+  const maskedToken = "**********";
   console.debug(`API request → ${url} – Authorization: Bearer ${maskedToken}`);
   headers.set("Authorization", `Bearer ${cfg.apiToken}`);
 
@@ -46,9 +52,16 @@ export async function request(path, options = {}) {
     headers,
   };
 
+  // 8‑second timeout for the XMRig‑Proxy request. We use a real AbortController
+  // so the underlying fetch is cancelled when the timeout fires -- the
+  // previous Promise.race handler rejected the wrapper but left the
+  // connection draining in the background.
+  const timeoutController = createTimeoutController(8000);
   try {
-    // 8‑second timeout for the XMRig‑Proxy request.
-    const response = await Promise.race([fetch(url, fetchOpts), timeoutPromise(8000)]);
+    const response = await fetch(url, {
+      ...fetchOpts,
+      signal: timeoutController.signal,
+    });
     if (!response.ok) {
       // 401 / 403 trigger a logout flow upstream.
       const err = new Error(`HTTP ${response.status}`);
@@ -58,11 +71,14 @@ export async function request(path, options = {}) {
     const data = await response.json();
     return data;
   } catch (e) {
-    // Normalise network errors.
+    // AbortError may come from either an explicit caller abort or our
+    // timeout firing -- normalise the timeout case to a friendlier message.
     if (e.name === "AbortError") {
-      e.message = "Network request aborted";
+      e.message = "Request timed out";
     }
     console.error(`API error (masked): ${e.message}`);
     throw e;
+  } finally {
+    clearTimeout(timeoutController._timer);
   }
 }
