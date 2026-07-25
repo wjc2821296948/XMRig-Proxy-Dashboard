@@ -12,6 +12,35 @@
 const STORAGE_KEY = "xmrig_proxy_config";
 
 /**
+ * Validate and sanitize loaded configuration.
+ * @param {any} config - Raw parsed config object
+ * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}|null}
+ */
+function validateConfig(config) {
+  if (!config || typeof config !== 'object') return null;
+  // Ensure required string fields exist
+  const apiUrl = typeof config.apiUrl === 'string' ? config.apiUrl.trim() : '';
+  const apiToken = typeof config.apiToken === 'string' ? config.apiToken : '';
+  if (!apiUrl) return null;
+  // Validate URL format
+  try {
+    new URL(apiUrl);
+  } catch {
+    return null;
+  }
+  // Validate refreshInterval
+  const refreshInterval = Number(config.refreshInterval);
+  if (!Number.isFinite(refreshInterval) || refreshInterval < 1 || refreshInterval > 120) {
+    return null;
+  }
+  // Validate theme
+  const theme = config.theme === 'light' ? 'light' : 'dark';
+  // Validate remember
+  const remember = Boolean(config.remember);
+  return { apiUrl, apiToken, remember, refreshInterval, theme };
+}
+
+/**
  * Save configuration to the chosen storage.
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}} cfg
  */
@@ -30,33 +59,24 @@ export function loadConfig() {
   if (raw) {
     try {
       const config = JSON.parse(raw);
-      // Ensure backward compatibility with defaults
-      return {
-        apiUrl: config.apiUrl || "",
-        apiToken: config.apiToken || "",
-        remember: config.remember !== undefined ? config.remember : true,
-        refreshInterval: config.refreshInterval || 10,
-        theme: config.theme || 'dark'
-      };
+      const validated = validateConfig(config);
+      if (validated) return validated;
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      // Fall through to sessionStorage
     }
+    localStorage.removeItem(STORAGE_KEY);
   }
   // Fallback to sessionStorage
   raw = sessionStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
       const config = JSON.parse(raw);
-      return {
-        apiUrl: config.apiUrl || "",
-        apiToken: config.apiToken || "",
-        remember: config.remember !== undefined ? config.remember : true,
-        refreshInterval: config.refreshInterval || 10,
-        theme: config.theme || 'dark'
-      };
+      const validated = validateConfig(config);
+      if (validated) return validated;
     } catch {
-      sessionStorage.removeItem(STORAGE_KEY);
+      // Fall through to null
     }
+    sessionStorage.removeItem(STORAGE_KEY);
   }
   return null;
 }
