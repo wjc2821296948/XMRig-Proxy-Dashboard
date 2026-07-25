@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="styles.css">
-  <!-- Content Security Policy: 仅允许同源脚本、内联样式、同源字体/图片 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src *;">
+  <!-- Content Security Policy: 仅允许同源脚本、内联样式、同源字体/图片，连接到任意源（需连接用户自建的 Proxy） -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src *; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 </head>
 <body>
   <div class="container">

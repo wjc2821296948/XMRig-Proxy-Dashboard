@@ -12,16 +12,16 @@
 import { getConfig } from "./storage.js";
 
 /**
- * Helper to create a timeout‑aware promise.
+ * Helper to create a timeout-aware AbortController.
+ * Returns an object with the controller and a cleanup function.
  */
 function createTimeoutController(ms) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
-  // Caller is responsible for clearTimeout in the finally block via the
-  // `timer` we expose on the controller -- wrap separately so the timer
-  // is always cleaned up.
-  controller._timer = timer;
-  return controller;
+  return {
+    controller,
+    cleanup: () => clearTimeout(timer),
+  };
 }
 
 /**
@@ -56,11 +56,11 @@ export async function request(path, options = {}) {
   // so the underlying fetch is cancelled when the timeout fires -- the
   // previous Promise.race handler rejected the wrapper but left the
   // connection draining in the background.
-  const timeoutController = createTimeoutController(8000);
+  const { controller, cleanup } = createTimeoutController(8000);
   try {
     const response = await fetch(url, {
       ...fetchOpts,
-      signal: timeoutController.signal,
+      signal: controller.signal,
     });
     if (!response.ok) {
       // 401 / 403 trigger a logout flow upstream.
@@ -79,6 +79,6 @@ export async function request(path, options = {}) {
     console.error(`API error (masked): ${e.message}`);
     throw e;
   } finally {
-    clearTimeout(timeoutController._timer);
+    cleanup();
   }
 }
