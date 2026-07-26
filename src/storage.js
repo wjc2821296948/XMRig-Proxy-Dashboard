@@ -1,78 +1,118 @@
 /**
- * storage.js – Browser storage abstraction for API configuration.
+ * storage.js – Browser storage abstraction.
  *
- * Handles the "Remember Me" preference:
- *   - true  → localStorage (persists across browser restarts)
- *   - false → sessionStorage (cleared when the tab/window is closed)
+ * Two concerns, separated so each has a single source of truth:
  *
- * The stored object shape:
- *   { apiUrl: string, apiToken: string, remember: boolean, refreshInterval: number, theme: string }
+ * 1. XMRig Proxy connection config (apiUrl, apiToken, remember, refreshInterval)
+ *    - "Remember Me" = true  → localStorage (persists across browser restarts)
+ *    - "Remember Me" = false → sessionStorage (cleared with the tab)
+ *
+ * 2. UI preferences (theme)
+ *    - Always localStorage — a UI preference should not depend on which tab
+ *      you happen to be in, and it is independent of whether the
+ *      connection is in "Remember Me" mode.
+ *
+ *  Why connection config and theme are separate keys:
+ *  - `clearConfig()` (logout) should NOT wipe the theme the user picked.
+ *  - The connection reloads every 10 s; the theme does not. Mixing them
+ *    invites desync, which the previous version suffered from.
  */
 
-const STORAGE_KEY = "xmrig_proxy_config";
+const CONFIG_KEY = "xmrig_proxy_config";
+const THEME_KEY  = "dashboard_theme";
+
+/* --------------------------------------------------------------------------
+   Connection config
+   -------------------------------------------------------------------------- */
 
 /**
- * Save configuration to the chosen storage.
- * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}} cfg
+ * Save connection configuration to the chosen storage.
+ *
+ * Stale entries in the *other* storage are cleared as well — otherwise a
+ * user who previously kept "Remember Me" and later disabled it would have
+ * the older localStorage entry silently override the new sessionStorage
+ * one on the next page load (loadConfig() reads localStorage first).
+ *
+ * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
-  const target = cfg.remember ? localStorage : sessionStorage;
-  target.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  const target  = cfg.remember ? localStorage : sessionStorage;
+  const sibling = cfg.remember ? sessionStorage : localStorage;
+  sibling.removeItem(CONFIG_KEY);
+  target.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
 
 /**
- * Load configuration from localStorage first, then sessionStorage.
- * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}|null}
+ * Apply backward-compat defaults without losing legitimately empty fields.
+ * `??` (not `||`) so e.g. refreshInterval=0 is not silently rewritten to 10.
+ */
+function hydrateConnection(raw) {
+  const config = JSON.parse(raw);
+  return {
+    apiUrl:          config.apiUrl          ?? "",
+    apiToken:        config.apiToken        ?? "",
+    remember:        config.remember        ?? true,
+    refreshInterval: config.refreshInterval ?? 10,
+  };
+}
+
+/**
+ * Load connection configuration from localStorage first, then sessionStorage.
+ * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}|null}
  */
 export function loadConfig() {
-  // localStorage takes precedence (user explicitly chose "Remember Me")
-  let raw = localStorage.getItem(STORAGE_KEY);
+  let raw = localStorage.getItem(CONFIG_KEY);
   if (raw) {
-    try {
-      const config = JSON.parse(raw);
-      // Ensure backward compatibility with defaults
-      return {
-        apiUrl: config.apiUrl || "",
-        apiToken: config.apiToken || "",
-        remember: config.remember !== undefined ? config.remember : true,
-        refreshInterval: config.refreshInterval || 10,
-        theme: config.theme || 'dark'
-      };
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    try { return hydrateConnection(raw); }
+    catch { localStorage.removeItem(CONFIG_KEY); }
   }
-  // Fallback to sessionStorage
-  raw = sessionStorage.getItem(STORAGE_KEY);
+  raw = sessionStorage.getItem(CONFIG_KEY);
   if (raw) {
-    try {
-      const config = JSON.parse(raw);
-      return {
-        apiUrl: config.apiUrl || "",
-        apiToken: config.apiToken || "",
-        remember: config.remember !== undefined ? config.remember : true,
-        refreshInterval: config.refreshInterval || 10,
-        theme: config.theme || 'dark'
-      };
-    } catch {
-      sessionStorage.removeItem(STORAGE_KEY);
-    }
+    try { return hydrateConnection(raw); }
+    catch { sessionStorage.removeItem(CONFIG_KEY); }
   }
   return null;
 }
 
-/**
- * Clear configuration from both storages.
- */
+/** Clear connection config from both storages (logout). Does NOT touch theme. */
 export function clearConfig() {
-  localStorage.removeItem(STORAGE_KEY);
-  sessionStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CONFIG_KEY);
+  sessionStorage.removeItem(CONFIG_KEY);
+}
+
+/* --------------------------------------------------------------------------
+   UI preferences (theme)
+   -------------------------------------------------------------------------- */
+
+const VALID_THEMES = new Set(["dark", "light"]);
+
+/**
+ * @param {"dark" | "light"} theme
+ */
+export function saveTheme(theme) {
+  if (!VALID_THEMES.has(theme)) return;
+  localStorage.setItem(THEME_KEY, theme);
 }
 
 /**
- * Reactive getter used by other modules.
- * Always reads the latest value from storage.
- * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number, theme:string}|null}
+ * @returns {"dark" | "light"}
+ */
+export function loadTheme() {
+  const raw = localStorage.getItem(THEME_KEY);
+  return VALID_THEMES.has(raw) ? raw : "dark";
+}
+
+/** Clear the persisted theme preference. */
+export function clearTheme() {
+  localStorage.removeItem(THEME_KEY);
+}
+
+/* --------------------------------------------------------------------------
+   Reactive getter (used by api.js, main.js)
+   -------------------------------------------------------------------------- */
+
+/**
+ * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}|null}
  */
 export function getConfig() {
   return loadConfig();

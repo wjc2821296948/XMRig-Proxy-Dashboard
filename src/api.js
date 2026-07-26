@@ -1,5 +1,5 @@
 /**
- * api.js – Centralised XMRig‑Proxy API client
+ * api.js – Centralised XMRig-Proxy API client
  *
  * Provides a single `request` function that automatically prefixes the base URL,
  * injects the `Authorization: Bearer <token>` header, applies a timeout and
@@ -11,23 +11,12 @@
 
 import { getConfig } from "./storage.js";
 
-/**
- * Helper to create a timeout‑aware promise.
- */
-function createTimeoutController(ms) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  // Caller is responsible for clearTimeout in the finally block via the
-  // `timer` we expose on the controller -- wrap separately so the timer
-  // is always cleaned up.
-  controller._timer = timer;
-  return controller;
-}
+const REQUEST_TIMEOUT_MS = 8000;
 
 /**
  * Central request wrapper.
  *
- * @param {string} path   Path relative to the XMRig‑Proxy API base (e.g. "/1/summary").
+ * @param {string} path   Path relative to the XMRig-Proxy API base (e.g. "/1/summary").
  * @param {object} [options] Optional fetch options (method, body, etc.).
  * @returns {Promise<any>} Resolves with parsed JSON on success.
  */
@@ -39,28 +28,21 @@ export async function request(path, options = {}) {
 
   const url = new URL(path, cfg.apiUrl).toString();
   const headers = new Headers(options.headers || {});
-  // Mask token in logs – do not expose raw value.
-  // Fixed-length mask: a per-char '*' reveals the token length to anyone
-  // who happens to scrape the console. Keep this constant.
-  const maskedToken = "**********";
-  console.debug(`API request → ${url} – Authorization: Bearer ${maskedToken}`);
+  // Fixed-length mask: replacing each token char with '*' would otherwise
+  // reveal the token length to anyone who happens to scrape the console.
+  console.debug(`API request → ${url} – Authorization: Bearer **********`);
   headers.set("Authorization", `Bearer ${cfg.apiToken}`);
 
-  const fetchOpts = {
-    method: "GET",
-    ...options,
-    headers,
-  };
+  // 8-second timeout via the platform-native AbortSignal so the underlying
+  // fetch is actually cancelled (Promise.race used to leave it draining).
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
-  // 8‑second timeout for the XMRig‑Proxy request. We use a real AbortController
-  // so the underlying fetch is cancelled when the timeout fires -- the
-  // previous Promise.race handler rejected the wrapper but left the
-  // connection draining in the background.
-  const timeoutController = createTimeoutController(8000);
   try {
     const response = await fetch(url, {
-      ...fetchOpts,
-      signal: timeoutController.signal,
+      ...options,
+      method: options.method || "GET",
+      headers,
+      signal: timeoutSignal,
     });
     if (!response.ok) {
       // 401 / 403 trigger a logout flow upstream.
@@ -68,17 +50,18 @@ export async function request(path, options = {}) {
       err.status = response.status;
       throw err;
     }
-    const data = await response.json();
-    return data;
+    return await response.json();
   } catch (e) {
-    // AbortError may come from either an explicit caller abort or our
-    // timeout firing -- normalise the timeout case to a friendlier message.
-    if (e.name === "AbortError") {
+    // AbortSignal.timeout() throws a DOMException whose `name` is "TimeoutError"
+    // (distinct from "AbortError" raised by AbortController.abort()). Browsers
+    // that pre-date `AbortSignal.timeout` still throw "AbortError"; in that
+    // case the upstream message is already a generic "The operation was
+    // aborted" so we keep it. The point of this branch was always to label
+    // timeout cancellations consistently — only relabel that case.
+    if (e.name === "TimeoutError") {
       e.message = "Request timed out";
     }
     console.error(`API error (masked): ${e.message}`);
     throw e;
-  } finally {
-    clearTimeout(timeoutController._timer);
   }
 }
