@@ -208,12 +208,12 @@ function renderDashboard(data) {
       ${points.map((p, i) => `
         <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
                 fill="${p.color}" stroke="var(--bg-card)" stroke-width="2"
-                data-label="${p.label}" data-value="${p.value}" />
+                data-label="${escapeHtml(p.label)}" data-value="${escapeHtml(p.value)}" />
       `).join('')}
       <!-- X-axis labels -->
       ${points.map(p => `
         <text x="${p.x}" y="${chartHeight - 4}" text-anchor="middle"
-              font-size="0.55rem" fill="var(--text-muted)" class="chart-label">${p.label}</text>
+              font-size="0.55rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
       `).join('')}
     </svg>
   `;
@@ -566,7 +566,11 @@ function init() {
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   // Build entity strings by concatenation so the leading '&' and
-  // trailing ';' cannot be silently stripped (see PR code-review fix).
+  // trailing ';' cannot be silently stripped (see PR code-review fix,
+  // project memory xss-escape-html-gotcha — writing the entities
+  // literally here once shipped to main as bare characters and made
+  // the dashboard an XSS sink because the inputs came from innerHTML
+  // writes of apiUrl/apiToken).
   // '&' must be replaced first to avoid double-encoding the entities
   // produced by the remaining rules.
   const ENT_AMP  = "&" + "amp;";
