@@ -10,7 +10,10 @@
  */
 
 import { request } from "./api.js";
-import { loadConfig, saveConfig, clearConfig, getConfig } from "./storage.js";
+import {
+  loadConfig, saveConfig, clearConfig, getConfig,
+  loadTheme, saveTheme,
+} from "./storage.js";
 import {
   showToast,
   renderSkeleton,
@@ -27,18 +30,19 @@ let isFetching = false;
 
 /* ==========================================================================
    Theme Management
+   The theme is owned by storage.js — never read or write localStorage
+   directly here.
    ========================================================================== */
 function initTheme() {
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', savedTheme);
+  document.documentElement.setAttribute("data-theme", loadTheme());
 }
 
 function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  showToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}模式`, 'info');
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", newTheme);
+  saveTheme(newTheme);
+  showToast(`已切换到${newTheme === "dark" ? "深色" : "浅色"}模式`, "info");
 }
 
 /* ==========================================================================
@@ -152,14 +156,15 @@ function renderDashboard(data) {
   const maxHr = Math.max(...hashrates, 1);
   const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
 
-  // Color palette for different time periods
+  // Color palette for different time periods — pulled from CSS variables
+  // so light theme and any future theme can override them in one place.
   const chartColors = [
-    "#3b82f6", // 10秒 - blue
-    "#8b5cf6", // 1分钟 - purple
-    "#06b6d4", // 15分钟 - cyan
-    "#22c55e", // 1小时 - green
-    "#eab308", // 12小时 - yellow
-    "#ef4444"  // 24小时 - red (warning)
+    "var(--chart-blue)",
+    "var(--chart-purple)",
+    "var(--chart-cyan)",
+    "var(--chart-green)",
+    "var(--chart-yellow)",
+    "var(--chart-red)",
   ];
 
   // Line chart data points for SVG
@@ -214,9 +219,13 @@ function renderDashboard(data) {
   `;
 
   // Memory usage
-  const memUsed = data.resources?.memory?.total - data.resources?.memory?.free || 0;
-  const memTotal = data.resources?.memory?.total || 1;
-  const memPct = ((memUsed / memTotal) * 100).toFixed(1);
+  // Precedence-safe: clamp the difference to >= 0 because malformed or
+  // transient readings where `total < free` would otherwise leak a
+  // negative number (or NaN) into the UI.
+  const memTotal = data.resources?.memory?.total ?? 0;
+  const memFree  = data.resources?.memory?.free  ?? memTotal;
+  const memUsed  = Math.max(0, memTotal - memFree);
+  const memPct   = memTotal > 0 ? ((memUsed / memTotal) * 100).toFixed(1) : "0.0";
 
   // Acceptance rate
   const accepted = data.results?.accepted || 0;
@@ -311,43 +320,45 @@ function renderDashboard(data) {
   els.dashboard.innerHTML = html;
   els.dashboard.className = "";
 
-  // Initialize chart point tooltips
+  // Initialize chart point tooltips (one delegated listener per chart,
+  // instead of one per data point per render).
   initChartTooltips();
 }
 
 /**
- * Initialize chart point tooltips - shows detailed info on hover
+ * Wire a single delegated tooltip handler onto every render's chart
+ * container. The chart container is re-created on every renderDashboard,
+ * so the delegated listener is per-instance — both the chart container
+ * and its tooltip node die together when `innerHTML` wipes the parent,
+ * which keeps the listener count bounded at exactly one per render.
+ *
+ * @returns {void}
  */
 function initChartTooltips() {
-  const chartContainer = document.querySelector('.hashrate-chart');
+  const chartContainer = document.querySelector(".hashrate-chart");
   if (!chartContainer) return;
 
-  const points = chartContainer.querySelectorAll('.chart-point');
-  let tooltip = chartContainer.querySelector('.chart-point-tooltip');
-
+  let tooltip = chartContainer.querySelector(".chart-point-tooltip");
   if (!tooltip) {
-    tooltip = document.createElement('div');
-    tooltip.className = 'chart-point-tooltip';
+    tooltip = document.createElement("div");
+    tooltip.className = "chart-point-tooltip";
     chartContainer.appendChild(tooltip);
   }
 
-  points.forEach(point => {
-    point.addEventListener('mouseenter', (e) => {
-      const label = point.dataset.label;
-      const value = point.dataset.value;
-      tooltip.textContent = `${label}: ${value}`;
-      tooltip.classList.add('visible');
-
-      // Position tooltip above the point
-      const rect = point.getBoundingClientRect();
-      const containerRect = chartContainer.getBoundingClientRect();
-      tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
-      tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
-    });
-
-    point.addEventListener('mouseleave', () => {
-      tooltip.classList.remove('visible');
-    });
+  chartContainer.addEventListener("mouseover", e => {
+    const point = e.target.closest(".chart-point");
+    if (!point || !chartContainer.contains(point)) return;
+    tooltip.textContent = `${point.dataset.label}: ${point.dataset.value}`;
+    const rect = point.getBoundingClientRect();
+    const containerRect = chartContainer.getBoundingClientRect();
+    tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+    tooltip.style.top  = `${rect.top  - containerRect.top  - 8}px`;
+    tooltip.classList.add("visible");
+  });
+  chartContainer.addEventListener("mouseout", e => {
+    if (!e.relatedTarget || !e.relatedTarget.closest?.(".chart-point")) {
+      tooltip.classList.remove("visible");
+    }
   });
 }
 
@@ -355,8 +366,8 @@ function initChartTooltips() {
    Settings Modal
    ========================================================================== */
 function openSettingsModal() {
-  const cfg = getConfig() || { apiUrl: "", apiToken: "", remember: true, refreshInterval: 10, theme: 'dark' };
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+  const cfg = getConfig() || { apiUrl: "", apiToken: "", remember: true, refreshInterval: 10 };
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
       <div class="modal">
@@ -375,7 +386,7 @@ function openSettingsModal() {
           </div>
           <div class="input-group">
             <label class="input-label" for="sRefreshInterval">自动刷新间隔 (秒)</label>
-            <input type="number" class="input-field" id="sRefreshInterval" value="${cfg.refreshInterval || 10}" min="1" max="120" required>
+            <input type="number" class="input-field" id="sRefreshInterval" value="${cfg.refreshInterval ?? 10}" min="1" max="120" required>
             <span class="input-hint">最小 1 秒，最大 120 秒</span>
           </div>
           <div class="checkbox-group">
@@ -415,17 +426,21 @@ function openSettingsModal() {
     const url = document.getElementById("sApiUrl").value.trim();
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
-    const theme = document.getElementById("sTheme").checked ? 'dark' : 'light';
-    const refreshInterval = parseInt(document.getElementById("sRefreshInterval")?.value || "10", 10);
+    const themeWantsDark = document.getElementById("sTheme").checked;
+    const refreshInput = document.getElementById("sRefreshInterval");
+    const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10))
+      ? parseInt(refreshInput.value, 10)
+      : 10;
 
     if (!url) { showToast("请输入 API URL", "error"); return; }
     try { new URL(url); } catch { showToast("无效的 URL", "error"); return; }
     if (refreshInterval < 1 || refreshInterval > 120) { showToast("刷新间隔必须在 1-120 秒之间", "error"); return; }
 
-    saveConfig({ apiUrl: url, apiToken: token, remember, refreshInterval, theme });
-    // Save theme preference
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    saveConfig({ apiUrl: url, apiToken: token, remember, refreshInterval });
+    // Theme lives in its own storage slot — see storage.js.
+    const theme = themeWantsDark ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", theme);
+    saveTheme(theme);
 
     closeModal(overlay);
     showToast("设置已保存，正在重新连接...", "info");
@@ -450,24 +465,38 @@ function openSettingsModal() {
 
   // Close on overlay click
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(overlay); });
-  // Escape key
-  const escHandler = e => { if (e.key === "Escape") { closeModal(overlay); document.removeEventListener("keydown", escHandler); } };
+  // Escape key — listener is removed by closeModal() so every close path
+  // (X, cancel, overlay click, save, logout) cleans it up.
+  const escHandler = e => { if (e.key === "Escape" && overlay.parentNode) closeModal(overlay); };
   document.addEventListener("keydown", escHandler);
+  overlay._escHandler = escHandler;
 }
 
 function closeModal(overlay) {
+  if (!overlay.parentNode) {
+    // Already detached — still need to release the ESC handler, which
+    // lives on `document` and would otherwise leak across opens.
+    if (overlay._escHandler) {
+      document.removeEventListener("keydown", overlay._escHandler);
+      overlay._escHandler = null;
+    }
+    return;
+  }
   overlay.classList.remove("open");
-  // Rely on CSS transition but cap with a 400 ms fallback so the
-  // node is always removed within a predictable window even when
-  // transitions are disabled or skipped.
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
+  // Detach listener registered by openSettingsModal so the document does
+  // not accumulate one stale ESC handler per settings open.
+  if (overlay._escHandler) {
+    document.removeEventListener("keydown", overlay._escHandler);
+    overlay._escHandler = null;
+  }
+  // .modal-overlay defines `transition: opacity var(--transition-normal)`,
+  // so a single `transitionend` (for `opacity`) removes the node as soon
+  // as the fade finishes. When the user has `prefers-reduced-motion:
+  // reduce` the transition has zero duration and `transitionend` fires
+  // synchronously inside the class-removal step, which is still fine.
+  overlay.addEventListener("transitionend", () => {
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-  };
-  overlay.addEventListener("transitionend", cleanup, { once: true });
-  setTimeout(cleanup, 400);
+  }, { once: true });
 }
 
 /* ==========================================================================
@@ -496,7 +525,7 @@ async function fetchAndRender() {
 function startAutoRefresh() {
   stopAutoRefresh();
   const cfg = getConfig();
-  const interval = (cfg?.refreshInterval || 10) * 1000; // Convert seconds to ms
+  const interval = (cfg?.refreshInterval ?? 10) * 1000; // seconds → ms
   refreshInterval = setInterval(fetchAndRender, Math.max(1000, Math.min(120000, interval)));
 }
 
@@ -536,15 +565,25 @@ function init() {
    ========================================================================== */
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
-  // Use direct entity strings for clarity and reliability.
+  // Build entity strings by concatenation so the leading '&' and
+  // trailing ';' cannot be silently stripped (see PR code-review fix,
+  // project memory xss-escape-html-gotcha — writing the entities
+  // literally here once shipped to main as bare characters and made
+  // the dashboard an XSS sink because the inputs came from innerHTML
+  // writes of apiUrl/apiToken).
   // '&' must be replaced first to avoid double-encoding the entities
   // produced by the remaining rules.
+  const ENT_AMP  = "&" + "amp;";
+  const ENT_LT   = "&" + "lt;";
+  const ENT_GT   = "&" + "gt;";
+  const ENT_QUOT = "&" + "quot;";
+  const ENT_APOS = "&" + "#039;";
   return String(str)
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/\"/g, """)
-    .replace(/'/g, "&#039;");
+    .replace(/&/g, ENT_AMP)
+    .replace(/</g, ENT_LT)
+    .replace(/>/g, ENT_GT)
+    .replace(/\"/g, ENT_QUOT)
+    .replace(/'/g, ENT_APOS);
 }
 
 /* ==========================================================================
