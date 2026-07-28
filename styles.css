@@ -244,6 +244,39 @@ h1 {
   letter-spacing: 0.05em;
 }
 
+/* "只读视图" ribbon — sits inline next to the live status badge. Deliberately
+   quieter than the status badge: pill outline instead of fill, muted text,
+   copper dot. The dot's glow reuses the same vocabulary as the status badges
+   so the two signals read as siblings instead of competitors. The ribbon
+   never competes with the live status — it is the operator's "what kind of
+   thing is this" anchor, not the live signal. */
+.view-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: transparent;
+}
+.view-mode-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-copper);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.18);
+}
+/* Light-theme glow tone: cream canvas needs a warmer, slightly more saturated
+   copper halo than the indigo canvas does. */
+[data-theme="light"] .view-mode-dot {
+  box-shadow: 0 0 0 3px rgba(184, 99, 63, 0.22);
+}
+
 /* Subtle inner glow keeps each badge legible on the indigo canvas
    without competing with the copper primary. */
 .status-online {
@@ -570,6 +603,63 @@ h1 {
   gap: 0.5rem;
   justify-content: center;
   margin-top: 1rem;
+}
+
+/* "只读监控面板" eyebrow above the connect-form title. Reuses the
+   small-caps vocabulary of .card-title so the operator's eye treats it
+   as a label, not decoration. Copper tint — same hue as the header
+   live-signal stripe — ties the connect screen to the dashboard brand. */
+.config-eyebrow {
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-copper);
+  margin-bottom: 0.5rem;
+}
+
+/* Honest disclaimer under the connect form: tells the operator that
+   the panel is a viewer over the proxy's restricted API and that
+   configuration belongs on the server. Replaces the previous single
+   privacy line so the user does not have to infer read-only from the
+   lack of write controls. */
+.config-disclaimer {
+  margin-top: 0.85rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.5;
+}
+.config-disclaimer-meta {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+.config-disclaimer-meta code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  padding: 0.05rem 0.3rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  color: var(--accent-copper);
+}
+.config-disclaimer-sub {
+  margin-top: 0.4rem;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Muted suffix for the token field label ("Access Token · 只读"). Keeps
+   the field name intact for muscle memory, adds the read-only reminder
+   without growing the label to two lines. */
+.input-label-suffix {
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 /* ==========================================================================

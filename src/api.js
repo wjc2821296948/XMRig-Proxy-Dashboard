@@ -16,6 +16,14 @@ const REQUEST_TIMEOUT_MS = 8000;
 /**
  * Central request wrapper.
  *
+ * Intentionally read-only. XMRig-Proxy's `restricted: true` mode disables
+ * every write endpoint (PUT /1/config, pool switching, hot reload), so this
+ * dashboard deliberately exposes no write helpers — the operator configures
+ * the proxy on the server. Adding a write method here would succeed at the
+ * transport layer and fail at the server; do not add one. The header
+ * carries a permanent "只读视图" ribbon so the operator always sees this
+ * constraint without having to dig.
+ *
  * @param {string} path   Path relative to the XMRig-Proxy API base (e.g. "/1/summary").
  * @param {object} [options] Optional fetch options (method, body, etc.).
  * @returns {Promise<any>} Resolves with parsed JSON on success.

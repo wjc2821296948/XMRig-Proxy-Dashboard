@@ -34,7 +34,12 @@ let isFetching = false;
    directly here.
    ========================================================================== */
 function initTheme() {
-  document.documentElement.setAttribute("data-theme", loadTheme());
+  const theme = loadTheme();
+  document.documentElement.setAttribute("data-theme", theme);
+  // The view-mode badge lives in the header on every page; flip its label
+  // alongside the theme so the "you are looking, not driving" signal keeps
+  // speaking the user's language.
+  syncViewModeBadgeText(theme);
 }
 
 function toggleTheme() {
@@ -42,7 +47,21 @@ function toggleTheme() {
   const newTheme = currentTheme === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", newTheme);
   saveTheme(newTheme);
+  syncViewModeBadgeText(newTheme);
   showToast(`已切换到${newTheme === "dark" ? "深色" : "浅色"}模式`, "info");
+}
+
+/**
+ * Update the persistent "view-only" ribbon's text to match the active theme.
+ * Kept as a single helper so both `initTheme`, `toggleTheme`, and the
+ * settings-modal save branch call the same source of truth.
+ *
+ * @param {"dark"|"light"} theme
+ */
+function syncViewModeBadgeText(theme) {
+  const label = document.getElementById("viewModeBadgeText");
+  if (!label) return;
+  label.textContent = theme === "dark" ? "只读视图" : "Read-only viewer";
 }
 
 /* ==========================================================================
@@ -63,13 +82,14 @@ function renderConnectForm(prefill = {}) {
   const { apiUrl = "", apiToken = "", remember = true } = prefill;
   els.dashboard.innerHTML = `
     <div class="config-panel" role="dialog" aria-labelledby="connect-title">
+      <p class="config-eyebrow">只读监控面板</p>
       <h2 id="connect-title" class="config-title">连接 XMRig Proxy</h2>
       <div class="input-group">
         <label class="input-label" for="apiUrlInput">API URL</label>
         <input type="url" class="input-field" id="apiUrlInput" placeholder="http://your-proxy:8080/1/summary" value="${escapeHtml(apiUrl)}" required autocomplete="url">
       </div>
       <div class="input-group">
-        <label class="input-label" for="apiTokenInput">Access Token</label>
+        <label class="input-label" for="apiTokenInput">Access Token <span class="input-label-suffix">· 只读</span></label>
         <input type="password" class="input-field" id="apiTokenInput" placeholder="留空表示无需 Token" value="${escapeHtml(apiToken)}" autocomplete="password">
       </div>
       <div class="checkbox-group">
@@ -79,8 +99,12 @@ function renderConnectForm(prefill = {}) {
       <div class="config-actions">
         <button class="btn" id="connectBtn">连接</button>
       </div>
-      <p style="margin-top:0.75rem;font-size:0.65rem;color:var(--text-muted);text-align:center;">
-        所有数据仅保存在浏览器本地，服务器无法访问。
+      <p class="config-disclaimer">
+        本面板为只读视图 — Proxy 配置请直接在服务端修改
+        <span class="config-disclaimer-meta">(HTTP API 受 <code>restricted</code> 控制)</span>
+      </p>
+      <p class="config-disclaimer-sub">
+        所有数据仅保存在浏览器本地，部署服务器无法访问。
       </p>
     </div>
   `;
@@ -150,6 +174,10 @@ function renderDashboard(data) {
   els.statusBadge.className = `status-badge ${status.cls}`;
   els.workerId.textContent = `Worker: ${escapeHtml(data.worker_id || "未知")} | 版本: ${escapeHtml(data.version || "未知")}`;
   els.lastUpdate.textContent = new Date().toLocaleTimeString();
+
+  // Re-sync the view-mode ribbon on every render. Defensive against any
+  // race where initTheme() ran before this element existed in the DOM.
+  syncViewModeBadgeText(document.documentElement.getAttribute("data-theme") || "dark");
 
   // Hashrate data
   const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
@@ -441,6 +469,7 @@ function openSettingsModal() {
     const theme = themeWantsDark ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
     saveTheme(theme);
+    syncViewModeBadgeText(theme);
 
     closeModal(overlay);
     showToast("设置已保存，正在重新连接...", "info");

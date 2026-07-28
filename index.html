@@ -18,6 +18,10 @@
       <h1>
         XMRig Proxy Dashboard
         <span id="statusBadge" class="status-badge status-warning">加载中…</span>
+        <!-- Permanent view-only ribbon. Mirrors the project's "honest thin
+             client" identity: the dashboard is a viewer over XMRig-Proxy's
+             restricted HTTP API, never a controller. -->
+        <span id="viewModeBadge" class="view-mode-badge" aria-label="只读视图"><span class="view-mode-dot" aria-hidden="true"></span><span id="viewModeBadgeText">只读视图</span></span>
       </h1>
       <div class="subtitle">
         <span id="workerId">初始化…</span>
