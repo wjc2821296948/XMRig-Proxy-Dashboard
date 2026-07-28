@@ -244,9 +244,23 @@ h1 {
   letter-spacing: 0.05em;
 }
 
-.status-online { background: var(--accent-green); color: #000; }
-.status-offline { background: var(--accent-red); color: var(--text-on-accent-red, #fff); }
-.status-warning { background: var(--accent-yellow); color: #000; }
+/* Subtle inner glow keeps each badge legible on the indigo canvas
+   without competing with the copper primary. */
+.status-online {
+  background: var(--accent-green);
+  color: var(--text-on-accent-green);
+  box-shadow: 0 0 0 1px rgba(61, 220, 151, 0.35) inset;
+}
+.status-offline {
+  background: var(--accent-red);
+  color: var(--text-on-accent-red);
+  box-shadow: 0 0 0 1px rgba(240, 107, 107, 0.35) inset;
+}
+.status-warning {
+  background: var(--accent-yellow);
+  color: var(--text-on-accent-yellow);
+  box-shadow: 0 0 0 1px rgba(240, 185, 74, 0.35) inset;
+}
 
 /* ==========================================================================
    Grid System
