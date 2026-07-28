@@ -2,6 +2,8 @@
 
 > **纯前端、零知识、静态部署** 的 XMRig Proxy 实时监控面板。
 
+🔗 **开放预览网站**：<https://xmrig-proxy-dashboard.lrate.top/>
+
 ---
 
 ## ✨ 核心特性
