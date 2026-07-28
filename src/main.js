@@ -181,8 +181,8 @@ function renderDashboard(data) {
     <svg class="hashrate-line-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="100%" height="100%">
       <defs>
         <linearGradient id="hrGradient" x1="0%" y1="100%" x2="0%" y2="0%">
-          <stop offset="0%" stop-color="var(--accent-green-light)" stop-opacity="0.3"/>
-          <stop offset="100%" stop-color="var(--accent-green)" stop-opacity="0.8"/>
+          <stop offset="0%" stop-color="var(--accent-copper-deep)" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="var(--accent-copper)" stop-opacity="0.85"/>
         </linearGradient>
         ${points.map((p, i) => `
           <linearGradient id="pointGradient${i}" x1="0%" y1="100%" x2="0%" y2="0%">
