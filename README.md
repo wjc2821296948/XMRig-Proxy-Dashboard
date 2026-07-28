@@ -209,4 +209,4 @@ A: 当前版本单实例。可通过「设置」修改 URL/Token 实现切换；
 
 ## 📄 许可证
 
-MIT License © 2025
+Apache License 2.0 © 2025
