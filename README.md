@@ -4,6 +4,8 @@
 
 🔗 **开放预览网站**：<https://xmrig-proxy-dashboard.lrate.top/>
 
+[English](README.en.md) | [中文](README.md)
+
 ---
 
 ## ✨ 核心特性
@@ -120,7 +122,8 @@ xmrig-proxy-dashboard/
 ├── index.html          # 入口 HTML
 ├── styles.css          # 完整样式（CSS 变量、响应式、动画）
 ├── panel.png           # 预览图
-├── README.md           # 本文档
+├── README.md           # 中文文档
+├── README.en.md        # 英文文档
 ├── CLAUDE.md           # 项目记忆（供 AI 协作参考）
 ├── .gitignore
 └── src/
