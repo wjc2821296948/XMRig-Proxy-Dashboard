@@ -457,18 +457,24 @@ h1 {
   justify-content: center;
   gap: 0.4rem;
   padding: 0.55rem 1.1rem;
-  background: var(--accent-green);
-  color: #000;
+  /* Primary action: copper — the loud brand color now lives here
+     instead of on every success state. */
+  background: var(--accent-copper);
+  color: var(--text-on-accent-copper);
   border: none;
   border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 0.8rem;
   cursor: pointer;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
-.btn:hover { background: var(--accent-green-light); transform: translateY(-1px); }
+.btn:hover {
+  background: var(--accent-copper-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(217, 119, 87, 0.25);
+}
 .btn:active { transform: translateY(0); }
-.btn:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 2px; }
+.btn:focus-visible { outline: 2px solid var(--accent-copper); outline-offset: 2px; }
 
 .btn-secondary {
   background: var(--bg-secondary);
