@@ -2,30 +2,43 @@
    CSS Variables – Theme & Spacing
    ========================================================================== */
 :root {
-  /* Dark theme palette (default) */
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #141414;
-  --bg-card: #1a1a1a;
-  --bg-card-hover: #222222;
-  --border-color: #333;
-  --border-light: #2a2a2a;
+  /* "Midnight Ledger" — dark theme palette (default)
+     Backgrounds are deep ink-indigo, not pure black, so the canvas
+     reads as "live instrument" rather than "blank terminal". */
+  --bg-primary: #0e0f1a;
+  --bg-secondary: #161827;
+  --bg-card: #1c1f33;
+  --bg-card-hover: #252a42;
+  --border-color: #2e3454;
+  --border-light: #252a44;
 
-  --text-primary: #e0e0e0;
-  --text-secondary: #888;
-  --text-muted: #555;
+  /* Cool slate text — sits better against indigo than warm gray. */
+  --text-primary: #e4e7f1;
+  --text-secondary: #9aa1c0;
+  --text-muted: #5e6585;
 
-  --accent-green: #10b981;
-  --accent-green-light: #34d399;
-  --accent-red: #ef4444;
-  --accent-red-light: #f87171;
-  --accent-yellow: #f59e0b;
-  --accent-yellow-light: #fbbf24;
-  --accent-blue: #3b82f6;
-  --accent-blue-light: #60a5fa;
+  /* Primary action / "live signal" — copper-amber.
+     Replaces emerald as the loud brand color; copper reads as an
+     oscilloscope needle and harmonizes with Monero's ink palette. */
+  --accent-copper: #d97757;
+  --accent-copper-light: #ec8d6b;
+  --accent-copper-deep: #b25e3f;
 
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 16px rgba(0,0,0,0.5);
+  /* Status accents — jade replaces emerald for success so the
+     "go" state no longer fights the primary brand color. */
+  --accent-green: #3ddc97;
+  --accent-green-light: #62e6ad;
+  --accent-red: #f06b6b;
+  --accent-red-light: #f78f8f;
+  --accent-yellow: #f0b94a;
+  --accent-yellow-light: #f6cf7a;
+  --accent-blue: #6b8af0;
+  --accent-blue-light: #93acf5;
+  --accent-purple: #a78bfa;
+
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 20px rgba(0,0,0,0.55);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -38,9 +51,10 @@
   --font-mono: 'SF Mono', 'Fira Code', monospace;
 
   /* Text on accent backgrounds */
-  --text-on-accent-green: #000;
+  --text-on-accent-copper: #1a1208;
+  --text-on-accent-green: #00261a;
   --text-on-accent-red: #fff;
-  --text-on-accent-yellow: #000;
+  --text-on-accent-yellow: #1a1300;
   --text-on-accent-blue: #fff;
 }
 
