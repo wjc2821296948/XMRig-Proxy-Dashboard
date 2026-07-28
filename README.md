@@ -21,6 +21,7 @@
 ## 🚀 快速开始
 
 ### 1️⃣ 直接打开（无需服务器）
+
 ```bash
 # 克隆仓库
 git clone https://github.com/yourname/xmrig-proxy-dashboard.git
@@ -33,6 +34,7 @@ python3 -m http.server 8000
 ```
 
 ### 2️⃣ 静态托管部署（推荐）
+
 支持任意静态托管平台，**无需任何后端配置**：
 
 | 平台 | 部署方式 |
@@ -70,11 +72,11 @@ python3 -m http.server 8000
 
 ## 🔐 使用流程
 
-1. **首次访问** → 显示连接表单  
-2. 填入 **API URL**（如 `http://192.168.1.100:8080/1/summary`）与 **Access Token**  
-3. 可勾选 **记住我** → 使用 `localStorage` 持久化；不勾选 → `sessionStorage`，关闭标签页自动清除  
-4. 点击 **连接** → 前端直连你的 Proxy，验证 Token  
-5. 成功后进入 Dashboard，自动每 10 秒刷新  
+1. **首次访问** → 显示连接表单
+2. 填入 **API URL**（如 `http://192.168.1.100:8080/1/summary`）与 **Access Token**
+3. 可勾选 **记住我** → 使用 `localStorage` 持久化；不勾选 → `sessionStorage`，关闭标签页自动清除
+4. 点击 **连接** → 前端直连你的 Proxy，验证 Token
+5. 成功后进入 Dashboard，自动每 10 秒刷新
 6. 点击右上角 **⚙ 设置** → 修改 URL / Token / 记住我 / 登出
 
 ---
@@ -101,6 +103,7 @@ python3 -m http.server 8000
 ```
 
 ### 关键点
+
 - **服务器完全无感**：不存储、不代理、不记录任何用户数据
 - **Token 仅存在浏览器**：`localStorage` / `sessionStorage`，关闭浏览器可自动清除
 - **所有请求直连 Proxy**：绕过部署站点，避免 CORS、中间人风险
@@ -158,29 +161,52 @@ A: 当前版本单实例。可通过「设置」修改 URL/Token 实现切换；
 
 ---
 
+## 🏗️ 重构后的重要设计决策记录
+
+| 决策 | 背景 | 影响 |
+|------|------|------|
+| **ES Module 替代单文件 script.js** | 便于模块化、Tree-shaking、浏览器原生支持 | 无需构建工具，保持零依赖 |
+| **统一 `api.js` 封装 fetch** | 原代码分散在多处 `fetch`，难以统一鉴权、错误处理 | 单点控制鉴权、超时、脱敏日志 |
+| **存储抽象 `storage.js`** | 原代码直接操作 `localStorage`，无 Remember Me 支持 | 统一 Remember Me 逻辑，便于测试替换 |
+| **UI 组件化 `ui.js`** | 原代码 `renderDashboard` 超 200 行字符串拼接 | 关注点分离，Skeleton/Toast 复用 |
+| **CSP + escapeHtml** | 原代码大量 `innerHTML` 模板字符串，存在 XSS 隐患 | 消除 DOM XSS 风险，符合安全基线 |
+| **Token 脱敏日志** | 原代码 `console.log` 直接打印完整 Token | 杜绝控制台泄露，满足安全审计 |
+| **响应式 CSS 变量主题** | 原 CSS 硬编码颜色，难以扩展主题 | 支持未来暗/亮主题切换，维护性提升 |
+
+---
+
+## 📋 部署清单
+
+- [ ] 静态托管平台已配置 **HTTPS**
+- [ ] `Content-Security-Policy` 已生效（见 `index.html` meta 标签）
+- [ ] 无 `console.log` 残留 Token（已全部脱敏）
+- [ ] `index.html` 引用 `<script type="module" src="src/main.js">`
+- [ ] 无构建步骤，直接推送即部署
+
+---
+
+## 📋 下一步计划
+
+- [ ] **多 Proxy 配置列表** —— 支持保存多组 Proxy 配置，一键切换
+- [ ] **PWA 支持** —— 离线缓存最近一次数据，支持"添加到主屏幕"
+- [ ] **主题切换** —— 暗/亮主题切换，CSS 变量已就绪
+- [ ] **更多图表库集成** —— 可选的历史趋势图表（Chart.js / uPlot 等按需加载）
+- [ ] **可选服务端代理模式** —— 用户自愿在自己的服务器部署无状态转发层，仅转发 `/1/summary`，不记录日志、不存 Token
+- [ ] **告警/通知机制** —— 算力异常、矿工离线等阈值告警（本地浏览器通知 / Webhook）
+- [ ] **多语言支持** —— i18n 框架预留，中英双语优先
+
+---
+
 ## 🤝 贡献指南
 
 1. Fork 本仓库
-2. 创建特性分支：`git checkout -b feat/awesome-feature`
-3. 提交变更：`git commit -m "feat: add awesome feature"`
-4. 推送分支：`git push origin feat/awesome-feature`
+2. 创建特性分支：`git checkout -b feat/xxx`
+3. 提交更改：`git commit -m "feat: xxx"`
+4. 推送分支：`git push origin feat/xxx`
 5. 发起 Pull Request
-
-> 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/)。
 
 ---
 
 ## 📄 许可证
 
-MIT License — 随意使用、修改、分发。
-
----
-
-## 🙏 致谢
-
-- [XMRig Proxy](https://github.com/xmrig/xmrig-proxy) — 高性能矿池代理
-- 所有提交 Issue / PR 的贡献者
-
----
-
-> **零知识、零后端、零负担** — 专为矿主设计的轻量监控面板。
+MIT License © 2025
