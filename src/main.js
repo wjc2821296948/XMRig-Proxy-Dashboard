@@ -9,10 +9,11 @@
  *  5. Wire UI events: Settings, Logout, Connect form.
  */
 
-import { request } from "./api.js";
+import { request, probeWriteAccess } from "./api.js";
 import {
   loadConfig, saveConfig, clearConfig, getConfig,
   loadTheme, saveTheme,
+  saveWriteAccess, loadWriteAccess, clearWriteAccess,
 } from "./storage.js";
 import {
   showToast,
@@ -62,6 +63,21 @@ function syncViewModeBadgeText(theme) {
   const label = document.getElementById("viewModeBadgeText");
   if (!label) return;
   label.textContent = theme === "dark" ? "只读视图" : "Read-only viewer";
+}
+
+/**
+ * Re-tint the header ribbon to reflect the current login state:
+ *   - "connected" (green dot)   — a connection succeeded and we are live.
+ *   - "disconnected" (yellow)   — no config saved, or the operator logged out.
+ * The status badge stays responsible for miner health (online/warning/offline);
+ * the ribbon only answers "is the panel actually talking to *something*?"
+ *
+ * @param {"connected"|"disconnected"} state
+ */
+function setRibbonConnectState(state) {
+  const badge = document.getElementById("viewModeBadge");
+  if (!badge) return;
+  badge.dataset.connectState = state;
 }
 
 /* ==========================================================================
@@ -149,6 +165,14 @@ async function handleConnect() {
     const data = await request("/1/summary");
     showToast("连接成功", "success");
     renderDashboard(data);
+    // Probe write access on every successful connect. The result is
+    // persisted so the mode picker does not need to re-probe on every
+    // render, and so it survives a tab refresh. If the probe fails for
+    // any reason we conservatively assume restricted and let the next
+    // connect retry.
+    const canWrite = await probeWriteAccess();
+    saveWriteAccess(canWrite);
+    setRibbonConnectState("connected");
     startAutoRefresh();
   } catch (err) {
     // Clear invalid config on auth failure
@@ -160,6 +184,9 @@ async function handleConnect() {
     } else {
       showToast(`连接失败: ${err.message}`, "error");
     }
+    // Probe result is stale once auth fails; the next probe will rerun.
+    clearWriteAccess();
+    setRibbonConnectState("disconnected");
     renderConnectForm({ apiUrl: url, apiToken: token, remember });
   }
 }
@@ -178,6 +205,11 @@ function renderDashboard(data) {
   // Re-sync the view-mode ribbon on every render. Defensive against any
   // race where initTheme() ran before this element existed in the DOM.
   syncViewModeBadgeText(document.documentElement.getAttribute("data-theme") || "dark");
+  // A successful render is the strongest signal that we are talking to a
+  // live proxy — paint the ribbon green now (handleConnect also does this,
+  // but a successful auto-refresh re-confirms it for any caller that
+  // reached renderDashboard through fetchAndRender).
+  setRibbonConnectState("connected");
 
   // Hashrate data
   const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
@@ -445,6 +477,8 @@ function openSettingsModal() {
   document.getElementById("cancelSettings").addEventListener("click", () => closeModal(overlay));
   document.getElementById("logoutBtn").addEventListener("click", () => {
     clearConfig();
+    clearWriteAccess();
+    setRibbonConnectState("disconnected");
     closeModal(overlay);
     showToast("已登出", "info");
     renderConnectForm();
@@ -478,11 +512,18 @@ function openSettingsModal() {
     try {
       const data = await request("/1/summary");
       renderDashboard(data);
+      // Probe on save too — the operator may have switched to a
+      // different proxy with a different restricted setting.
+      const canWrite = await probeWriteAccess();
+      saveWriteAccess(canWrite);
+      setRibbonConnectState("connected");
       startAutoRefresh();
       showToast("重新连接成功", "success");
     } catch (err) {
       if (err.status === 401 || err.status === 403) {
         clearConfig();
+        clearWriteAccess();
+        setRibbonConnectState("disconnected");
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: url, apiToken: token, remember });
       } else {
@@ -540,6 +581,8 @@ async function fetchAndRender() {
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
       clearConfig();
+      clearWriteAccess();
+      setRibbonConnectState("disconnected");
       showToast("会话过期，请重新登录", "error");
       renderConnectForm();
       stopAutoRefresh();
@@ -574,6 +617,11 @@ function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
+
+  // Initial ribbon state: until a successful render proves otherwise, the
+  // panel is not actually talking to anything — paint it yellow so the
+  // operator sees the not-connected state at a glance.
+  setRibbonConnectState("disconnected");
 
   // Load saved config
   const cfg = loadConfig();
