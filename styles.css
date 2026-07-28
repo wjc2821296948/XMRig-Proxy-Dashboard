@@ -58,45 +58,55 @@
   --text-on-accent-blue: #fff;
 }
 
-/* Light theme */
+/* Light theme — "Linen Ledger"
+   Warm off-white surfaces with copper primary keep the brand identity
+   from the dark theme. The card surface is cream, not pure white, so
+   the copper reads warmer against it. */
 [data-theme="light"] {
-  --bg-primary: #f5f5f5;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f0f0f0;
-  --border-color: #ddd;
-  --border-light: #e8e8e8;
+  --bg-primary: #f4eee5;
+  --bg-secondary: #fbf6ee;
+  --bg-card: #fffdf7;
+  --bg-card-hover: #f1ebe0;
+  --border-color: #d9cfbe;
+  --border-light: #e6dccb;
 
-  --text-primary: #1a1a1a;
-  --text-secondary: #666;
-  --text-muted: #999;
+  --text-primary: #2a2418;
+  --text-secondary: #6e6450;
+  --text-muted: #9a907a;
 
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
-  --shadow-lg: 0 8px 16px rgba(0,0,0,0.12);
+  --shadow-sm: 0 2px 4px rgba(60,40,20,0.08);
+  --shadow-md: 0 4px 10px rgba(60,40,20,0.12);
+  --shadow-lg: 0 8px 20px rgba(60,40,20,0.16);
 
-  /* Slightly desaturated accents keep contrast on a white card */
-  --accent-green: #059669;
-  --accent-green-light: #34d399;
-  --accent-red: #dc2626;
-  --accent-red-light: #ef4444;
-  --accent-yellow: #d97706;
-  --accent-yellow-light: #f59e0b;
-  --accent-blue: #2563eb;
-  --accent-blue-light: #3b82f6;
+  /* Copper primary — same hue family as dark, deeper for contrast on cream */
+  --accent-copper: #b8633f;
+  --accent-copper-light: #d97757;
+  --accent-copper-deep: #8a4628;
 
-  /* Chart palette in light theme — keep hues but ensure readable on white */
-  --chart-blue: #2563eb;
-  --chart-purple: #7c3aed;
-  --chart-cyan: #0891b2;
-  --chart-green: #059669;
-  --chart-yellow: #ca8a04;
-  --chart-red: #dc2626;
+  /* Slightly desaturated accents keep contrast on a cream card */
+  --accent-green: #2f9d6e;
+  --accent-green-light: #3ddc97;
+  --accent-red: #d24a4a;
+  --accent-red-light: #f06b6b;
+  --accent-yellow: #c08a2c;
+  --accent-yellow-light: #f0b94a;
+  --accent-blue: #4a6bd6;
+  --accent-blue-light: #6b8af0;
+  --accent-purple: #8a6bcf;
+
+  /* Chart palette in light theme — keep hues but ensure readable on cream */
+  --chart-blue: #4a6bd6;
+  --chart-purple: #8a6bcf;
+  --chart-cyan: #2c8aa3;
+  --chart-green: #2f9d6e;
+  --chart-yellow: #c08a2c;
+  --chart-red: #d24a4a;
 
   /* Text on accent backgrounds for light theme */
+  --text-on-accent-copper: #fff;
   --text-on-accent-green: #fff;
   --text-on-accent-red: #fff;
-  --text-on-accent-yellow: #000;
+  --text-on-accent-yellow: #2a1c00;
   --text-on-accent-blue: #fff;
 }
 
