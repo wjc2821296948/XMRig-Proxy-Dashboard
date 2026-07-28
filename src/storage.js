@@ -18,8 +18,9 @@
  *    invites desync, which the previous version suffered from.
  */
 
-const CONFIG_KEY = "xmrig_proxy_config";
-const THEME_KEY  = "dashboard_theme";
+const CONFIG_KEY    = "xmrig_proxy_config";
+const THEME_KEY     = "dashboard_theme";
+const WRITE_KEY     = "dashboard_write_access";
 
 /* --------------------------------------------------------------------------
    Connection config
@@ -137,6 +138,43 @@ export function loadTheme() {
 /** Clear the persisted theme preference. */
 export function clearTheme() {
   localStorage.removeItem(THEME_KEY);
+}
+
+/* --------------------------------------------------------------------------
+   Write-access flag
+
+   Discovered by the dashboard on every successful connect by probing
+   GET /1/config (restricted mode blocks that endpoint). Persisted so the
+   mode picker doesn't need to re-probe on every render and so the ribbon
+   state survives a tab refresh.
+
+   Stored under its own key (separate from CONFIG_KEY) so that logging out
+   does not erase a freshly-probed write-access result, and so that
+   clearing the connection does not invalidate the probe.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Save the discovered write-access state of the currently-connected proxy.
+ *
+ * @param {boolean} enabled  true when GET /1/config returned 2xx.
+ */
+export function saveWriteAccess(enabled) {
+  localStorage.setItem(WRITE_KEY, enabled ? "1" : "0");
+}
+
+/**
+ * @returns {boolean}  true when the most recent probe saw an unrestricted
+ *                     proxy. Defaults to false — we never assume write
+ *                     permission; the operator must explicitly earn it
+ *                     via a successful probe.
+ */
+export function loadWriteAccess() {
+  return localStorage.getItem(WRITE_KEY) === "1";
+}
+
+/** Forget the write-access state (called on logout / disconnect). */
+export function clearWriteAccess() {
+  localStorage.removeItem(WRITE_KEY);
 }
 
 /* --------------------------------------------------------------------------
