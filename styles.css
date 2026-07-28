@@ -111,14 +111,16 @@
 }
 
 /* Default chart palette — also picked up by [data-theme="dark"] which
-   inherits from :root. main.js references these via var(--chart-*)  */
+   inherits from :root. main.js references these via var(--chart-*)
+   Hues chosen so adjacent points in the 6-step sequence are
+   distinguishable at small size on the indigo canvas. */
 :root {
-  --chart-blue: #3b82f6;
-  --chart-purple: #8b5cf6;
-  --chart-cyan: #06b6d4;
-  --chart-green: #22c55e;
-  --chart-yellow: #eab308;
-  --chart-red: #ef4444;
+  --chart-blue: #6b8af0;
+  --chart-purple: #a78bfa;
+  --chart-cyan: #5ec8d4;
+  --chart-green: #3ddc97;
+  --chart-yellow: #f0b94a;
+  --chart-red: #f06b6b;
 }
 
 /* Theme transition: limited to elements that visibly swap color when the
