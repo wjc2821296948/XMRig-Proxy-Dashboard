@@ -223,7 +223,7 @@ h1 {
   text-decoration: underline;
   transition: color var(--transition-fast);
 }
-.edit-url:hover { color: var(--accent-green); }
+.edit-url:hover { color: var(--accent-copper); }
 
 .refresh-time {
   color: var(--text-muted);
@@ -344,7 +344,9 @@ h1 {
 }
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-green), var(--accent-green-light));
+  /* Progress reads as "live signal filling" — copper gradient for the
+     brand-consistent fill, mirroring the header signature stripe. */
+  background: linear-gradient(90deg, var(--accent-copper-deep), var(--accent-copper), var(--accent-copper-light));
   border-radius: 4px;
   transition: width var(--transition-normal);
 }
@@ -518,8 +520,8 @@ h1 {
 }
 .input-field:focus {
   outline: none;
-  border-color: var(--accent-green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  border-color: var(--accent-copper);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.22);
 }
 .input-field::placeholder { color: var(--text-muted); }
 
@@ -538,7 +540,7 @@ h1 {
 }
 .checkbox-group input[type="checkbox"] {
   width: 16px; height: 16px;
-  accent-color: var(--accent-green);
+  accent-color: var(--accent-copper);
 }
 .checkbox-group label { font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; }
 
@@ -665,7 +667,7 @@ h1 {
   width: 32px;
   height: 32px;
   border: 3px solid var(--border-color);
-  border-top-color: var(--accent-green);
+  border-top-color: var(--accent-copper);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
