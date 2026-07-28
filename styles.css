@@ -2,30 +2,43 @@
    CSS Variables – Theme & Spacing
    ========================================================================== */
 :root {
-  /* Dark theme palette (default) */
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #141414;
-  --bg-card: #1a1a1a;
-  --bg-card-hover: #222222;
-  --border-color: #333;
-  --border-light: #2a2a2a;
+  /* "Midnight Ledger" — dark theme palette (default)
+     Backgrounds are deep ink-indigo, not pure black, so the canvas
+     reads as "live instrument" rather than "blank terminal". */
+  --bg-primary: #0e0f1a;
+  --bg-secondary: #161827;
+  --bg-card: #1c1f33;
+  --bg-card-hover: #252a42;
+  --border-color: #2e3454;
+  --border-light: #252a44;
 
-  --text-primary: #e0e0e0;
-  --text-secondary: #888;
-  --text-muted: #555;
+  /* Cool slate text — sits better against indigo than warm gray. */
+  --text-primary: #e4e7f1;
+  --text-secondary: #9aa1c0;
+  --text-muted: #5e6585;
 
-  --accent-green: #10b981;
-  --accent-green-light: #34d399;
-  --accent-red: #ef4444;
-  --accent-red-light: #f87171;
-  --accent-yellow: #f59e0b;
-  --accent-yellow-light: #fbbf24;
-  --accent-blue: #3b82f6;
-  --accent-blue-light: #60a5fa;
+  /* Primary action / "live signal" — copper-amber.
+     Replaces emerald as the loud brand color; copper reads as an
+     oscilloscope needle and harmonizes with Monero's ink palette. */
+  --accent-copper: #d97757;
+  --accent-copper-light: #ec8d6b;
+  --accent-copper-deep: #b25e3f;
 
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 16px rgba(0,0,0,0.5);
+  /* Status accents — jade replaces emerald for success so the
+     "go" state no longer fights the primary brand color. */
+  --accent-green: #3ddc97;
+  --accent-green-light: #62e6ad;
+  --accent-red: #f06b6b;
+  --accent-red-light: #f78f8f;
+  --accent-yellow: #f0b94a;
+  --accent-yellow-light: #f6cf7a;
+  --accent-blue: #6b8af0;
+  --accent-blue-light: #93acf5;
+  --accent-purple: #a78bfa;
+
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 20px rgba(0,0,0,0.55);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -38,63 +51,76 @@
   --font-mono: 'SF Mono', 'Fira Code', monospace;
 
   /* Text on accent backgrounds */
-  --text-on-accent-green: #000;
+  --text-on-accent-copper: #1a1208;
+  --text-on-accent-green: #00261a;
   --text-on-accent-red: #fff;
-  --text-on-accent-yellow: #000;
+  --text-on-accent-yellow: #1a1300;
   --text-on-accent-blue: #fff;
 }
 
-/* Light theme */
+/* Light theme — "Linen Ledger"
+   Warm off-white surfaces with copper primary keep the brand identity
+   from the dark theme. The card surface is cream, not pure white, so
+   the copper reads warmer against it. */
 [data-theme="light"] {
-  --bg-primary: #f5f5f5;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f0f0f0;
-  --border-color: #ddd;
-  --border-light: #e8e8e8;
+  --bg-primary: #f4eee5;
+  --bg-secondary: #fbf6ee;
+  --bg-card: #fffdf7;
+  --bg-card-hover: #f1ebe0;
+  --border-color: #d9cfbe;
+  --border-light: #e6dccb;
 
-  --text-primary: #1a1a1a;
-  --text-secondary: #666;
-  --text-muted: #999;
+  --text-primary: #2a2418;
+  --text-secondary: #6e6450;
+  --text-muted: #9a907a;
 
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
-  --shadow-lg: 0 8px 16px rgba(0,0,0,0.12);
+  --shadow-sm: 0 2px 4px rgba(60,40,20,0.08);
+  --shadow-md: 0 4px 10px rgba(60,40,20,0.12);
+  --shadow-lg: 0 8px 20px rgba(60,40,20,0.16);
 
-  /* Slightly desaturated accents keep contrast on a white card */
-  --accent-green: #059669;
-  --accent-green-light: #34d399;
-  --accent-red: #dc2626;
-  --accent-red-light: #ef4444;
-  --accent-yellow: #d97706;
-  --accent-yellow-light: #f59e0b;
-  --accent-blue: #2563eb;
-  --accent-blue-light: #3b82f6;
+  /* Copper primary — same hue family as dark, deeper for contrast on cream */
+  --accent-copper: #b8633f;
+  --accent-copper-light: #d97757;
+  --accent-copper-deep: #8a4628;
 
-  /* Chart palette in light theme — keep hues but ensure readable on white */
-  --chart-blue: #2563eb;
-  --chart-purple: #7c3aed;
-  --chart-cyan: #0891b2;
-  --chart-green: #059669;
-  --chart-yellow: #ca8a04;
-  --chart-red: #dc2626;
+  /* Slightly desaturated accents keep contrast on a cream card */
+  --accent-green: #2f9d6e;
+  --accent-green-light: #3ddc97;
+  --accent-red: #d24a4a;
+  --accent-red-light: #f06b6b;
+  --accent-yellow: #c08a2c;
+  --accent-yellow-light: #f0b94a;
+  --accent-blue: #4a6bd6;
+  --accent-blue-light: #6b8af0;
+  --accent-purple: #8a6bcf;
+
+  /* Chart palette in light theme — keep hues but ensure readable on cream */
+  --chart-blue: #4a6bd6;
+  --chart-purple: #8a6bcf;
+  --chart-cyan: #2c8aa3;
+  --chart-green: #2f9d6e;
+  --chart-yellow: #c08a2c;
+  --chart-red: #d24a4a;
 
   /* Text on accent backgrounds for light theme */
+  --text-on-accent-copper: #fff;
   --text-on-accent-green: #fff;
   --text-on-accent-red: #fff;
-  --text-on-accent-yellow: #000;
+  --text-on-accent-yellow: #2a1c00;
   --text-on-accent-blue: #fff;
 }
 
 /* Default chart palette — also picked up by [data-theme="dark"] which
-   inherits from :root. main.js references these via var(--chart-*)  */
+   inherits from :root. main.js references these via var(--chart-*)
+   Hues chosen so adjacent points in the 6-step sequence are
+   distinguishable at small size on the indigo canvas. */
 :root {
-  --chart-blue: #3b82f6;
-  --chart-purple: #8b5cf6;
-  --chart-cyan: #06b6d4;
-  --chart-green: #22c55e;
-  --chart-yellow: #eab308;
-  --chart-red: #ef4444;
+  --chart-blue: #6b8af0;
+  --chart-purple: #a78bfa;
+  --chart-cyan: #5ec8d4;
+  --chart-green: #3ddc97;
+  --chart-yellow: #f0b94a;
+  --chart-red: #f06b6b;
 }
 
 /* Theme transition: limited to elements that visibly swap color when the
@@ -156,12 +182,17 @@ body {
 }
 
 header {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+  /* "Live signal bar" — copper-amber accent stripe across the top
+     signals the dashboard is running. This is the page's signature:
+     the operator sees at a glance whether the system is alive. */
+  background:
+    linear-gradient(180deg, var(--accent-copper) 0%, var(--accent-copper-deep) 100%) top/100% 3px no-repeat,
+    linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 1rem 1.25rem;
+  padding: 1.15rem 1.25rem 1rem;
   margin-bottom: 1rem;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 1px 0 rgba(217, 119, 87, 0.15);
 }
 
 h1 {
@@ -192,7 +223,7 @@ h1 {
   text-decoration: underline;
   transition: color var(--transition-fast);
 }
-.edit-url:hover { color: var(--accent-green); }
+.edit-url:hover { color: var(--accent-copper); }
 
 .refresh-time {
   color: var(--text-muted);
@@ -213,9 +244,23 @@ h1 {
   letter-spacing: 0.05em;
 }
 
-.status-online { background: var(--accent-green); color: #000; }
-.status-offline { background: var(--accent-red); color: var(--text-on-accent-red, #fff); }
-.status-warning { background: var(--accent-yellow); color: #000; }
+/* Subtle inner glow keeps each badge legible on the indigo canvas
+   without competing with the copper primary. */
+.status-online {
+  background: var(--accent-green);
+  color: var(--text-on-accent-green);
+  box-shadow: 0 0 0 1px rgba(61, 220, 151, 0.35) inset;
+}
+.status-offline {
+  background: var(--accent-red);
+  color: var(--text-on-accent-red);
+  box-shadow: 0 0 0 1px rgba(240, 107, 107, 0.35) inset;
+}
+.status-warning {
+  background: var(--accent-yellow);
+  color: var(--text-on-accent-yellow);
+  box-shadow: 0 0 0 1px rgba(240, 185, 74, 0.35) inset;
+}
 
 /* ==========================================================================
    Grid System
@@ -299,7 +344,9 @@ h1 {
 }
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-green), var(--accent-green-light));
+  /* Progress reads as "live signal filling" — copper gradient for the
+     brand-consistent fill, mirroring the header signature stripe. */
+  background: linear-gradient(90deg, var(--accent-copper-deep), var(--accent-copper), var(--accent-copper-light));
   border-radius: 4px;
   transition: width var(--transition-normal);
 }
@@ -412,18 +459,24 @@ h1 {
   justify-content: center;
   gap: 0.4rem;
   padding: 0.55rem 1.1rem;
-  background: var(--accent-green);
-  color: #000;
+  /* Primary action: copper — the loud brand color now lives here
+     instead of on every success state. */
+  background: var(--accent-copper);
+  color: var(--text-on-accent-copper);
   border: none;
   border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 0.8rem;
   cursor: pointer;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
-.btn:hover { background: var(--accent-green-light); transform: translateY(-1px); }
+.btn:hover {
+  background: var(--accent-copper-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(217, 119, 87, 0.25);
+}
 .btn:active { transform: translateY(0); }
-.btn:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 2px; }
+.btn:focus-visible { outline: 2px solid var(--accent-copper); outline-offset: 2px; }
 
 .btn-secondary {
   background: var(--bg-secondary);
@@ -467,8 +520,8 @@ h1 {
 }
 .input-field:focus {
   outline: none;
-  border-color: var(--accent-green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  border-color: var(--accent-copper);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.22);
 }
 .input-field::placeholder { color: var(--text-muted); }
 
@@ -487,7 +540,7 @@ h1 {
 }
 .checkbox-group input[type="checkbox"] {
   width: 16px; height: 16px;
-  accent-color: var(--accent-green);
+  accent-color: var(--accent-copper);
 }
 .checkbox-group label { font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; }
 
@@ -614,7 +667,7 @@ h1 {
   width: 32px;
   height: 32px;
   border: 3px solid var(--border-color);
-  border-top-color: var(--accent-green);
+  border-top-color: var(--accent-copper);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
