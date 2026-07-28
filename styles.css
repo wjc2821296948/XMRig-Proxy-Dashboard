@@ -182,12 +182,17 @@ body {
 }
 
 header {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+  /* "Live signal bar" — copper-amber accent stripe across the top
+     signals the dashboard is running. This is the page's signature:
+     the operator sees at a glance whether the system is alive. */
+  background:
+    linear-gradient(180deg, var(--accent-copper) 0%, var(--accent-copper-deep) 100%) top/100% 3px no-repeat,
+    linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 1rem 1.25rem;
+  padding: 1.15rem 1.25rem 1rem;
   margin-bottom: 1rem;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 1px 0 rgba(217, 119, 87, 0.15);
 }
 
 h1 {
