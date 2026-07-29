@@ -778,6 +778,28 @@ h1 {
   color: var(--accent-green);
   font-size: 0.55rem;
 }
+/* Mirror the ribbon's connection state inside the picker: when the
+   panel is not actually logged in (yellow ribbon) the active row's
+   marker and the enabled row's chevron/labels are also yellow, so the
+   popover reads as a single coherent state instead of a green-on-yellow
+   mismatch. Disabled (red) is always red — restricted mode is its own
+   story and should never be re-tinted to match the ribbon. */
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-active::after {
+  color: var(--accent-yellow);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-enabled .mode-picker-item-label {
+  color: var(--accent-yellow);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-enabled::after {
+  color: var(--accent-yellow);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
+}
+[data-theme="light"] .mode-picker[data-state="disconnected"] .mode-picker-item-dot {
+  box-shadow: 0 0 0 3px rgba(192, 138, 44, 0.22);
+}
 .mode-picker-item.is-disabled {
   /* Locked-out alternative mode: same shape as the active row so the
      operator reads them as siblings, but the text drops to muted and

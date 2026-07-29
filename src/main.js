@@ -81,6 +81,10 @@ function setRibbonConnectState(state) {
   const badge = document.getElementById("viewModeBadge");
   if (!badge) return;
   badge.dataset.connectState = state;
+  // Repaint the open picker in lockstep so the dots and active marker
+  // never sit on a stale color if the connection flips while the
+  // picker is showing.
+  syncModePickerConnectState();
 }
 
 /* ==========================================================================
@@ -140,6 +144,7 @@ function openModePicker() {
     modePickerTheme = currentTheme;
   }
   syncModePickerAltRow();
+  syncModePickerConnectState();
   positionModePicker();
   modePickerEl.classList.add("open");
   els.viewModeBadge?.setAttribute("aria-expanded", "true");
@@ -261,6 +266,19 @@ function syncModePickerAltRow() {
       ? "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换"
       : "This proxy runs in restricted mode. Set \"restricted\": false in the XMRig-Proxy config to enable config mode.";
   }
+}
+
+/**
+ * Mirror the ribbon's connection state onto the picker. The picker's
+ * own dots, active marker, and enabled-row labels read this attribute
+ * so a disconnected ribbon never sits next to a green-on-yellow
+ * mismatch inside the popover.
+ */
+function syncModePickerConnectState() {
+  if (!modePickerEl) return;
+  const ribbon = els.viewModeBadge;
+  const state = ribbon?.dataset?.connectState === "connected" ? "connected" : "disconnected";
+  modePickerEl.dataset.state = state;
 }
 
 /**
