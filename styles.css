@@ -793,13 +793,6 @@ h1 {
 .mode-picker[data-state="disconnected"] .mode-picker-item.is-enabled::after {
   color: var(--accent-yellow);
 }
-.mode-picker[data-state="disconnected"] .mode-picker-item-dot {
-  background: var(--accent-yellow);
-  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
-}
-[data-theme="light"] .mode-picker[data-state="disconnected"] .mode-picker-item-dot {
-  box-shadow: 0 0 0 3px rgba(192, 138, 44, 0.22);
-}
 .mode-picker-item.is-disabled {
   /* Locked-out alternative mode: same shape as the active row so the
      operator reads them as siblings, but the text drops to muted and
@@ -826,6 +819,25 @@ h1 {
   /* The active mode's dot is jade — the "go" signal — so the picker
      reads as "this one is running", not "this one is allowed". */
   background: var(--accent-green);
+}
+/* Mirror the ribbon's connection state inside the picker. These rules
+   must come AFTER .mode-picker-item.is-active .mode-picker-item-dot
+   (and after .mode-picker-item-dot) so they win on source order at the
+   same specificity — otherwise the active row's hard-coded jade
+   survives and the leftmost dot stays green when the ribbon is yellow.
+   Disabled (restricted) is always red and is never re-tinted; that
+   story is independent of the ribbon. */
+.mode-picker[data-state="disconnected"] .mode-picker-item-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-active .mode-picker-item-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
+}
+[data-theme="light"] .mode-picker[data-state="disconnected"] .mode-picker-item-dot,
+[data-theme="light"] .mode-picker[data-state="disconnected"] .mode-picker-item.is-active .mode-picker-item-dot {
+  box-shadow: 0 0 0 3px rgba(192, 138, 44, 0.22);
 }
 .mode-picker-item-label {
   flex: 1;
