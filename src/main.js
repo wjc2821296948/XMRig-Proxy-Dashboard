@@ -49,6 +49,9 @@ function toggleTheme() {
   document.documentElement.setAttribute("data-theme", newTheme);
   saveTheme(newTheme);
   syncViewModeBadgeText(newTheme);
+  // Force the next picker open to rebuild so its labels and disabled-row
+  // title match the new language.
+  modePickerTheme = null;
   showToast(`已切换到${newTheme === "dark" ? "深色" : "浅色"}模式`, "info");
 }
 
@@ -89,7 +92,224 @@ const els = {
   workerId: document.getElementById("workerId"),
   lastUpdate: document.getElementById("lastUpdate"),
   editUrl: document.getElementById("editUrl"),
+  viewModeBadge: document.getElementById("viewModeBadge"),
 };
+
+/* ==========================================================================
+   Mode picker (header ribbon popover)
+
+   The ribbon advertises that it opens a menu (role="button",
+   aria-haspopup="menu" in index.html). Clicking or pressing Enter/Space
+   on the ribbon opens a small popover anchored to it that lists the
+   currently-active mode (jade dot, not clickable) and the alternative
+   mode (jade chevron when enabled, gray text + red dot when disabled).
+
+   The alternative mode is the operator's only path to write capability,
+   so it carries the most information: when the connected proxy runs
+   restricted mode the alt row is locked out and its title= attribute
+   tells the operator exactly which config line to flip on the server.
+   ========================================================================== */
+
+let modePickerEl = null;
+let modePickerEscHandler = null;
+let modePickerOutsideClickHandler = null;
+let modePickerTheme = null;
+
+// The dashboard currently renders in only one mode; tracking the active
+// one in module-level state keeps the picker logic obvious to read.
+// Stage 2 will add a 'config' branch that swaps the dashboard body.
+let activeDashboardMode = "readonly";
+
+/**
+ * Open the mode picker anchored to the header ribbon.
+ * Idempotent — repeated calls while it is already open are no-ops so a
+ * stray re-open from the ESC handler cannot strand the popover open.
+ */
+function openModePicker() {
+  if (modePickerEl && modePickerEl.classList.contains("open")) return;
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  // Rebuild the picker when the theme changed since the last build, so
+  // the language and disabled-row title stay in sync without us having
+  // to translate nodes in place.
+  if (modePickerEl && modePickerTheme !== currentTheme) {
+    modePickerEl.remove();
+    modePickerEl = null;
+  }
+  if (!modePickerEl) {
+    modePickerEl = buildModePicker();
+    modePickerTheme = currentTheme;
+  }
+  syncModePickerAltRow();
+  positionModePicker();
+  modePickerEl.classList.add("open");
+  els.viewModeBadge?.setAttribute("aria-expanded", "true");
+
+  if (!modePickerEscHandler) {
+    modePickerEscHandler = e => {
+      if (e.key === "Escape") closeModePicker();
+    };
+    document.addEventListener("keydown", modePickerEscHandler);
+  }
+  if (!modePickerOutsideClickHandler) {
+    modePickerOutsideClickHandler = e => {
+      if (!modePickerEl) return;
+      if (modePickerEl.contains(e.target)) return;
+      if (els.viewModeBadge && els.viewModeBadge.contains(e.target)) return;
+      closeModePicker();
+    };
+    document.addEventListener("click", modePickerOutsideClickHandler);
+  }
+}
+
+/** Close the picker and tear down its document-level listeners. */
+function closeModePicker() {
+  if (modePickerEl) modePickerEl.classList.remove("open");
+  els.viewModeBadge?.setAttribute("aria-expanded", "false");
+  if (modePickerEscHandler) {
+    document.removeEventListener("keydown", modePickerEscHandler);
+    modePickerEscHandler = null;
+  }
+  if (modePickerOutsideClickHandler) {
+    document.removeEventListener("click", modePickerOutsideClickHandler);
+    modePickerOutsideClickHandler = null;
+  }
+}
+
+/**
+ * Build the picker DOM once and re-use the node across opens. The
+ * "active" and "alternative" rows are static text — only their state
+ * classes flip based on the persisted write-access flag — so there is
+ * nothing in the picker that needs to be re-rendered per open.
+ *
+ * @returns {HTMLElement}
+ */
+function buildModePicker() {
+  const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
+  const labelActive = isDark ? "只读视图" : "Read-only viewer";
+  const labelAlt    = isDark ? "配置模式" : "Config mode";
+  const title       = isDark ? "选择模式" : "Select mode";
+
+  const wrap = document.createElement("div");
+  wrap.className = "mode-picker";
+  wrap.setAttribute("role", "menu");
+  wrap.innerHTML = `
+    <div class="mode-picker-title">${escapeHtml(title)}</div>
+    <div class="mode-picker-item is-active" role="menuitem" aria-disabled="true" data-mode="readonly">
+      <span class="mode-picker-item-dot" aria-hidden="true"></span>
+      <span class="mode-picker-item-label">${escapeHtml(labelActive)}</span>
+    </div>
+    <div class="mode-picker-item" role="menuitem" data-mode="config">
+      <span class="mode-picker-item-dot" aria-hidden="true"></span>
+      <span class="mode-picker-item-label">${escapeHtml(labelAlt)}</span>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  // Wire the alt row's behavior. The active row is intentionally
+  // non-interactive (no listener) — clicking it does nothing, and the
+  // cursor:default styling in CSS carries that intent.
+  const altRow = wrap.querySelector('.mode-picker-item[data-mode="config"]');
+  altRow.addEventListener("click", () => onAltModeRowClicked(altRow));
+
+  return wrap;
+}
+
+/**
+ * Position the picker just below the header ribbon, right-aligned.
+ * getBoundingClientRect() already accounts for any page scroll, so we
+ * add window scroll offsets into the fixed-position coordinates.
+ */
+function positionModePicker() {
+  if (!modePickerEl || !els.viewModeBadge) return;
+  const r = els.viewModeBadge.getBoundingClientRect();
+  modePickerEl.style.top  = `${window.scrollY + r.bottom + 6}px`;
+  modePickerEl.style.left = `${window.scrollX + r.right - modePickerEl.offsetWidth}px`;
+}
+
+/**
+ * Click handler for the alternative-mode row. Two outcomes:
+ *  - writeAccess = true  → the row was styled .is-enabled; switch the
+ *    dashboard into config mode and close the picker.
+ *  - writeAccess = false → the row was styled .is-disabled; do nothing
+ *    (the native title= tooltip already explains the restriction).
+ */
+function onAltModeRowClicked(row) {
+  if (row.classList.contains("is-disabled")) return;
+  closeModePicker();
+  switchDashboardMode(row.dataset.mode);
+}
+
+/**
+ * Re-paint the alt-mode row to reflect the most recently probed
+ * write-access state. Called from openModePicker() and from any
+ * connect/probe site that flips the persisted flag.
+ */
+function syncModePickerAltRow() {
+  if (!modePickerEl) return;
+  const altRow = modePickerEl.querySelector('.mode-picker-item[data-mode="config"]');
+  if (!altRow) return;
+  altRow.classList.remove("is-enabled", "is-disabled");
+  if (loadWriteAccess()) {
+    altRow.classList.add("is-enabled");
+    altRow.removeAttribute("aria-disabled");
+    altRow.removeAttribute("title");
+  } else {
+    altRow.classList.add("is-disabled");
+    altRow.setAttribute("aria-disabled", "true");
+    const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
+    altRow.title = isDark
+      ? "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换"
+      : "This proxy runs in restricted mode. Set \"restricted\": false in the XMRig-Proxy config to enable config mode.";
+  }
+}
+
+/**
+ * Switch the dashboard body into the requested mode. For stage 1 only
+ * the 'readonly' branch actually exists; 'config' is wired up to a
+ * placeholder that will be replaced by the real config surface in
+ * stage 2.
+ *
+ * @param {"readonly" | "config"} mode
+ */
+function switchDashboardMode(mode) {
+  if (mode === activeDashboardMode) return;
+  activeDashboardMode = mode;
+  if (mode === "readonly") {
+    // Re-render the dashboard with the last successful /1/summary payload
+    // by re-fetching — keeps the chart, cards, and status all in sync
+    // without us having to cache the data elsewhere.
+    showToast("已切换到只读视图", "info");
+    fetchAndRender().catch(() => {
+      showToast("无法恢复只读视图，请刷新页面", "error");
+    });
+  } else if (mode === "config") {
+    showToast("配置模式 — 占位 (即将推出)", "info");
+    renderConfigPlaceholder();
+  }
+}
+
+/**
+ * Stage-1 placeholder for the config mode. Renders inside the same
+ * dashboard container so the layout does not jump when the real config
+ * UI lands in stage 2.
+ */
+function renderConfigPlaceholder() {
+  els.dashboard.innerHTML = `
+    <div class="config-panel config-mode-placeholder" role="region" aria-labelledby="config-mode-title">
+      <p class="config-eyebrow">配置模式</p>
+      <h2 id="config-mode-title" class="config-title">配置模式即将推出</h2>
+      <p style="font-size:0.75rem;color:var(--text-secondary);text-align:center;margin-bottom:1rem;">
+        将在下一阶段提供 XMRig-Proxy <code>/1/config</code> 的可视化编辑与 <code>PUT /1/config</code> 保存。
+      </p>
+      <div class="config-actions">
+        <button class="btn btn-secondary" id="backToReadonly">返回只读视图</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("backToReadonly")?.addEventListener("click", () => {
+    switchDashboardMode("readonly");
+  });
+}
 
 /* ==========================================================================
    Connection Form Rendering
@@ -173,6 +393,7 @@ async function handleConnect() {
     const canWrite = await probeWriteAccess();
     saveWriteAccess(canWrite);
     setRibbonConnectState("connected");
+    syncModePickerAltRow();
     startAutoRefresh();
   } catch (err) {
     // Clear invalid config on auth failure
@@ -187,6 +408,7 @@ async function handleConnect() {
     // Probe result is stale once auth fails; the next probe will rerun.
     clearWriteAccess();
     setRibbonConnectState("disconnected");
+    syncModePickerAltRow();
     renderConnectForm({ apiUrl: url, apiToken: token, remember });
   }
 }
@@ -479,6 +701,8 @@ function openSettingsModal() {
     clearConfig();
     clearWriteAccess();
     setRibbonConnectState("disconnected");
+    closeModePicker();
+    syncModePickerAltRow();
     closeModal(overlay);
     showToast("已登出", "info");
     renderConnectForm();
@@ -504,6 +728,7 @@ function openSettingsModal() {
     document.documentElement.setAttribute("data-theme", theme);
     saveTheme(theme);
     syncViewModeBadgeText(theme);
+    modePickerTheme = null;
 
     closeModal(overlay);
     showToast("设置已保存，正在重新连接...", "info");
@@ -517,6 +742,7 @@ function openSettingsModal() {
       const canWrite = await probeWriteAccess();
       saveWriteAccess(canWrite);
       setRibbonConnectState("connected");
+      syncModePickerAltRow();
       startAutoRefresh();
       showToast("重新连接成功", "success");
     } catch (err) {
@@ -524,6 +750,7 @@ function openSettingsModal() {
         clearConfig();
         clearWriteAccess();
         setRibbonConnectState("disconnected");
+        syncModePickerAltRow();
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: url, apiToken: token, remember });
       } else {
@@ -583,6 +810,7 @@ async function fetchAndRender() {
       clearConfig();
       clearWriteAccess();
       setRibbonConnectState("disconnected");
+      syncModePickerAltRow();
       showToast("会话过期，请重新登录", "error");
       renderConnectForm();
       stopAutoRefresh();
@@ -617,6 +845,26 @@ function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
+
+  // Wire the view-mode ribbon: click or keyboard activation opens the
+  // mode picker. The ribbon itself never closes the picker — that lives
+  // on document-level listeners owned by openModePicker().
+  if (els.viewModeBadge) {
+    els.viewModeBadge.addEventListener("click", e => {
+      e.stopPropagation();
+      if (modePickerEl?.classList.contains("open")) {
+        closeModePicker();
+      } else {
+        openModePicker();
+      }
+    });
+    els.viewModeBadge.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        els.viewModeBadge.click();
+      }
+    });
+  }
 
   // Initial ribbon state: until a successful render proves otherwise, the
   // panel is not actually talking to anything — paint it yellow so the
