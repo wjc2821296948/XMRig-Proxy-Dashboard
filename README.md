@@ -166,18 +166,6 @@ A: 当前版本单实例。可通过「设置」修改 URL/Token 实现切换；
 
 ---
 
-## 🏗️ 重构后的重要设计决策记录
-
-| 决策 | 背景 | 影响 |
-|------|------|------|
-| **ES Module 替代单文件 script.js** | 便于模块化、Tree-shaking、浏览器原生支持 | 无需构建工具，保持零依赖 |
-| **统一 `api.js` 封装 fetch** | 原代码分散在多处 `fetch`，难以统一鉴权、错误处理 | 单点控制鉴权、超时、脱敏日志 |
-| **存储抽象 `storage.js`** | 原代码直接操作 `localStorage`，无 Remember Me 支持 | 统一 Remember Me 逻辑，便于测试替换 |
-| **UI 组件化 `ui.js`** | 原代码 `renderDashboard` 超 200 行字符串拼接 | 关注点分离，Skeleton/Toast 复用 |
-| **CSP + escapeHtml** | 原代码大量 `innerHTML` 模板字符串，存在 XSS 隐患 | 消除 DOM XSS 风险，符合安全基线 |
-| **Token 脱敏日志** | 原代码 `console.log` 直接打印完整 Token | 杜绝控制台泄露，满足安全审计 |
-| **响应式 CSS 变量主题** | 原 CSS 硬编码颜色，难以扩展主题 | 支持未来暗/亮主题切换，维护性提升 |
-
 ---
 
 ## 📋 部署清单
