@@ -166,18 +166,6 @@ A: Current version single instance. Switch via "Settings" to change URL/Token; f
 
 ---
 
-## 🏗️ Key Design Decisions (Post-Refactor)
-
-| Decision | Context | Impact |
-|----------|---------|--------|
-| **ES Module instead of single script.js** | Modularity, tree-shaking, native browser support | No build tools needed, zero deps maintained |
-| **Unified `api.js` fetch wrapper** | Original code had scattered `fetch` calls, hard to unify auth/error handling | Single point control for auth, timeout, sanitized logs |
-| **Storage abstraction `storage.js`** | Original code used `localStorage` directly, no Remember Me support | Unified Remember Me logic, easy to test/replace |
-| **UI componentization `ui.js`** | Original `renderDashboard` was 200+ lines of string concatenation | Separation of concerns, Skeleton/Toast reuse |
-| **CSP + escapeHtml** | Original code used heavy `innerHTML` template strings, XSS risk | Eliminates DOM XSS risk, meets security baseline |
-| **Token sanitized logs** | Original `console.log` printed full Token | Prevents console leaks, passes security audits |
-| **Responsive CSS variable theme** | Original CSS hardcoded colors, hard to extend themes | Supports future dark/light toggle, improved maintainability |
-
 ---
 
 ## 📋 Deployment Checklist
@@ -202,6 +190,54 @@ A: Current version single instance. Switch via "Settings" to change URL/Token; f
 
 ---
 
+## 🩺 Status Mapping & Production Semantics
+
+The "Offline / Warning / Online" badge in the dashboard header is
+computed by `getStatusInfo(data.miners)` in `src/ui.js`. The rules:
+
+| Display | Trigger | Real-world meaning (inferred) |
+|---|---|---|
+| **Offline** (red) | `data.miners.now === 0` | No miners are currently connected to this Proxy. Possible causes: every rig is powered down / the Proxy just started and no miner has dialed in yet / every Stratum connection timed out and was kicked / all miners failed over to a backup Proxy. |
+| **Warning** (yellow) | `0 < now < max × 0.5` | Active miner count is below half of the historical peak. Possible causes: rigs signing off after a peak hour / a batch dropped and hasn't reconnected yet / a pool outage triggered failover / a miner config change is rolling out. |
+| **Online** (green) | `now >= max × 0.5` | Most of the historical miners are still connected and stable. |
+
+### Known production pitfalls
+
+1. **`max` is a sticky historical peak** — it does not reset to zero on
+   restart. After a Proxy restart `max` will re-accumulate, but old
+   peaks linger; if `max = 1000` and `now = 10`, the badge will show
+   "Warning", not "Offline".
+2. **`now` is instantaneous** — a 5-second pool blip can flicker the
+   UI between "Offline" and "Online". The check has no rolling average.
+3. **Health is not measured** — a miner rejecting 99 % of shares while
+   still connected still counts as "Online". Watch the **Acceptance
+   Rate** and **Latency** tiles in the Mining Results card alongside
+   the badge.
+4. **Proxy-restart transient** — `/1/summary` will return
+   `miners.now = 0` for a brief moment after a Proxy restart, which
+   the badge immediately paints as "Offline"; the miners reconnect
+   within seconds.
+5. **Cold-start false positive** — a freshly deployed Proxy has
+   `max = 0, now = 0`. The check `0 < 0 × 0.5` is false, so the badge
+   lights **green** on an empty Proxy, which is misleading.
+
+### Ribbon vs. badge — don't confuse them
+
+The dashboard carries two parallel status indicators that answer
+different questions:
+
+| Element | Question it answers | Driven by |
+|---|---|---|
+| Header Ribbon (dot + "Read-only viewer") | **Login state**: am I successfully talking to a Proxy right now? | `setRibbonConnectState("connected" \| "disconnected")` |
+| Status badge (dot + Offline / Warning / Online) | **Business state**: are there enough miners connected? | `getStatusInfo(data.miners)` |
+
+Ribbon green = the last `/1/summary` returned 2xx. Ribbon yellow =
+no config saved, or a 401 / connect failure happened. The badge
+text only updates after a successful `/1/summary`; if the Ribbon is
+yellow the badge text is whatever was last rendered and should not
+be trusted.
+
+---
 ## 🤝 Contributing
 
 1. Fork this repository
