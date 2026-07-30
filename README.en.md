@@ -166,18 +166,6 @@ A: Current version single instance. Switch via "Settings" to change URL/Token; f
 
 ---
 
-## 🏗️ Key Design Decisions (Post-Refactor)
-
-| Decision | Context | Impact |
-|----------|---------|--------|
-| **ES Module instead of single script.js** | Modularity, tree-shaking, native browser support | No build tools needed, zero deps maintained |
-| **Unified `api.js` fetch wrapper** | Original code had scattered `fetch` calls, hard to unify auth/error handling | Single point control for auth, timeout, sanitized logs |
-| **Storage abstraction `storage.js`** | Original code used `localStorage` directly, no Remember Me support | Unified Remember Me logic, easy to test/replace |
-| **UI componentization `ui.js`** | Original `renderDashboard` was 200+ lines of string concatenation | Separation of concerns, Skeleton/Toast reuse |
-| **CSP + escapeHtml** | Original code used heavy `innerHTML` template strings, XSS risk | Eliminates DOM XSS risk, meets security baseline |
-| **Token sanitized logs** | Original `console.log` printed full Token | Prevents console leaks, passes security audits |
-| **Responsive CSS variable theme** | Original CSS hardcoded colors, hard to extend themes | Supports future dark/light toggle, improved maintainability |
-
 ---
 
 ## 📋 Deployment Checklist
