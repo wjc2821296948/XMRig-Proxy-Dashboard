@@ -52,6 +52,11 @@ function toggleTheme() {
   // Force the next picker open to rebuild so its labels and disabled-row
   // title match the new language.
   modePickerTheme = null;
+  // If the picker is currently open, close it first — its labels and
+  // tooltips are now stale until the next open rebuilds them. Leaving
+  // it open during the rebuild would show mixed-language content for
+  // a frame.
+  if (modePickerEl?.classList.contains("open")) closeModePicker();
   showToast(`已切换到${newTheme === "dark" ? "深色" : "浅色"}模式`, "info");
 }
 
@@ -85,6 +90,45 @@ function setRibbonConnectState(state) {
   // never sit on a stale color if the connection flips while the
   // picker is showing.
   syncModePickerConnectState();
+}
+
+/**
+ * Centralised disconnect sequence. Three callers used to repeat this
+ * pattern (logout, auth failure in fetchAndRender, auth failure in
+ * settings-save). Keeping it here makes the policy a single line —
+ * e.g. the decision to keep or clear the write-access flag is now
+ * documented in one place instead of scattered across the file.
+ *
+ * @param {{clearWriteAccess?: boolean}} [opts] When true, also clears the
+ *                                          persisted write-access flag.
+ *                                          Defaults to false (keep the
+ *                                          previously-probed state across
+ *                                          transient disconnects).
+ */
+function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
+  if (shouldClear) clearWriteAccess();
+  setRibbonConnectState("disconnected");
+  // Only repaint the alt row when the persisted flag actually changed;
+  // a transient disconnect (network blip) should not reflash the picker.
+  if (shouldClear) syncModePickerAltRow();
+}
+
+/**
+ * Apply a tri-state probe result. Persists the flag for the picker and
+ * surfaces non-restricted failures so the operator gets a real reason
+ * instead of a silent downgrade to "disabled".
+ *
+ * @param {"unrestricted" | "restricted" | "unknown"} state
+ * @param {boolean} [showUnknownToast] When true, an "unknown" result also
+ *                                     fires a toast. False suppresses it
+ *                                     (e.g. when the caller already showed
+ *                                     a connection-level error toast).
+ */
+function applyProbeResult(state, showUnknownToast = true) {
+  saveWriteAccess(state === "unrestricted");
+  if (state === "unknown" && showUnknownToast) {
+    showToast("无法确认 Proxy 写入权限，配置模式已禁用（请检查网络或 CORS）", "warn");
+  }
 }
 
 /* ==========================================================================
@@ -157,7 +201,10 @@ function openModePicker() {
   }
   if (!modePickerOutsideClickHandler) {
     modePickerOutsideClickHandler = e => {
-      if (!modePickerEl) return;
+      // Defensive: a stale listener could fire after the picker node was
+      // removed (e.g. during a theme-toggle rebuild). isConnected is the
+      // canonical check for "still attached to the document tree".
+      if (!modePickerEl || !modePickerEl.isConnected) return;
       if (modePickerEl.contains(e.target)) return;
       if (els.viewModeBadge && els.viewModeBadge.contains(e.target)) return;
       closeModePicker();
@@ -168,7 +215,11 @@ function openModePicker() {
 
 /** Close the picker and tear down its document-level listeners. */
 function closeModePicker() {
-  if (modePickerEl) modePickerEl.classList.remove("open");
+  // Only touch the picker if it's still attached to the document; a
+  // theme-toggle rebuild may have detached it between open and close.
+  if (modePickerEl && modePickerEl.isConnected) {
+    modePickerEl.classList.remove("open");
+  }
   els.viewModeBadge?.setAttribute("aria-expanded", "false");
   if (modePickerEscHandler) {
     document.removeEventListener("keydown", modePickerEscHandler);
@@ -399,17 +450,21 @@ async function handleConnect() {
   els.statusBadge.className = "status-badge status-warning";
 
   try {
-    // Test connection
-    const data = await request("/1/summary");
+    // Kick off the write-access probe in parallel with the first /1/summary
+    // so we don't pay an extra 8s round-trip on every connect. Both
+    // requests share the same Authorization header and have independent
+    // failure modes, so parallel is safe.
+    const summaryPromise  = request("/1/summary");
+    const probePromise    = probeWriteAccess();
+    const data = await summaryPromise;
     showToast("连接成功", "success");
     renderDashboard(data);
-    // Probe write access on every successful connect. The result is
-    // persisted so the mode picker does not need to re-probe on every
-    // render, and so it survives a tab refresh. If the probe fails for
-    // any reason we conservatively assume restricted and let the next
-    // connect retry.
-    const canWrite = await probeWriteAccess();
-    saveWriteAccess(canWrite);
+    // The probe result is persisted so the mode picker does not need to
+    // re-probe on every render, and so it survives a tab refresh. We await
+    // it here only to surface non-restricted failures (network/5xx) as a
+    // toast — "unknown" still disables the config-mode row but the
+    // operator gets a clear reason instead of a silent downgrade.
+    applyProbeResult(await probePromise, /* showUnknownToast */ true);
     setRibbonConnectState("connected");
     syncModePickerAltRow();
     startAutoRefresh();
@@ -423,10 +478,12 @@ async function handleConnect() {
     } else {
       showToast(`连接失败: ${err.message}`, "error");
     }
-    // Probe result is stale once auth fails; the next probe will rerun.
-    clearWriteAccess();
-    setRibbonConnectState("disconnected");
-    syncModePickerAltRow();
+    // Probe result is only stale on auth failure — the operator's token
+    // no longer matches the proxy, so any previously persisted write flag
+    // belongs to a session we no longer trust. For other errors
+    // (network, 5xx, timeout) we deliberately keep the old flag so a
+    // transient hiccup doesn't silently downgrade the picker.
+    markDisconnected({ clearWriteAccess: err.status === 401 || err.status === 403 });
     renderConnectForm({ apiUrl: url, apiToken: token, remember });
   }
 }
@@ -717,10 +774,8 @@ function openSettingsModal() {
   document.getElementById("cancelSettings").addEventListener("click", () => closeModal(overlay));
   document.getElementById("logoutBtn").addEventListener("click", () => {
     clearConfig();
-    clearWriteAccess();
-    setRibbonConnectState("disconnected");
+    markDisconnected({ clearWriteAccess: true });
     closeModePicker();
-    syncModePickerAltRow();
     closeModal(overlay);
     showToast("已登出", "info");
     renderConnectForm();
@@ -753,12 +808,15 @@ function openSettingsModal() {
 
     renderSkeleton(els.dashboard, 6);
     try {
-      const data = await request("/1/summary");
+      // Same parallel-probe pattern as handleConnect — settings save
+      // is just a reconnect with a possibly-different proxy URL.
+      const summaryPromise = request("/1/summary");
+      const probePromise   = probeWriteAccess();
+      const data = await summaryPromise;
       renderDashboard(data);
       // Probe on save too — the operator may have switched to a
       // different proxy with a different restricted setting.
-      const canWrite = await probeWriteAccess();
-      saveWriteAccess(canWrite);
+      applyProbeResult(await probePromise, /* showUnknownToast */ true);
       setRibbonConnectState("connected");
       syncModePickerAltRow();
       startAutoRefresh();
@@ -766,9 +824,7 @@ function openSettingsModal() {
     } catch (err) {
       if (err.status === 401 || err.status === 403) {
         clearConfig();
-        clearWriteAccess();
-        setRibbonConnectState("disconnected");
-        syncModePickerAltRow();
+        markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: url, apiToken: token, remember });
       } else {
@@ -826,9 +882,10 @@ async function fetchAndRender() {
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
       clearConfig();
-      clearWriteAccess();
-      setRibbonConnectState("disconnected");
-      syncModePickerAltRow();
+      // Auth failure invalidates the persisted write flag (the token no
+      // longer matches), but a transient network/5xx does not — see
+      // markDisconnected docs.
+      markDisconnected({ clearWriteAccess: true });
       showToast("会话过期，请重新登录", "error");
       renderConnectForm();
       stopAutoRefresh();
