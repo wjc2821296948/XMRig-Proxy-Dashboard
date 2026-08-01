@@ -151,30 +151,93 @@ export function clearTheme() {
    Stored under its own key (separate from CONFIG_KEY) so that logging out
    does not erase a freshly-probed write-access result, and so that
    clearing the connection does not invalidate the probe.
+
+   The persisted value is keyed by the proxy URL it was probed against,
+   not stored as a single global flag. Two proxies with different
+   restricted settings cannot share a flag, and a URL swap via devtools
+   doesn't leave the previous proxy's verdict behind.
    -------------------------------------------------------------------------- */
 
 /**
- * Save the discovered write-access state of the currently-connected proxy.
+ * Read the persisted write-access flag for the currently-connected proxy.
+ * Returns false (locked) when:
+ *   - no config is saved
+ *   - no probe result has ever been recorded for this URL
+ *   - the previous probe failed (we never assume write permission)
  *
- * @param {boolean} enabled  true when GET /1/config returned 2xx.
+ * @param {string} [apiUrl]  Proxy URL to look up. Defaults to the
+ *                           currently-saved connection's URL.
+ * @returns {boolean}
  */
-export function saveWriteAccess(enabled) {
-  localStorage.setItem(WRITE_KEY, enabled ? "1" : "0");
+export function loadWriteAccess(apiUrl) {
+  const target = apiUrl ?? getConfig()?.apiUrl;
+  if (!target) return false;
+  const map = readWriteAccessMap();
+  return map[target] === true;
 }
 
 /**
- * @returns {boolean}  true when the most recent probe saw an unrestricted
- *                     proxy. Defaults to false — we never assume write
- *                     permission; the operator must explicitly earn it
- *                     via a successful probe.
+ * Save the discovered write-access state of the currently-connected proxy.
+ * Non-boolean inputs are coerced via `Boolean(...)` so a stray truthy
+ * non-bool (e.g. a `Promise`, an object) cannot silently enable writes.
+ *
+ * @param {boolean} enabled  true when GET /1/config returned 2xx.
+ * @param {string} [apiUrl]  Proxy URL this verdict applies to. Defaults
+ *                           to the currently-saved connection's URL.
  */
-export function loadWriteAccess() {
-  return localStorage.getItem(WRITE_KEY) === "1";
+export function saveWriteAccess(enabled, apiUrl) {
+  const target = apiUrl ?? getConfig()?.apiUrl;
+  if (!target) return;
+  const map = readWriteAccessMap();
+  map[target] = Boolean(enabled);
+  writeWriteAccessMap(map);
 }
 
-/** Forget the write-access state (called on logout / disconnect). */
-export function clearWriteAccess() {
-  localStorage.removeItem(WRITE_KEY);
+/**
+ * Forget the write-access state for the currently-connected proxy.
+ * Removes only that URL's entry so an unrelated proxy's verdict is
+ * preserved (e.g. operator toggles between two proxies).
+ *
+ * @param {string} [apiUrl]  Proxy URL to forget. Defaults to the
+ *                           currently-saved connection's URL.
+ */
+export function clearWriteAccess(apiUrl) {
+  const target = apiUrl ?? getConfig()?.apiUrl;
+  if (!target) {
+    // No URL provided and no config saved — clear everything for safety.
+    localStorage.removeItem(WRITE_KEY);
+    return;
+  }
+  const map = readWriteAccessMap();
+  if (target in map) {
+    delete map[target];
+    writeWriteAccessMap(map);
+  }
+}
+
+/* Write-access storage format:
+ *
+ *   { "http://proxy-a:8080": true, "http://proxy-b:8080": false }
+ *
+ * JSON instead of many per-URL keys so a single `removeItem` is enough
+ * to fully wipe, and so cross-URL cleanup (e.g. logging out completely)
+ * is one operation.
+ */
+
+function readWriteAccessMap() {
+  const raw = localStorage.getItem(WRITE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : {};
+  } catch {
+    // Legacy/corrupt entry — treat as empty rather than crash the picker.
+    return {};
+  }
+}
+
+function writeWriteAccessMap(map) {
+  localStorage.setItem(WRITE_KEY, JSON.stringify(map));
 }
 
 /* --------------------------------------------------------------------------
