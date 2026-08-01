@@ -16,6 +16,14 @@ const REQUEST_TIMEOUT_MS = 8000;
 /**
  * Central request wrapper.
  *
+ * Intentionally read-only. XMRig-Proxy's `restricted: true` mode disables
+ * every write endpoint (PUT /1/config, pool switching, hot reload), so this
+ * dashboard deliberately exposes no write helpers — the operator configures
+ * the proxy on the server. Adding a write method here would succeed at the
+ * transport layer and fail at the server; do not add one. The header
+ * carries a permanent "只读视图" ribbon so the operator always sees this
+ * constraint without having to dig.
+ *
  * @param {string} path   Path relative to the XMRig-Proxy API base (e.g. "/1/summary").
  * @param {object} [options] Optional fetch options (method, body, etc.).
  * @returns {Promise<any>} Resolves with parsed JSON on success.
@@ -63,5 +71,34 @@ export async function request(path, options = {}) {
     }
     console.error(`API error (masked): ${e.message}`);
     throw e;
+  }
+}
+
+/**
+ * Probe whether the connected XMRig-Proxy exposes the write endpoints.
+ *
+ * XMRig-Proxy's `restricted: true` mode blocks every `/1/config` request
+ * (both GET and PUT) with HTTP 403/404. A successful GET against
+ * `/1/config` therefore proves the operator's proxy runs with
+ * `restricted: false` (or `--http-no-restricted`), and conversely any
+ * non-2xx response means writes are disabled.
+ *
+ * The probe is read-only — it never sends a write request — so it is
+ * safe to run on every successful connect. The dashboard uses its
+ * result to decide whether to enable the "配置模式" entry in the
+ * header mode picker.
+ *
+ * Returns false on any error (network, auth, timeout, restricted): we
+ * never assume write permission; absence of evidence is treated as
+ * restricted.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function probeWriteAccess() {
+  try {
+    await request("/1/config");
+    return true;
+  } catch {
+    return false;
   }
 }
