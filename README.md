@@ -209,17 +209,6 @@ Dashboard 同时维护两套并行的状态指示，请勿混淆：
 Ribbon 绿色 = 上次 `/1/summary` 拿到 2xx；Ribbon 黄色 = 未登录 / 401 / 断开。
 徽章颜色仅在成功获取 `/1/summary` 之后才有意义——若 Ribbon 处于黄色，徽章文字不会更新。
 
----
-## 🤝 贡献指南
-
-1. Fork 本仓库
-2. 创建特性分支：`git checkout -b feat/xxx`
-3. 提交更改：`git commit -m "feat: xxx"`
-4. 推送分支：`git push origin feat/xxx`
-5. 发起 Pull Request
-
----
-
 ## 📄 许可证
 
 Apache License 2.0 © 2025

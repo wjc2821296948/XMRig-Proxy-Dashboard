@@ -225,17 +225,6 @@ text only updates after a successful `/1/summary`; if the Ribbon is
 yellow the badge text is whatever was last rendered and should not
 be trusted.
 
----
-## 🤝 Contributing
-
-1. Fork this repository
-2. Create feature branch: `git checkout -b feat/xxx`
-3. Commit changes: `git commit -m "feat: xxx"`
-4. Push branch: `git push origin feat/xxx`
-5. Open Pull Request
-
----
-
 ## 📄 License
 
 Apache License 2.0 © 2025
