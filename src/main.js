@@ -9,10 +9,11 @@
  *  5. Wire UI events: Settings, Logout, Connect form.
  */
 
-import { request } from "./api.js";
+import { request, probeWriteAccess } from "./api.js";
 import {
   loadConfig, saveConfig, clearConfig, getConfig,
   loadTheme, saveTheme,
+  saveWriteAccess, loadWriteAccess, clearWriteAccess,
 } from "./storage.js";
 import {
   showToast,
@@ -34,7 +35,12 @@ let isFetching = false;
    directly here.
    ========================================================================== */
 function initTheme() {
-  document.documentElement.setAttribute("data-theme", loadTheme());
+  const theme = loadTheme();
+  document.documentElement.setAttribute("data-theme", theme);
+  // The view-mode badge lives in the header on every page; flip its label
+  // alongside the theme so the "you are looking, not driving" signal keeps
+  // speaking the user's language.
+  syncViewModeBadgeText(theme);
 }
 
 function toggleTheme() {
@@ -42,7 +48,87 @@ function toggleTheme() {
   const newTheme = currentTheme === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", newTheme);
   saveTheme(newTheme);
+  syncViewModeBadgeText(newTheme);
+  // Force the next picker open to rebuild so its labels and disabled-row
+  // title match the new language.
+  modePickerTheme = null;
+  // If the picker is currently open, close it first — its labels and
+  // tooltips are now stale until the next open rebuilds them. Leaving
+  // it open during the rebuild would show mixed-language content for
+  // a frame.
+  if (modePickerEl?.classList.contains("open")) closeModePicker();
   showToast(`已切换到${newTheme === "dark" ? "深色" : "浅色"}模式`, "info");
+}
+
+/**
+ * Update the persistent "view-only" ribbon's text to match the active theme.
+ * Kept as a single helper so both `initTheme`, `toggleTheme`, and the
+ * settings-modal save branch call the same source of truth.
+ *
+ * @param {"dark"|"light"} theme
+ */
+function syncViewModeBadgeText(theme) {
+  const label = document.getElementById("viewModeBadgeText");
+  if (!label) return;
+  label.textContent = theme === "dark" ? "只读视图" : "Read-only viewer";
+}
+
+/**
+ * Re-tint the header ribbon to reflect the current login state:
+ *   - "connected" (green dot)   — a connection succeeded and we are live.
+ *   - "disconnected" (yellow)   — no config saved, or the operator logged out.
+ * The status badge stays responsible for miner health (online/warning/offline);
+ * the ribbon only answers "is the panel actually talking to *something*?"
+ *
+ * @param {"connected"|"disconnected"} state
+ */
+function setRibbonConnectState(state) {
+  const badge = document.getElementById("viewModeBadge");
+  if (!badge) return;
+  badge.dataset.connectState = state;
+  // Repaint the open picker in lockstep so the dots and active marker
+  // never sit on a stale color if the connection flips while the
+  // picker is showing.
+  syncModePickerConnectState();
+}
+
+/**
+ * Centralised disconnect sequence. Three callers used to repeat this
+ * pattern (logout, auth failure in fetchAndRender, auth failure in
+ * settings-save). Keeping it here makes the policy a single line —
+ * e.g. the decision to keep or clear the write-access flag is now
+ * documented in one place instead of scattered across the file.
+ *
+ * @param {{clearWriteAccess?: boolean}} [opts] When true, also clears the
+ *                                          persisted write-access flag.
+ *                                          Defaults to false (keep the
+ *                                          previously-probed state across
+ *                                          transient disconnects).
+ */
+function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
+  if (shouldClear) clearWriteAccess();
+  setRibbonConnectState("disconnected");
+  // Only repaint the alt row when the persisted flag actually changed;
+  // a transient disconnect (network blip) should not reflash the picker.
+  if (shouldClear) syncModePickerAltRow();
+}
+
+/**
+ * Apply a tri-state probe result. Persists the flag for the picker and
+ * surfaces non-restricted failures so the operator gets a real reason
+ * instead of a silent downgrade to "disabled".
+ *
+ * @param {"unrestricted" | "restricted" | "unknown"} state
+ * @param {boolean} [showUnknownToast] When true, an "unknown" result also
+ *                                     fires a toast. False suppresses it
+ *                                     (e.g. when the caller already showed
+ *                                     a connection-level error toast).
+ */
+function applyProbeResult(state, showUnknownToast = true) {
+  saveWriteAccess(state === "unrestricted");
+  if (state === "unknown" && showUnknownToast) {
+    showToast("无法确认 Proxy 写入权限，配置模式已禁用（请检查网络或 CORS）", "warn");
+  }
 }
 
 /* ==========================================================================
@@ -54,7 +140,245 @@ const els = {
   workerId: document.getElementById("workerId"),
   lastUpdate: document.getElementById("lastUpdate"),
   editUrl: document.getElementById("editUrl"),
+  viewModeBadge: document.getElementById("viewModeBadge"),
 };
+
+/* ==========================================================================
+   Mode picker (header ribbon popover)
+
+   The ribbon advertises that it opens a menu (role="button",
+   aria-haspopup="menu" in index.html). Clicking or pressing Enter/Space
+   on the ribbon opens a small popover anchored to it that lists the
+   currently-active mode (jade dot, not clickable) and the alternative
+   mode (jade chevron when enabled, gray text + red dot when disabled).
+
+   The alternative mode is the operator's only path to write capability,
+   so it carries the most information: when the connected proxy runs
+   restricted mode the alt row is locked out and its title= attribute
+   tells the operator exactly which config line to flip on the server.
+   ========================================================================== */
+
+let modePickerEl = null;
+let modePickerEscHandler = null;
+let modePickerOutsideClickHandler = null;
+let modePickerTheme = null;
+
+// The dashboard currently renders in only one mode; tracking the active
+// one in module-level state keeps the picker logic obvious to read.
+// Stage 2 will add a 'config' branch that swaps the dashboard body.
+let activeDashboardMode = "readonly";
+
+/**
+ * Open the mode picker anchored to the header ribbon.
+ * Idempotent — repeated calls while it is already open are no-ops so a
+ * stray re-open from the ESC handler cannot strand the popover open.
+ */
+function openModePicker() {
+  if (modePickerEl && modePickerEl.classList.contains("open")) return;
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  // Rebuild the picker when the theme changed since the last build, so
+  // the language and disabled-row title stay in sync without us having
+  // to translate nodes in place.
+  if (modePickerEl && modePickerTheme !== currentTheme) {
+    modePickerEl.remove();
+    modePickerEl = null;
+  }
+  if (!modePickerEl) {
+    modePickerEl = buildModePicker();
+    modePickerTheme = currentTheme;
+  }
+  syncModePickerAltRow();
+  syncModePickerConnectState();
+  positionModePicker();
+  modePickerEl.classList.add("open");
+  els.viewModeBadge?.setAttribute("aria-expanded", "true");
+
+  if (!modePickerEscHandler) {
+    modePickerEscHandler = e => {
+      if (e.key === "Escape") closeModePicker();
+    };
+    document.addEventListener("keydown", modePickerEscHandler);
+  }
+  if (!modePickerOutsideClickHandler) {
+    modePickerOutsideClickHandler = e => {
+      // Defensive: a stale listener could fire after the picker node was
+      // removed (e.g. during a theme-toggle rebuild). isConnected is the
+      // canonical check for "still attached to the document tree".
+      if (!modePickerEl || !modePickerEl.isConnected) return;
+      if (modePickerEl.contains(e.target)) return;
+      if (els.viewModeBadge && els.viewModeBadge.contains(e.target)) return;
+      closeModePicker();
+    };
+    document.addEventListener("click", modePickerOutsideClickHandler);
+  }
+}
+
+/** Close the picker and tear down its document-level listeners. */
+function closeModePicker() {
+  // Only touch the picker if it's still attached to the document; a
+  // theme-toggle rebuild may have detached it between open and close.
+  if (modePickerEl && modePickerEl.isConnected) {
+    modePickerEl.classList.remove("open");
+  }
+  els.viewModeBadge?.setAttribute("aria-expanded", "false");
+  if (modePickerEscHandler) {
+    document.removeEventListener("keydown", modePickerEscHandler);
+    modePickerEscHandler = null;
+  }
+  if (modePickerOutsideClickHandler) {
+    document.removeEventListener("click", modePickerOutsideClickHandler);
+    modePickerOutsideClickHandler = null;
+  }
+}
+
+/**
+ * Build the picker DOM once and re-use the node across opens. The
+ * "active" and "alternative" rows are static text — only their state
+ * classes flip based on the persisted write-access flag — so there is
+ * nothing in the picker that needs to be re-rendered per open.
+ *
+ * @returns {HTMLElement}
+ */
+function buildModePicker() {
+  const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
+  const labelActive = isDark ? "只读视图" : "Read-only viewer";
+  const labelAlt    = isDark ? "配置模式" : "Config mode";
+  const title       = isDark ? "选择模式" : "Select mode";
+
+  const wrap = document.createElement("div");
+  wrap.className = "mode-picker";
+  wrap.setAttribute("role", "menu");
+  wrap.innerHTML = `
+    <div class="mode-picker-title">${escapeHtml(title)}</div>
+    <div class="mode-picker-item is-active" role="menuitem" aria-disabled="true" data-mode="readonly">
+      <span class="mode-picker-item-dot" aria-hidden="true"></span>
+      <span class="mode-picker-item-label">${escapeHtml(labelActive)}</span>
+    </div>
+    <div class="mode-picker-item" role="menuitem" data-mode="config">
+      <span class="mode-picker-item-dot" aria-hidden="true"></span>
+      <span class="mode-picker-item-label">${escapeHtml(labelAlt)}</span>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  // Wire the alt row's behavior. The active row is intentionally
+  // non-interactive (no listener) — clicking it does nothing, and the
+  // cursor:default styling in CSS carries that intent.
+  const altRow = wrap.querySelector('.mode-picker-item[data-mode="config"]');
+  altRow.addEventListener("click", () => onAltModeRowClicked(altRow));
+
+  return wrap;
+}
+
+/**
+ * Position the picker just below the header ribbon, right-aligned.
+ * getBoundingClientRect() already accounts for any page scroll, so we
+ * add window scroll offsets into the fixed-position coordinates.
+ */
+function positionModePicker() {
+  if (!modePickerEl || !els.viewModeBadge) return;
+  const r = els.viewModeBadge.getBoundingClientRect();
+  modePickerEl.style.top  = `${window.scrollY + r.bottom + 6}px`;
+  modePickerEl.style.left = `${window.scrollX + r.right - modePickerEl.offsetWidth}px`;
+}
+
+/**
+ * Click handler for the alternative-mode row. Two outcomes:
+ *  - writeAccess = true  → the row was styled .is-enabled; switch the
+ *    dashboard into config mode and close the picker.
+ *  - writeAccess = false → the row was styled .is-disabled; do nothing
+ *    (the native title= tooltip already explains the restriction).
+ */
+function onAltModeRowClicked(row) {
+  if (row.classList.contains("is-disabled")) return;
+  closeModePicker();
+  switchDashboardMode(row.dataset.mode);
+}
+
+/**
+ * Re-paint the alt-mode row to reflect the most recently probed
+ * write-access state. Called from openModePicker() and from any
+ * connect/probe site that flips the persisted flag.
+ */
+function syncModePickerAltRow() {
+  if (!modePickerEl) return;
+  const altRow = modePickerEl.querySelector('.mode-picker-item[data-mode="config"]');
+  if (!altRow) return;
+  altRow.classList.remove("is-enabled", "is-disabled");
+  if (loadWriteAccess()) {
+    altRow.classList.add("is-enabled");
+    altRow.removeAttribute("aria-disabled");
+    altRow.removeAttribute("title");
+  } else {
+    altRow.classList.add("is-disabled");
+    altRow.setAttribute("aria-disabled", "true");
+    const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
+    altRow.title = isDark
+      ? "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换"
+      : "This proxy runs in restricted mode. Set \"restricted\": false in the XMRig-Proxy config to enable config mode.";
+  }
+}
+
+/**
+ * Mirror the ribbon's connection state onto the picker. The picker's
+ * own dots, active marker, and enabled-row labels read this attribute
+ * so a disconnected ribbon never sits next to a green-on-yellow
+ * mismatch inside the popover.
+ */
+function syncModePickerConnectState() {
+  if (!modePickerEl) return;
+  const ribbon = els.viewModeBadge;
+  const state = ribbon?.dataset?.connectState === "connected" ? "connected" : "disconnected";
+  modePickerEl.dataset.state = state;
+}
+
+/**
+ * Switch the dashboard body into the requested mode. For stage 1 only
+ * the 'readonly' branch actually exists; 'config' is wired up to a
+ * placeholder that will be replaced by the real config surface in
+ * stage 2.
+ *
+ * @param {"readonly" | "config"} mode
+ */
+function switchDashboardMode(mode) {
+  if (mode === activeDashboardMode) return;
+  activeDashboardMode = mode;
+  if (mode === "readonly") {
+    // Re-render the dashboard with the last successful /1/summary payload
+    // by re-fetching — keeps the chart, cards, and status all in sync
+    // without us having to cache the data elsewhere.
+    showToast("已切换到只读视图", "info");
+    fetchAndRender().catch(() => {
+      showToast("无法恢复只读视图，请刷新页面", "error");
+    });
+  } else if (mode === "config") {
+    showToast("配置模式 — 占位 (即将推出)", "info");
+    renderConfigPlaceholder();
+  }
+}
+
+/**
+ * Stage-1 placeholder for the config mode. Renders inside the same
+ * dashboard container so the layout does not jump when the real config
+ * UI lands in stage 2.
+ */
+function renderConfigPlaceholder() {
+  els.dashboard.innerHTML = `
+    <div class="config-panel config-mode-placeholder" role="region" aria-labelledby="config-mode-title">
+      <p class="config-eyebrow">配置模式</p>
+      <h2 id="config-mode-title" class="config-title">配置模式即将推出</h2>
+      <p style="font-size:0.75rem;color:var(--text-secondary);text-align:center;margin-bottom:1rem;">
+        将在下一阶段提供 XMRig-Proxy <code>/1/config</code> 的可视化编辑与 <code>PUT /1/config</code> 保存。
+      </p>
+      <div class="config-actions">
+        <button class="btn btn-secondary" id="backToReadonly">返回只读视图</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("backToReadonly")?.addEventListener("click", () => {
+    switchDashboardMode("readonly");
+  });
+}
 
 /* ==========================================================================
    Connection Form Rendering
@@ -63,13 +387,14 @@ function renderConnectForm(prefill = {}) {
   const { apiUrl = "", apiToken = "", remember = true } = prefill;
   els.dashboard.innerHTML = `
     <div class="config-panel" role="dialog" aria-labelledby="connect-title">
+      <p class="config-eyebrow">只读监控面板</p>
       <h2 id="connect-title" class="config-title">连接 XMRig Proxy</h2>
       <div class="input-group">
         <label class="input-label" for="apiUrlInput">API URL</label>
         <input type="url" class="input-field" id="apiUrlInput" placeholder="http://your-proxy:8080/1/summary" value="${escapeHtml(apiUrl)}" required autocomplete="url">
       </div>
       <div class="input-group">
-        <label class="input-label" for="apiTokenInput">Access Token</label>
+        <label class="input-label" for="apiTokenInput">Access Token <span class="input-label-suffix">· 只读</span></label>
         <input type="password" class="input-field" id="apiTokenInput" placeholder="留空表示无需 Token" value="${escapeHtml(apiToken)}" autocomplete="password">
       </div>
       <div class="checkbox-group">
@@ -79,8 +404,12 @@ function renderConnectForm(prefill = {}) {
       <div class="config-actions">
         <button class="btn" id="connectBtn">连接</button>
       </div>
-      <p style="margin-top:0.75rem;font-size:0.65rem;color:var(--text-muted);text-align:center;">
-        所有数据仅保存在浏览器本地，服务器无法访问。
+      <p class="config-disclaimer">
+        本面板为只读视图 — Proxy 配置请直接在服务端修改
+        <span class="config-disclaimer-meta">(HTTP API 受 <code>restricted</code> 控制)</span>
+      </p>
+      <p class="config-disclaimer-sub">
+        所有数据仅保存在浏览器本地，部署服务器无法访问。
       </p>
     </div>
   `;
@@ -121,10 +450,23 @@ async function handleConnect() {
   els.statusBadge.className = "status-badge status-warning";
 
   try {
-    // Test connection
-    const data = await request("/1/summary");
+    // Kick off the write-access probe in parallel with the first /1/summary
+    // so we don't pay an extra 8s round-trip on every connect. Both
+    // requests share the same Authorization header and have independent
+    // failure modes, so parallel is safe.
+    const summaryPromise  = request("/1/summary");
+    const probePromise    = probeWriteAccess();
+    const data = await summaryPromise;
     showToast("连接成功", "success");
     renderDashboard(data);
+    // The probe result is persisted so the mode picker does not need to
+    // re-probe on every render, and so it survives a tab refresh. We await
+    // it here only to surface non-restricted failures (network/5xx) as a
+    // toast — "unknown" still disables the config-mode row but the
+    // operator gets a clear reason instead of a silent downgrade.
+    applyProbeResult(await probePromise, /* showUnknownToast */ true);
+    setRibbonConnectState("connected");
+    syncModePickerAltRow();
     startAutoRefresh();
   } catch (err) {
     // Clear invalid config on auth failure
@@ -136,6 +478,12 @@ async function handleConnect() {
     } else {
       showToast(`连接失败: ${err.message}`, "error");
     }
+    // Probe result is only stale on auth failure — the operator's token
+    // no longer matches the proxy, so any previously persisted write flag
+    // belongs to a session we no longer trust. For other errors
+    // (network, 5xx, timeout) we deliberately keep the old flag so a
+    // transient hiccup doesn't silently downgrade the picker.
+    markDisconnected({ clearWriteAccess: err.status === 401 || err.status === 403 });
     renderConnectForm({ apiUrl: url, apiToken: token, remember });
   }
 }
@@ -150,6 +498,15 @@ function renderDashboard(data) {
   els.statusBadge.className = `status-badge ${status.cls}`;
   els.workerId.textContent = `Worker: ${escapeHtml(data.worker_id || "未知")} | 版本: ${escapeHtml(data.version || "未知")}`;
   els.lastUpdate.textContent = new Date().toLocaleTimeString();
+
+  // Re-sync the view-mode ribbon on every render. Defensive against any
+  // race where initTheme() ran before this element existed in the DOM.
+  syncViewModeBadgeText(document.documentElement.getAttribute("data-theme") || "dark");
+  // A successful render is the strongest signal that we are talking to a
+  // live proxy — paint the ribbon green now (handleConnect also does this,
+  // but a successful auto-refresh re-confirms it for any caller that
+  // reached renderDashboard through fetchAndRender).
+  setRibbonConnectState("connected");
 
   // Hashrate data
   const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
@@ -417,6 +774,8 @@ function openSettingsModal() {
   document.getElementById("cancelSettings").addEventListener("click", () => closeModal(overlay));
   document.getElementById("logoutBtn").addEventListener("click", () => {
     clearConfig();
+    markDisconnected({ clearWriteAccess: true });
+    closeModePicker();
     closeModal(overlay);
     showToast("已登出", "info");
     renderConnectForm();
@@ -441,19 +800,31 @@ function openSettingsModal() {
     const theme = themeWantsDark ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
     saveTheme(theme);
+    syncViewModeBadgeText(theme);
+    modePickerTheme = null;
 
     closeModal(overlay);
     showToast("设置已保存，正在重新连接...", "info");
 
     renderSkeleton(els.dashboard, 6);
     try {
-      const data = await request("/1/summary");
+      // Same parallel-probe pattern as handleConnect — settings save
+      // is just a reconnect with a possibly-different proxy URL.
+      const summaryPromise = request("/1/summary");
+      const probePromise   = probeWriteAccess();
+      const data = await summaryPromise;
       renderDashboard(data);
+      // Probe on save too — the operator may have switched to a
+      // different proxy with a different restricted setting.
+      applyProbeResult(await probePromise, /* showUnknownToast */ true);
+      setRibbonConnectState("connected");
+      syncModePickerAltRow();
       startAutoRefresh();
       showToast("重新连接成功", "success");
     } catch (err) {
       if (err.status === 401 || err.status === 403) {
         clearConfig();
+        markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: url, apiToken: token, remember });
       } else {
@@ -511,6 +882,10 @@ async function fetchAndRender() {
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
       clearConfig();
+      // Auth failure invalidates the persisted write flag (the token no
+      // longer matches), but a transient network/5xx does not — see
+      // markDisconnected docs.
+      markDisconnected({ clearWriteAccess: true });
       showToast("会话过期，请重新登录", "error");
       renderConnectForm();
       stopAutoRefresh();
@@ -545,6 +920,31 @@ function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
+
+  // Wire the view-mode ribbon: click or keyboard activation opens the
+  // mode picker. The ribbon itself never closes the picker — that lives
+  // on document-level listeners owned by openModePicker().
+  if (els.viewModeBadge) {
+    els.viewModeBadge.addEventListener("click", e => {
+      e.stopPropagation();
+      if (modePickerEl?.classList.contains("open")) {
+        closeModePicker();
+      } else {
+        openModePicker();
+      }
+    });
+    els.viewModeBadge.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        els.viewModeBadge.click();
+      }
+    });
+  }
+
+  // Initial ribbon state: until a successful render proves otherwise, the
+  // panel is not actually talking to anything — paint it yellow so the
+  // operator sees the not-connected state at a glance.
+  setRibbonConnectState("disconnected");
 
   // Load saved config
   const cfg = loadConfig();

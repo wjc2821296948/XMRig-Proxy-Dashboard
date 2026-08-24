@@ -244,6 +244,85 @@ h1 {
   letter-spacing: 0.05em;
 }
 
+/* "只读视图" ribbon — sits inline next to the live status badge. Deliberately
+   quieter than the status badge: pill outline instead of fill, muted text,
+   copper dot. The dot's glow reuses the same vocabulary as the status badges
+   so the two signals read as siblings instead of competitors. The ribbon
+   never competes with the live status — it is the operator's "what kind of
+   thing is this" anchor, not the live signal. */
+.view-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: transparent;
+}
+.view-mode-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-copper);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.18);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+/* Light-theme glow tone: cream canvas needs a warmer, slightly more saturated
+   copper halo than the indigo canvas does. */
+[data-theme="light"] .view-mode-dot {
+  box-shadow: 0 0 0 3px rgba(184, 99, 63, 0.22);
+}
+
+/* Login-state tint: when the panel is actually talking to a proxy the
+   ribbon goes green; when not logged in (or right after a connect
+   failure) it goes yellow. The transition lives on the dot only — the
+   pill border stays muted — so the state change is visible without
+   shouting. The default is the not-connected yellow so a render before
+   any successful connect doesn't flicker through copper. */
+.view-mode-badge[data-connect-state="connected"] .view-mode-dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.18);
+}
+[data-theme="light"] .view-mode-badge[data-connect-state="connected"] .view-mode-dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 0 3px rgba(47, 157, 110, 0.22);
+}
+.view-mode-badge[data-connect-state="disconnected"] .view-mode-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
+}
+[data-theme="light"] .view-mode-badge[data-connect-state="disconnected"] .view-mode-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(192, 138, 44, 0.22);
+}
+/* Clickable: the ribbon now opens a mode picker. Hover affordance
+   matches the existing .edit-url vocabulary (color shifts to copper
+   brand) so the operator's eye treats it as a known control. */
+.view-mode-badge[role="button"] {
+  cursor: pointer;
+  user-select: none;
+}
+.view-mode-badge[role="button"]:hover {
+  border-color: var(--accent-copper);
+  color: var(--text-primary);
+}
+.view-mode-badge[role="button"]:focus-visible {
+  outline: 2px solid var(--accent-copper);
+  outline-offset: 2px;
+}
+.view-mode-badge .view-mode-caret {
+  display: inline-block;
+  font-size: 0.5rem;
+  margin-left: 0.1rem;
+  opacity: 0.7;
+  transform: translateY(-0.05rem);
+}
+
 /* Subtle inner glow keeps each badge legible on the indigo canvas
    without competing with the copper primary. */
 .status-online {
@@ -570,6 +649,209 @@ h1 {
   gap: 0.5rem;
   justify-content: center;
   margin-top: 1rem;
+}
+
+/* "只读监控面板" eyebrow above the connect-form title. Reuses the
+   small-caps vocabulary of .card-title so the operator's eye treats it
+   as a label, not decoration. Copper tint — same hue as the header
+   live-signal stripe — ties the connect screen to the dashboard brand. */
+.config-eyebrow {
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-copper);
+  margin-bottom: 0.5rem;
+}
+
+/* Honest disclaimer under the connect form: tells the operator that
+   the panel is a viewer over the proxy's restricted API and that
+   configuration belongs on the server. Replaces the previous single
+   privacy line so the user does not have to infer read-only from the
+   lack of write controls. */
+.config-disclaimer {
+  margin-top: 0.85rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.5;
+}
+.config-disclaimer-meta {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+.config-disclaimer-meta code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  padding: 0.05rem 0.3rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  color: var(--accent-copper);
+}
+.config-disclaimer-sub {
+  margin-top: 0.4rem;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Muted suffix for the token field label ("Access Token · 只读"). Keeps
+   the field name intact for muscle memory, adds the read-only reminder
+   without growing the label to two lines. */
+.input-label-suffix {
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* ==========================================================================
+   Mode picker (header ribbon popover)
+
+   Anchored under the header ribbon. Lists the active mode on top and the
+   alternative mode below. The alternative mode is the operator's only
+   path to write capability — when the connected proxy runs restricted
+   mode it is rendered disabled so the operator cannot even click it,
+   and the disabled item carries a native title= explaining the exact
+   config line to change on the server.
+   ========================================================================== */
+.mode-picker {
+  position: absolute;
+  /* Default anchor: relative to the document body via fixed positioning.
+     JS rewrites top/left when it opens, after measuring the ribbon. */
+  top: 0;
+  left: 0;
+  min-width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.4rem;
+  box-shadow: var(--shadow-lg);
+  z-index: 1500;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity var(--transition-fast), visibility var(--transition-fast),
+              transform var(--transition-fast);
+}
+.mode-picker.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.mode-picker-title {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0.35rem 0.5rem 0.25rem;
+}
+.mode-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.mode-picker-item:hover:not(.is-active):not(.is-disabled) {
+  background: var(--bg-card-hover);
+}
+.mode-picker-item.is-active {
+  /* The currently-selected mode is highlighted, not clickable. */
+  background: var(--bg-secondary);
+  cursor: default;
+}
+.mode-picker-item.is-active .mode-picker-item-label {
+  font-weight: 600;
+}
+.mode-picker-item.is-active::after {
+  content: "●";
+  margin-left: auto;
+  color: var(--accent-green);
+  font-size: 0.55rem;
+}
+/* Mirror the ribbon's connection state inside the picker: when the
+   panel is not actually logged in (yellow ribbon) the active row's
+   marker and the enabled row's chevron/labels are also yellow, so the
+   popover reads as a single coherent state instead of a green-on-yellow
+   mismatch. Disabled (red) is always red — restricted mode is its own
+   story and should never be re-tinted to match the ribbon. */
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-active::after {
+  color: var(--accent-yellow);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-enabled .mode-picker-item-label {
+  color: var(--accent-yellow);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-enabled::after {
+  color: var(--accent-yellow);
+}
+.mode-picker-item.is-disabled {
+  /* Locked-out alternative mode: same shape as the active row so the
+     operator reads them as siblings, but the text drops to muted and
+     the dot goes red. cursor:not-allowed is the operating system's own
+     signal that this row does nothing on click. */
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.mode-picker-item.is-disabled .mode-picker-item-dot {
+  background: var(--accent-red);
+  box-shadow: 0 0 0 3px rgba(240, 107, 107, 0.18);
+}
+.mode-picker-item-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.18);
+  flex-shrink: 0;
+}
+.mode-picker-item.is-active .mode-picker-item-dot {
+  /* The active mode's dot is jade — the "go" signal — so the picker
+     reads as "this one is running", not "this one is allowed". */
+  background: var(--accent-green);
+}
+/* Mirror the ribbon's connection state inside the picker. These rules
+   must come AFTER .mode-picker-item.is-active .mode-picker-item-dot
+   (and after .mode-picker-item-dot) so they win on source order at the
+   same specificity — otherwise the active row's hard-coded jade
+   survives and the leftmost dot stays green when the ribbon is yellow.
+   Disabled (restricted) is always red and is never re-tinted; that
+   story is independent of the ribbon. */
+.mode-picker[data-state="disconnected"] .mode-picker-item-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
+}
+.mode-picker[data-state="disconnected"] .mode-picker-item.is-active .mode-picker-item-dot {
+  background: var(--accent-yellow);
+  box-shadow: 0 0 0 3px rgba(240, 185, 74, 0.18);
+}
+[data-theme="light"] .mode-picker[data-state="disconnected"] .mode-picker-item-dot,
+[data-theme="light"] .mode-picker[data-state="disconnected"] .mode-picker-item.is-active .mode-picker-item-dot {
+  box-shadow: 0 0 0 3px rgba(192, 138, 44, 0.22);
+}
+.mode-picker-item-label {
+  flex: 1;
+}
+.mode-picker-item.is-enabled .mode-picker-item-label {
+  color: var(--accent-green);
+  font-weight: 500;
+}
+.mode-picker-item.is-enabled::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--accent-green);
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 /* ==========================================================================
