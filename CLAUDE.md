@@ -97,7 +97,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **保持纯静态部署** — 不新增任何后端服务、数据库、认证服务
 2. **不引入大型前端框架** — 继续使用原生 ES Module + CSS Variables
 3. **最大程度复用现有代码** — 重构优于重写
-4. **不改变 Dashboard 核心交互** — 10s 自动刷新、指标含义、卡片布局
+4. **不改变 Dashboard 核心交互** — 自动刷新（默认 10s，可配置 1-120s）、指标含义、卡片布局
 5. **安全优先** — Token 脱敏、CSP、XSS 防护、无 `eval`/`innerHTML` 注入
 6. **Token 永远只在浏览器本地** — 绝不上传、绝不写入服务端日志
 7. **保持模块化** — `api.js` / `storage.js` / `ui.js` / `main.js` 职责单一
@@ -127,12 +127,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 export async function request(path, options = {}) {
   // 1. 读取配置 (storage.getConfig())
   // 2. 拼接 URL, 注入 Authorization: Bearer <token>
-  // 3. 8s 超时 Promise.race(fetch, timeout)
-  // 4. 统一错误归一化: 401/403 → 触发登出; 其它 → Toast
+  // 3. 8s 超时 AbortSignal.timeout(8000) —— 原生取消底层 fetch
+  // 4. 统一错误归一化: 抛出带 status 的 Error（401/403 由 main.js 决定登出；其它由 main.js 决定 toast）
   // 5. 返回 JSON
 }
 ```
-- **单一职责**：所有网络请求只走这里，便于审计、测试、替换。
+- **单一职责**：所有网络请求只走这里，便于审计、测试、替换。**不包含 UI 决策**（登出/toast 由 main.js 负责）。
 
 ### `src/storage.js`
 ```js
@@ -151,9 +151,10 @@ export function getConfig()    // 响应式获取最新配置
 
 ### `src/main.js`
 - **状态机**：`init → loadConfig → (config? fetchAndRender : renderConnectForm)`
-- **自动刷新**：`setInterval(fetchAndRender, 10000)`，可随时 `stopAutoRefresh()`
+- **自动刷新**：`setInterval(fetchAndRender, interval)`，间隔可配置 1-120 秒（默认 10 秒，存储于 `refreshInterval`），可随时 `stopAutoRefresh()`
 - **事件绑定**：设置按钮、连接表单、登出、模态框关闭
 - **XSS 防护**：所有动态文本经 `escapeHtml()`，模态框用 `textContent` 填充
+- **UI 决策**：登出、错误 toast、连接状态均由 main.js 决定（api.js 仅抛出规范化错误）
 
 ---
 
