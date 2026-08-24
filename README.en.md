@@ -166,18 +166,6 @@ A: Current version single instance. Switch via "Settings" to change URL/Token; f
 
 ---
 
----
-
-## 📋 Deployment Checklist
-
-- [ ] Static hosting platform configured with **HTTPS**
-- [ ] `Content-Security-Policy` active (see `index.html` meta tag)
-- [ ] No `console.log` leaking Token (all sanitized)
-- [ ] `index.html` references `<script type="module" src="src/main.js">`
-- [ ] No build step, push to deploy
-
----
-
 ## 📋 Roadmap
 
 - [ ] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click

@@ -166,18 +166,6 @@ A: 当前版本单实例。可通过「设置」修改 URL/Token 实现切换；
 
 ---
 
----
-
-## 📋 部署清单
-
-- [ ] 静态托管平台已配置 **HTTPS**
-- [ ] `Content-Security-Policy` 已生效（见 `index.html` meta 标签）
-- [ ] 无 `console.log` 残留 Token（已全部脱敏）
-- [ ] `index.html` 引用 `<script type="module" src="src/main.js">`
-- [ ] 无构建步骤，直接推送即部署
-
----
-
 ## 📋 下一步计划
 
 - [ ] **多 Proxy 配置列表** —— 支持保存多组 Proxy 配置，一键切换
