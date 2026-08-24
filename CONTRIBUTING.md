@@ -46,7 +46,7 @@
 ```bash
 # 1. Fork 仓库到您的 GitHub 账号
 # 2. 克隆您的 Fork
-git clone https://github.com/YOUR_USERNAME/xmrig-proxy-dashboard.git
+git clone https://github.com/wjc2821296948/XMRig-Proxy-Dashboard.git
 cd xmrig-proxy-dashboard
 
 # 3. 创建功能分支
@@ -89,7 +89,7 @@ xmrig-proxy-dashboard/
 
 ### 搜索现有 Issue
 
-在创建新 Issue 前，请先搜索 [Issues 列表](https://github.com/yourname/xmrig-proxy-dashboard/issues) 确认是否已有相同或类似的报告。
+在创建新 Issue 前，请先搜索 [Issues 列表](https://github.com/wjc2821296948/XMRig-Proxy-Dashboard/issues) 确认是否已有相同或类似的报告。
 
 ### Bug 报告模板
 
@@ -239,7 +239,7 @@ Closes #123 / Relates to #456
 
 ### 通用原则
 
-> 详见 [CLAUDE.md](CLAUDE.md) 中的「开发原则」与「代码规范」章节。
+> 详见 [CLAUDE.md](CLAUDE.md) 中的「开发原则」与「代码规范」章节（该文件已纳入版本控制）。
 
 | 规范 | 要求 |
 |------|------|
@@ -432,7 +432,7 @@ chore/<short-description>    # 维护任务
 
 ## 📞 获取帮助
 
-- **Issue 讨论**：[GitHub Issues](https://github.com/yourname/xmrig-proxy-dashboard/issues)
+- **Issue 讨论**：[GitHub Issues](https://github.com/wjc2821296948/XMRig-Proxy-Dashboard/issues)
 - **安全漏洞**：请通过 GitHub Security Advisories 私密报告，勿公开 Issue
 - **一般咨询**：可在 Issue 中提问或发起 Discussion
 
