@@ -46,8 +46,8 @@
 ```bash
 # 1. Fork 仓库到您的 GitHub 账号
 # 2. 克隆您的 Fork
-git clone https://github.com/wjc2821296948/XMRig-Proxy-Dashboard.git
-cd xmrig-proxy-dashboard
+git clone https://github.com/YOUR_USERNAME/XMRig-Proxy-Dashboard.git
+cd XMRig-Proxy-Dashboard
 
 # 3. 创建功能分支
 git checkout -b feat/your-feature-name

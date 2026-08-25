@@ -14,9 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|------|
 | **Zero Knowledge** | 服务器不知晓用户连接的 Proxy 地址、Access Token、任何配置。服务器仅分发 HTML/CSS/JS。 |
 | **无后端、无数据库、无用户系统** | 消除服务端攻击面：无认证绕过、无 SQL 注入、无会话劫持、无数据泄露。 |
-| **浏览器本地存储** | `localStorage`（记住我）或 `sessionStorage`（仅会话）保存 `API_URL` 与 `API_TOKEN`。关闭浏览器可自动清除。 |
+| **浏览器本地存储** | `localStorage`（记住我）持久化保存，跨浏览器重启保留；`sessionStorage`（仅会话）随标签页关闭清除。 |
 | **Token 永不上传服务器** | 所有 API 请求由浏览器**直连**用户自建的 XMRig Proxy（`Authorization: Bearer <token>`），绕过部署站点。 |
-| **最小信任边界** | 信任链：用户 ↔ 浏览器 ↔ 用户自己的 Proxy。部署站点完全不在信任链内。 |
+| **最小信任边界** | 信任链：用户 ↔ 浏览器 ↔ 用户自己的 Proxy。部署站点服务静态文件（含 JS），若被篡改可窃取凭证，因此属于**客户端完整性信任边界**内，但不在 API 代理/存储信任链内。 |
 
 ### 放弃的方案及理由
 
