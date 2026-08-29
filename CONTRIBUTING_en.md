@@ -269,7 +269,7 @@ Files/logic you'd like reviewers to pay special attention to.
 
 ### New Code Must Follow
 
-1. **All new network requests must go through `api.request()`**
+1. **All new network requests (outside `api.js`) must go through `api.request()`**
 2. **All new config read/write must go through `storage.*`**
 3. **All new UI feedback should prefer `ui.showToast()` / `ui.renderSkeleton()`**
 4. **Style changes prefer CSS variable adjustments, avoid hardcoded colors**
@@ -410,7 +410,7 @@ This project currently has no automated test framework, relying on **manual test
 | Remember Me | `localStorage` persists, refresh page keeps login |
 | Session only | `sessionStorage`, close tab clears config |
 | Settings change | Modify URL/Token/Remember Me, logout |
-| Auto-refresh | Configurable interval (1-120s, default 10s), manual refresh, network error retry |
+| Auto-refresh | Configurable interval (1-120s, default 10s), network error retry |
 | Error handling | 401 auto logout, network timeout, CORS error, Proxy offline |
 | Responsive | 320px / 768px / 1024px / 1440px breakpoints |
 | Security | Console token masking, CSP active, no XSS vulnerabilities |

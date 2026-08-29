@@ -262,7 +262,7 @@ Closes #123 / Relates to #456
 
 ### 新增代码必须遵守
 
-1. **任何新增网络请求必须走 `api.request()`**
+1. **任何新增网络请求（`api.js` 外部）必须走 `api.request()`**
 2. **任何新增配置读写必须走 `storage.*`**
 3. **任何新增 UI 反馈优先用 `ui.showToast()` / `ui.renderSkeleton()`**
 4. **修改样式优先调整 CSS 变量，避免硬编码颜色**
@@ -403,7 +403,7 @@ chore/<short-description>    # 维护任务
 | 记住我 | `localStorage` 持久化、刷新页面保持登录 |
 | 仅会话 | `sessionStorage`、关闭标签页清除配置 |
 | 设置修改 | 修改 URL/Token/Remember Me、登出 |
-| 自动刷新 | 可配置间隔 (1-120s，默认 10s)、手动刷新、网络异常重试 |
+| 自动刷新 | 可配置间隔 (1-120s，默认 10s)、网络异常重试 |
 | 错误处理 | 401 自动登出、网络超时、CORS 错误、Proxy 离线 |
 | 响应式 | 320px / 768px / 1024px / 1440px 断点 |
 | 安全 | 控制台 Token 脱敏、CSP 生效、无 XSS 漏洞 |
