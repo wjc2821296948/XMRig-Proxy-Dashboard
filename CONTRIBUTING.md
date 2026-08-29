@@ -1,4 +1,10 @@
-# 贡献指南 / Contributing Guide
+# Contributing Guide / 贡献指南
+
+[English](CONTRIBUTING_en.md) | [中文](CONTRIBUTING.md)
+
+---
+
+# 贡献指南
 
 感谢您对 XMRig Proxy Dashboard 的关注！欢迎任何形式的贡献，包括但不限于：
 
