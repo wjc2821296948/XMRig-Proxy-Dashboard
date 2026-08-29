@@ -46,8 +46,8 @@
 ```bash
 # 1. Fork 仓库到您的 GitHub 账号
 # 2. 克隆您的 Fork
-git clone https://github.com/YOUR_USERNAME/xmrig-proxy-dashboard.git
-cd xmrig-proxy-dashboard
+git clone https://github.com/YOUR_USERNAME/XMRig-Proxy-Dashboard.git
+cd XMRig-Proxy-Dashboard
 
 # 3. 创建功能分支
 git checkout -b feat/your-feature-name
@@ -89,7 +89,7 @@ xmrig-proxy-dashboard/
 
 ### 搜索现有 Issue
 
-在创建新 Issue 前，请先搜索 [Issues 列表](https://github.com/yourname/xmrig-proxy-dashboard/issues) 确认是否已有相同或类似的报告。
+在创建新 Issue 前，请先搜索 [Issues 列表](https://github.com/wjc2821296948/XMRig-Proxy-Dashboard/issues) 确认是否已有相同或类似的报告。
 
 ### Bug 报告模板
 
@@ -239,7 +239,7 @@ Closes #123 / Relates to #456
 
 ### 通用原则
 
-> 详见 [CLAUDE.md](CLAUDE.md) 中的「开发原则」与「代码规范」章节。
+> 详见 [CLAUDE.md](CLAUDE.md) 中的「开发原则」与「代码规范」章节（该文件已纳入版本控制）。
 
 | 规范 | 要求 |
 |------|------|
@@ -255,10 +255,10 @@ Closes #123 / Relates to #456
 
 | 模块 | 职责 | 禁止事项 |
 |------|------|----------|
-| `api.js` | 统一请求封装、鉴权、超时、错误归一化、Token 脱敏日志 | 直接 `fetch`、业务逻辑 |
-| `storage.js` | 配置存储抽象、Remember Me 逻辑 | 直接操作 `localStorage`/`sessionStorage` |
+| `api.js` | 统一请求封装、鉴权、超时（`AbortSignal.timeout` 取消底层 fetch）、错误归一化（仅抛出带 status 的 Error）、Token 脱敏日志 | 直接 `fetch`、业务逻辑、**UI 决策（登出/toast 由 main.js 负责）** |
+| `storage.js` | 配置存储抽象、Remember Me 逻辑、刷新间隔持久化、主题存储、写权限缓存 | 直接操作 `localStorage`/`sessionStorage` |
 | `ui.js` | UI 组件、渲染工具函数、格式化函数 | 业务逻辑、网络请求 |
-| `main.js` | 应用入口、状态机、事件绑定、自动刷新 | 直接 DOM 操作（应委托给 ui.js） |
+| `main.js` | 应用入口、状态机、事件绑定、自动刷新（可配置 1-120 秒）、登出/错误 toast 决策 | 直接 DOM 操作（应委托给 ui.js） |
 
 ### 新增代码必须遵守
 
@@ -403,7 +403,7 @@ chore/<short-description>    # 维护任务
 | 记住我 | `localStorage` 持久化、刷新页面保持登录 |
 | 仅会话 | `sessionStorage`、关闭标签页清除配置 |
 | 设置修改 | 修改 URL/Token/Remember Me、登出 |
-| 自动刷新 | 10s 间隔、手动刷新、网络异常重试 |
+| 自动刷新 | 可配置间隔 (1-120s，默认 10s)、手动刷新、网络异常重试 |
 | 错误处理 | 401 自动登出、网络超时、CORS 错误、Proxy 离线 |
 | 响应式 | 320px / 768px / 1024px / 1440px 断点 |
 | 安全 | 控制台 Token 脱敏、CSP 生效、无 XSS 漏洞 |
@@ -432,7 +432,7 @@ chore/<short-description>    # 维护任务
 
 ## 📞 获取帮助
 
-- **Issue 讨论**：[GitHub Issues](https://github.com/yourname/xmrig-proxy-dashboard/issues)
+- **Issue 讨论**：[GitHub Issues](https://github.com/wjc2821296948/XMRig-Proxy-Dashboard/issues)
 - **安全漏洞**：请通过 GitHub Security Advisories 私密报告，勿公开 Issue
 - **一般咨询**：可在 Issue 中提问或发起 Discussion
 
