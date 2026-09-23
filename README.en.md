@@ -189,25 +189,16 @@ computed by `getStatusInfo(data.miners)` in `src/ui.js`. The rules:
 | **Warning** (yellow) | `0 < now < max × 0.5` | Active miner count is below half of the historical peak. Possible causes: rigs signing off after a peak hour / a batch dropped and hasn't reconnected yet / a pool outage triggered failover / a miner config change is rolling out. |
 | **Online** (green) | `now >= max × 0.5` | Most of the historical miners are still connected and stable. |
 
-### Known production pitfalls
+### Current status state machine
 
-1. **`max` is a sticky historical peak** — it does not reset to zero on
-   restart. After a Proxy restart `max` will re-accumulate, but old
-   peaks linger; if `max = 1000` and `now = 10`, the badge will show
-   "Warning", not "Offline".
-2. **`now` is instantaneous** — a 5-second pool blip can flicker the
-   UI between "Offline" and "Online". The check has no rolling average.
-3. **Health is not measured** — a miner rejecting 99 % of shares while
-   still connected still counts as "Online". Watch the **Acceptance
-   Rate** and **Latency** tiles in the Mining Results card alongside
-   the badge.
-4. **Proxy-restart transient** — `/1/summary` will return
-   `miners.now = 0` for a brief moment after a Proxy restart, which
-   the badge immediately paints as "Offline"; the miners reconnect
-   within seconds.
-5. **Cold-start false positive** — a freshly deployed Proxy has
-   `max = 0, now = 0`. The check `0 < 0 × 0.5` is false, so the badge
-   lights **green** on an empty Proxy, which is misleading.
+Status classification is handled by a time-aware state machine:
+
+- A rolling 15-minute sampled peak replaces Proxy's sticky lifetime `max` as the miner-count baseline.
+- The badge enters **Offline** only after 20 seconds with zero miners, so a short `now = 0` blip does not immediately flicker the UI.
+- A decrease in Proxy `uptime` detects a restart; when no miners are present, a short **Restarting** grace state is shown.
+- Recovery from restart/offline requires two consecutive positive samples before returning to the normal business state.
+- Recent acceptance health uses deltas between `results.accepted/rejected` samples and requires at least 20 shares before affecting the badge.
+- A new Proxy with no miners shows **Waiting** for the first 60 seconds instead of falsely appearing Online.
 
 ### Ribbon vs. badge — don't confuse them
 
