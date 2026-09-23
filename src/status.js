@@ -30,9 +30,9 @@ const DEFAULTS = Object.freeze({
   // Do not judge acceptance health from tiny samples.
   minHealthShares: 20,
 
-  // Acceptance/rejection health is evaluated over a short rolling window,
-  // independently of the longer recent-peak window.
-  healthWindowMs: 60 * 1000,
+  // Health is evaluated from the most recent consecutive successful samples.
+  // Reject stale pairs that are farther apart than the recent-peak window.
+  healthWindowMs: 15 * 60 * 1000,
 
   // A brand-new Proxy with no historical miners is shown as "waiting"
   // only during the first minute of its current process lifetime.
@@ -116,7 +116,13 @@ function detectRestart(tracker, uptime, nowMs, minerCount) {
     Number.isFinite(uptime) &&
     uptime < tracker.previousUptime
   ) {
-    tracker.restartUntil = nowMs + tracker.cfg.restartGraceMs;
+    // Only keep the explicit restart state while the first post-restart
+    // sample still has zero miners. With a long refresh interval the first
+    // observed sample may already be recovered, in which case showing
+    // "restarting" would be misleading.
+    tracker.restartUntil = minerCount === 0
+      ? nowMs + tracker.cfg.restartGraceMs
+      : 0;
 
     // The old process lifetime must not contaminate the new one's peak or
     // share-counter baseline.
@@ -140,16 +146,20 @@ function getRecentPeak(tracker) {
   return Math.max(...tracker.samples.map(sample => sample.miners));
 }
 
-function getRecentAcceptanceRate(tracker, nowMs) {
-  const cutoff = nowMs - tracker.cfg.healthWindowMs;
-  const window = tracker.samples.filter(sample => sample.ts >= cutoff);
-
-  if (window.length < 2) {
+function getRecentAcceptanceRate(tracker) {
+  if (tracker.samples.length < 2) {
     return null;
   }
 
-  const first = window[0];
-  const last = window[window.length - 1];
+  // Compare the two most recent successful samples. This works with every
+  // supported refresh interval, including low-frequency polling such as
+  // 120 seconds, while still rejecting stale gaps beyond the health window.
+  const first = tracker.samples[tracker.samples.length - 2];
+  const last = tracker.samples[tracker.samples.length - 1];
+
+  if (last.ts - first.ts > tracker.cfg.healthWindowMs) {
+    return null;
+  }
 
   const acceptedDelta = last.accepted - first.accepted;
   const rejectedDelta = last.rejected - first.rejected;
@@ -266,11 +276,11 @@ export function getStatusInfo(data, tracker, nowMs = Date.now()) {
     minerCount < recentPeak * tracker.cfg.warningRatio;
 
   /*
-   * Health is a separate warning dimension. It uses deltas from the
-   * cumulative results counters so an old healthy history cannot hide a
+   * Health is a separate warning dimension. It uses deltas between the two
+   * most recent successful samples so an old healthy history cannot hide a
    * current rejection spike.
    */
-  const acceptanceRate = getRecentAcceptanceRate(tracker, nowMs);
+  const acceptanceRate = getRecentAcceptanceRate(tracker);
   const healthWarning =
     acceptanceRate !== null &&
     acceptanceRate < tracker.cfg.warningRatio;
