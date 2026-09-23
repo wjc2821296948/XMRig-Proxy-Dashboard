@@ -341,6 +341,17 @@ h1 {
   box-shadow: 0 0 0 1px rgba(240, 185, 74, 0.35) inset;
 }
 
+.status-waiting {
+  background: var(--accent-blue);
+  color: var(--text-on-accent-blue);
+}
+
+.status-restarting {
+  background: var(--accent-yellow);
+  color: var(--text-on-accent-yellow);
+}
+
+
 /* ==========================================================================
    Grid System
    ========================================================================== */
