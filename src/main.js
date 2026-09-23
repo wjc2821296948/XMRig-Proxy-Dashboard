@@ -22,12 +22,17 @@ import {
   formatBytes,
   formatUptime,
   formatNumber,
-  getStatusInfo,
 } from "./ui.js";
+import {
+  createStatusTracker,
+  resetStatusTracker,
+  getStatusInfo,
+} from "./status.js";
 
 // Global state
 let refreshInterval = null;
 let isFetching = false;
+const statusTracker = createStatusTracker();
 
 /* ==========================================================================
    Theme Management
@@ -424,6 +429,7 @@ function renderConnectForm(prefill = {}) {
    Connect Handler
    ========================================================================== */
 async function handleConnect() {
+  resetStatusTracker(statusTracker);
   const url = document.getElementById("apiUrlInput").value.trim();
   const token = document.getElementById("apiTokenInput").value.trim();
   const remember = document.getElementById("rememberMe").checked;
@@ -472,6 +478,7 @@ async function handleConnect() {
     // Clear invalid config on auth failure
     if (err.status === 401 || err.status === 403) {
       clearConfig();
+      resetStatusTracker(statusTracker);
       showToast("认证失败：Token 无效或已过期", "error");
     } else if (err.message.includes("timed out")) {
       showToast("连接超时，请检查地址和网络", "error");
@@ -493,7 +500,7 @@ async function handleConnect() {
    ========================================================================== */
 function renderDashboard(data) {
   // Header info
-  const status = getStatusInfo(data.miners);
+  const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
   els.statusBadge.className = `status-badge ${status.cls}`;
   els.workerId.textContent = `Worker: ${escapeHtml(data.worker_id || "未知")} | 版本: ${escapeHtml(data.version || "未知")}`;
@@ -774,6 +781,7 @@ function openSettingsModal() {
   document.getElementById("cancelSettings").addEventListener("click", () => closeModal(overlay));
   document.getElementById("logoutBtn").addEventListener("click", () => {
     clearConfig();
+    resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
@@ -796,6 +804,7 @@ function openSettingsModal() {
     if (refreshInterval < 1 || refreshInterval > 120) { showToast("刷新间隔必须在 1-120 秒之间", "error"); return; }
 
     saveConfig({ apiUrl: url, apiToken: token, remember, refreshInterval });
+    resetStatusTracker(statusTracker);
     // Theme lives in its own storage slot — see storage.js.
     const theme = themeWantsDark ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
@@ -882,6 +891,7 @@ async function fetchAndRender() {
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
       clearConfig();
+      resetStatusTracker(statusTracker);
       // Auth failure invalidates the persisted write flag (the token no
       // longer matches), but a transient network/5xx does not — see
       // markDisconnected docs.
