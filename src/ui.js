@@ -116,34 +116,11 @@ export function formatNumber(num) {
  * Determine status class and text.
  */
 export function getStatusInfo(miners) {
-  if (!miners) {
+  if (!miners || miners.now === 0) {
     return { cls: "status-offline", text: "离线" };
   }
-  const { now, max, accepted = 0, total = 0, timestamp } = miners;
-
-  // 5. 冷启状态：历史最大为0且当前 0
-  if (max === 0 && now === 0) {
-    return { cls: "status-waiting", text: "等待中" };
-  }
-
-  // 4. 检测是否刚刚重启（使用 timestamp 或 fetch 时间）
-  const recent = timestamp
-    ? Math.abs(Date.now() - new Date(timestamp).getTime()) < 5000
-    : false;
-  if (now === 0 && recent) {
-    return { cls: "status-restarting", text: "重启中" };
-  }
-
-  // 3. 健康度检查，若接受率低则认为离线
-  const healthy = total > 0 ? accepted / total > 0.5 : true;
-  if (!healthy || now === 0) {
-    return { cls: "status-offline", text: "离线" };
-  }
-
-  // 2. 预警判定：实际数低于历史最大值的一半
-  if (now < max * 0.5) {
+  if (miners.now < miners.max * 0.5) {
     return { cls: "status-warning", text: "预警" };
   }
-
   return { cls: "status-online", text: "在线" };
 }
