@@ -19,12 +19,12 @@ jobs:
     env:
       OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Set the model to a local Ollama model
-      config.model: "openai/gpt-oss-120b"
-      config.fallback_models: '["openai/gpt-oss-120b"]'
+      # Use the requested Nemotron model through the LiteLLM OpenAI-compatible endpoint
+      config.model: "openai/nvidia/nemotron-3-super-120b-a12b"
+      config.fallback_models: '["openai/nvidia/nemotron-3-super-120b-a12b"]'
       config.custom_model_max_tokens: "131072"
-      # Ollama configuration
-      OLLAMA.API_BASE: "https://litellm.lrate.top"
+      # LiteLLM OpenAI-compatible endpoint
+      OPENAI__API_BASE: "https://litellm.lrate.top/v1"
       # Tool configuration
       github_action_config.auto_review: "true"
       github_action_config.auto_describe: "true"
