@@ -129,7 +129,9 @@ function detectRestart(tracker, uptime, nowMs, minerCount) {
     tracker.samples = [];
     tracker.zeroSince = minerCount === 0 ? nowMs : null;
     tracker.recoveryCount = 0;
-    tracker.everHadMiners = false;
+    // Preserve process-history knowledge across restarts so a restarted
+    // Proxy is not mistaken for a brand-new cold start after its restart
+    // grace period expires.
     tracker.lastStableStatus = null;
   }
 
