@@ -1,0 +1,18 @@
+[config]
+model = "openai/nvidia/nemotron-3-ultra-550b-a55b"
+fallback_models = ["openai/nvidia/nemotron-3-super-120b-a12b"]
+custom_model_max_tokens = 131072
+repo_context_files = ["CLAUDE.md"]
+
+[openai]
+api_base = "https://litellm.lrate.top/v1"
+
+[github_action_config]
+auto_review = true
+auto_describe = false
+auto_improve = false
+pr_actions = ["opened", "reopened", "ready_for_review", "review_requested"]
+handle_push_trigger = false
+
+[pr_reviewer]
+inline_key_issues = true
