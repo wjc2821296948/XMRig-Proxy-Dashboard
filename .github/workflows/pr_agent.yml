@@ -28,28 +28,6 @@ jobs:
       - name: PR Agent action step
         id: pragent
         uses: the-pr-agent/pr-agent@v0.46.0
-
     env:
       OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Pin PR-Agent to the repository's reviewed project context.
-      config.repo_context_files: '["CLAUDE.md"]'
-
-      # Main model + real fallback model through the same LiteLLM endpoint.
-      config.model: "openai/nvidia/nemotron-3-ultra-550b-a55b"
-      config.fallback_models: '["openai/nvidia/nemotron-3-super-120b-a12b"]'
-      config.custom_model_max_tokens: "131072"
-      OPENAI__API_BASE: "https://litellm.lrate.top/v1"
-
-      # Automatic actions: review only by default.
-      github_action_config.auto_review: "true"
-      github_action_config.auto_describe: "false"
-      github_action_config.auto_improve: "false"
-
-      # Do not automatically review every new push. Push-trigger handling stays opt-in.
-      github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested"]'
-      github_action_config.handle_push_trigger: "false"
-
-      # Put concrete findings directly on the changed lines when possible.
-      pr_reviewer.inline_key_issues: "true"
