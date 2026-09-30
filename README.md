@@ -1,6 +1,6 @@
 # XMRig Proxy Dashboard
 
-> **纯前端、零知识、静态部署** 的 XMRig Proxy 实时监控面板。
+> **纯前端、零知识、静态部署** 的 XMRig Proxy 实时监控面板。浏览器版本在部署时将 `xmrig-proxy-client` 打包进本地静态资源，不在运行时从第三方 CDN 加载核心代码。
 
 🔗 **开放预览网站**：<https://xmrig-proxy-dashboard.lrate.top/>
 
@@ -43,12 +43,12 @@ python3 -m http.server 8000
 
 | 平台 | 部署方式 |
 |------|----------|
-| **GitHub Pages** | 推送到 `main` 分支 → Settings → Pages → Deploy from branch |
-| **Cloudflare Pages** | 连接仓库 → Build command: 留空 / Output: `/` |
-| **Netlify / Vercel** | 导入仓库 → 无需构建命令 → 直接部署 |
-| **Nginx / Caddy / Apache** | 将文件夹作为静态站点根目录 |
+| **GitHub Pages** | 使用 GitHub Actions 执行 `npm run build`，发布 `dist/` |
+| **Cloudflare Pages** | Build command: `npm run build` / Build output directory: `dist` |
+| **Netlify / Vercel** | Build command: `npm run build` / Output directory: `dist` |
+| **Nginx / Caddy / Apache** | 发布构建后的 `dist/` 目录 |
 
-> ✅ **零配置** —— 只要能服务静态文件即可。
+> ✅ **运行时仍然是纯静态前端** —— 构建阶段会把 Package 代码打入 `dist/app.js`，部署后的浏览器不需要访问 GitHub Raw 或 npm。
 
 ---
 
