@@ -20,5 +20,8 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install package dependency
+        run: npm install --no-audit --no-fund
+
       - name: Run status state tests
-        run: node --experimental-default-type=module --test tests/status.test.js
+        run: npm test

@@ -85,6 +85,14 @@ python3 -m http.server 8000
 
 ---
 
+## 📦 可复用 Package 集成
+
+Dashboard 现在把通用的 XMRig Proxy API 与健康状态逻辑交给 [xmrig-proxy-client](https://github.com/wjc2821296948/xmrig-proxy-client)。Dashboard 自身只保留页面状态、配置存储和 UI 适配。
+
+当前集成固定到 package 的 commit `e8a10f38dfa049bd85c708b911d1cfd49879d1c0`，保证静态页面不会因为上游分支移动而加载不同代码。浏览器通过 GitHub Raw 加载同一个 ES Module；Node.js 状态测试通过 `package.json` 中的 GitHub 依赖解析同一个 commit。
+
+之后发布稳定 npm 版本时，可以把适配层切换到固定的 npm 版本，而不需要重新设计 Dashboard 的 API 层。
+
 ## 🏗️ 架构设计
 
 ```
@@ -127,10 +135,12 @@ xmrig-proxy-dashboard/
 ├── CLAUDE.md           # 项目记忆（供 AI 协作参考）
 ├── .gitignore
 └── src/
-    ├── main.js         # 应用入口、状态机、事件绑定
-    ├── api.js          # 统一 API 请求封装（鉴权、超时、错误归一化）
-    ├── storage.js      # 配置存储抽象（localStorage / sessionStorage）
-    └── ui.js           # UI 组件（Skeleton、Toast、渲染工具函数）
+    ├── main.js               # 应用入口、状态机、事件绑定
+    ├── api.js                # package 的兼容适配层（鉴权/请求入口）
+    ├── xmrig-proxy-client.js # package 环境适配：Node 测试 / 浏览器静态部署
+    ├── status.js             # package 健康状态函数的兼容导出
+    ├── storage.js            # 配置存储抽象（localStorage / sessionStorage）
+    └── ui.js                 # UI 组件（Skeleton、Toast、渲染工具函数）
 ```
 
 ---
@@ -180,8 +190,8 @@ A: 当前版本单实例。可通过「设置」修改 URL/Token 实现切换；
 
 ## 🩺 状态判断与生产环境类比
 
-Dashboard 顶部徽章的「离线 / 预警 / 在线」由 `src/ui.js` 中的
-`getStatusInfo(data.miners)` 决定，规则如下：
+Dashboard 顶部徽章的「离线 / 预警 / 在线」由 `xmrig-proxy-client` 导出的
+`getStatusInfo(data, tracker)` 决定，`src/status.js` 仅负责兼容导出。规则如下：
 
 | 显示 | 触发条件 | 生产环境真实含义（推断） |
 |------|----------|--------------------------|
