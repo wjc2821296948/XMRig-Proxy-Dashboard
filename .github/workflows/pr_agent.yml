@@ -5,7 +5,7 @@ on:
 
 jobs:
   pr_agent_job:
-    # Ignore bot events and only let slash-commands on PR comments invoke PR-Agent.
+    # Ignore bot events and only let supported PR-Agent slash commands invoke PR-Agent.
     if: >-
       ${{
         github.event.sender.type != 'Bot' &&
@@ -13,7 +13,44 @@ jobs:
           github.event_name != 'issue_comment' ||
           (
             github.event.issue.pull_request &&
-            startsWith(github.event.comment.body, '/')
+            (
+              github.event.comment.body == '/review' ||
+              startsWith(github.event.comment.body, '/review ') ||
+              github.event.comment.body == '/review_pr' ||
+              startsWith(github.event.comment.body, '/review_pr ') ||
+              github.event.comment.body == '/auto_review' ||
+              startsWith(github.event.comment.body, '/auto_review ') ||
+              github.event.comment.body == '/answer' ||
+              startsWith(github.event.comment.body, '/answer ') ||
+              github.event.comment.body == '/describe' ||
+              startsWith(github.event.comment.body, '/describe ') ||
+              github.event.comment.body == '/describe_pr' ||
+              startsWith(github.event.comment.body, '/describe_pr ') ||
+              github.event.comment.body == '/improve' ||
+              startsWith(github.event.comment.body, '/improve ') ||
+              github.event.comment.body == '/improve_code' ||
+              startsWith(github.event.comment.body, '/improve_code ') ||
+              github.event.comment.body == '/ask' ||
+              startsWith(github.event.comment.body, '/ask ') ||
+              github.event.comment.body == '/ask_question' ||
+              startsWith(github.event.comment.body, '/ask_question ') ||
+              github.event.comment.body == '/ask_line' ||
+              startsWith(github.event.comment.body, '/ask_line ') ||
+              github.event.comment.body == '/update_changelog' ||
+              startsWith(github.event.comment.body, '/update_changelog ') ||
+              github.event.comment.body == '/add_docs' ||
+              startsWith(github.event.comment.body, '/add_docs ') ||
+              github.event.comment.body == '/generate_labels' ||
+              startsWith(github.event.comment.body, '/generate_labels ') ||
+              github.event.comment.body == '/config' ||
+              startsWith(github.event.comment.body, '/config ') ||
+              github.event.comment.body == '/settings' ||
+              startsWith(github.event.comment.body, '/settings ') ||
+              github.event.comment.body == '/help' ||
+              startsWith(github.event.comment.body, '/help ') ||
+              github.event.comment.body == '/similar_issue' ||
+              startsWith(github.event.comment.body, '/similar_issue ')
+            )
           )
         )
       }}
@@ -23,7 +60,7 @@ jobs:
       pull-requests: write
       contents: write
       checks: write
-    name: Run PR Agent on pull requests and slash commands
+    name: Run PR Agent on pull requests and supported slash commands
     steps:
       - name: PR Agent action step
         id: pragent
