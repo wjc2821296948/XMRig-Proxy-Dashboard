@@ -1,0 +1,11 @@
+{
+  "name": "xmrig-proxy-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/status.test.js"
+  },
+  "devDependencies": {
+    "xmrig-proxy-client": "github:wjc2821296948/xmrig-proxy-client#e8a10f38dfa049bd85c708b911d1cfd49879d1c0"
+  }
+}

@@ -6,11 +6,15 @@
   <title>XMRig Proxy Dashboard</title>
   <meta name="description" content="纯前端 XMRig Proxy 实时监控面板 - Zero Knowledge 架构">
   <meta name="theme-color" content="#0e0f1a">
+  <meta name="preconnect" content="https://fonts.googleapis.com">
+  <meta name="preconnect" content="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="styles.css">
-  <!-- Content Security Policy: 仅允许同源脚本、内联样式、同源字体/图片，连接到任意源（需连接用户自建的 Proxy） -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src *; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+  <!-- The reusable package is loaded as an immutable ES module commit.
+       connect-src remains open because the browser must reach the operator's
+       own XMRig Proxy; script-src also permits the package module host. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://raw.githubusercontent.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src *; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 </head>
 <body>
   <div class="container">
@@ -18,9 +22,6 @@
       <h1>
         XMRig Proxy Dashboard
         <span id="statusBadge" class="status-badge status-warning">加载中…</span>
-        <!-- Permanent view-only ribbon. Mirrors the project's "honest thin
-             client" identity: the dashboard is a viewer over XMRig-Proxy's
-             restricted HTTP API, never a controller. -->
         <span id="viewModeBadge" class="view-mode-badge" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-label="只读视图"><span class="view-mode-dot" aria-hidden="true"></span><span id="viewModeBadgeText">只读视图</span><span class="view-mode-caret" aria-hidden="true">▾</span></span>
       </h1>
       <div class="subtitle">
@@ -35,7 +36,6 @@
     </main>
   </div>
 
-  <!-- Application entry point as ES Module -->
   <script type="module" src="src/main.js"></script>
 </body>
 </html>
