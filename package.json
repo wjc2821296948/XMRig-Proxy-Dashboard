@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build.mjs",
     "test": "node --test tests/status.test.js"
   },
   "devDependencies": {
-    "xmrig-proxy-client": "github:wjc2821296948/xmrig-proxy-client#e8a10f38dfa049bd85c708b911d1cfd49879d1c0"
+    "esbuild": "0.28.2",
+    "xmrig-proxy-client": "github:wjc2821296948/xmrig-proxy-client#e5a656b8d0ebed9800fb0da5ad8e6f4650bd6e6b"
   }
 }

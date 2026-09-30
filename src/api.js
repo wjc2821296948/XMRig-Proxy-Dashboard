@@ -1,8 +1,9 @@
 /**
  * api.js – Dashboard adapter for xmrig-proxy-client.
  *
- * The reusable transport and write-access probe live in the package.
- * This file only adapts the package to the dashboard's existing storage API.
+ * The package owns HTTP transport, authentication headers, timeout handling,
+ * and write-access probing. This adapter owns dashboard connection storage
+ * and reuses one client instance for the active connection.
  */
 
 import { XMRigProxyClient } from "./xmrig-proxy-client.js";
@@ -10,17 +11,27 @@ import { getConfig } from "./storage.js";
 
 const REQUEST_TIMEOUT_MS = 8000;
 
-function createClient() {
+let cachedClient = null;
+let cachedFingerprint = null;
+
+function getClient() {
   const cfg = getConfig();
   if (!cfg || !cfg.apiUrl || !cfg.apiToken) {
     throw new Error("API configuration missing");
   }
 
-  return new XMRigProxyClient({
-    url: cfg.apiUrl,
-    token: cfg.apiToken,
-    timeoutMs: REQUEST_TIMEOUT_MS,
-  });
+  const fingerprint = JSON.stringify([cfg.apiUrl, cfg.apiToken]);
+
+  if (!cachedClient || cachedFingerprint !== fingerprint) {
+    cachedClient = new XMRigProxyClient({
+      url: cfg.apiUrl,
+      token: cfg.apiToken,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    });
+    cachedFingerprint = fingerprint;
+  }
+
+  return cachedClient;
 }
 
 /**
@@ -29,12 +40,20 @@ function createClient() {
  * xmrig-proxy-client.
  */
 export function request(path, options = {}) {
-  return createClient().request(path, options);
+  return getClient().request(path, options);
 }
 
 /**
  * Probe the configured Proxy for write access without issuing a write request.
  */
 export function probeWriteAccess() {
-  return createClient().probeWriteAccess();
+  return getClient().probeWriteAccess();
+}
+
+/**
+ * Drop the cached client after changing connection credentials.
+ */
+export function resetClient() {
+  cachedClient = null;
+  cachedFingerprint = null;
 }
