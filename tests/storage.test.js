@@ -1,0 +1,172 @@
+import { test, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  clearConfig,
+  clearTheme,
+  clearWriteAccess,
+  loadConfig,
+  loadTheme,
+  loadWriteAccess,
+  saveConfig,
+  saveTheme,
+  saveWriteAccess,
+} from "../src/storage.js";
+
+class MemoryStorage {
+  #data = new Map();
+
+  getItem(key) {
+    return this.#data.has(key) ? this.#data.get(key) : null;
+  }
+
+  setItem(key, value) {
+    this.#data.set(String(key), String(value));
+  }
+
+  removeItem(key) {
+    this.#data.delete(key);
+  }
+
+  clear() {
+    this.#data.clear();
+  }
+}
+
+globalThis.localStorage = new MemoryStorage();
+globalThis.sessionStorage = new MemoryStorage();
+
+beforeEach(() => {
+  globalThis.localStorage.clear();
+  globalThis.sessionStorage.clear();
+});
+
+test("remembered config is stored in localStorage only", () => {
+  const cfg = {
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "secret",
+    remember: true,
+    refreshInterval: 30,
+  };
+
+  saveConfig(cfg);
+
+  assert.deepEqual(loadConfig(), cfg);
+  assert.ok(globalThis.localStorage.getItem("xmrig_proxy_config"));
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
+});
+
+test("session-only config clears stale localStorage config", () => {
+  saveConfig({
+    apiUrl: "https://old.example",
+    apiToken: "old",
+    remember: true,
+    refreshInterval: 10,
+  });
+
+  const cfg = {
+    apiUrl: "https://new.example",
+    apiToken: "new",
+    remember: false,
+    refreshInterval: 45,
+  };
+
+  saveConfig(cfg);
+
+  assert.deepEqual(loadConfig(), cfg);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+});
+
+test("invalid persisted config is discarded and valid session config is recovered", () => {
+  globalThis.localStorage.setItem("xmrig_proxy_config", "{bad json");
+
+  const fallback = {
+    apiUrl: "https://proxy.example",
+    apiToken: "",
+    remember: false,
+    refreshInterval: 120,
+  };
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify(fallback));
+
+  assert.deepEqual(loadConfig(), fallback);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+});
+
+test("refresh interval is normalized to the supported 1-120 second range", () => {
+  globalThis.sessionStorage.setItem(
+    "xmrig_proxy_config",
+    JSON.stringify({
+      apiUrl: "https://proxy.example",
+      apiToken: "token",
+      remember: false,
+      refreshInterval: 999,
+    }),
+  );
+
+  assert.equal(loadConfig().refreshInterval, 120);
+
+  globalThis.sessionStorage.setItem(
+    "xmrig_proxy_config",
+    JSON.stringify({
+      apiUrl: "https://proxy.example",
+      apiToken: "token",
+      remember: false,
+      refreshInterval: 0,
+    }),
+  );
+
+  assert.equal(loadConfig().refreshInterval, 10);
+});
+
+test("logout removes connection config but preserves the theme preference", () => {
+  saveConfig({
+    apiUrl: "https://proxy.example",
+    apiToken: "token",
+    remember: true,
+    refreshInterval: 10,
+  });
+  saveTheme("light");
+
+  clearConfig();
+
+  assert.equal(loadConfig(), null);
+  assert.equal(loadTheme(), "light");
+});
+
+test("theme storage ignores unsupported values and defaults to dark", () => {
+  saveTheme("blue");
+  assert.equal(loadTheme(), "dark");
+
+  saveTheme("light");
+  assert.equal(loadTheme(), "light");
+
+  clearTheme();
+  assert.equal(loadTheme(), "dark");
+});
+
+test("write-access decisions are isolated by proxy URL", () => {
+  const first = "https://proxy-a.example";
+  const second = "https://proxy-b.example";
+
+  saveWriteAccess(true, first);
+  saveWriteAccess(false, second);
+
+  assert.equal(loadWriteAccess(first), true);
+  assert.equal(loadWriteAccess(second), false);
+  assert.equal(loadWriteAccess("https://proxy-c.example"), false);
+
+  clearWriteAccess(first);
+
+  assert.equal(loadWriteAccess(first), false);
+  assert.equal(loadWriteAccess(second), false);
+});
+
+test("write-access values are coerced to booleans", () => {
+  const url = "https://proxy.example";
+
+  saveWriteAccess("yes", url);
+  assert.equal(loadWriteAccess(url), true);
+
+  saveWriteAccess(0, url);
+  assert.equal(loadWriteAccess(url), false);
+});
