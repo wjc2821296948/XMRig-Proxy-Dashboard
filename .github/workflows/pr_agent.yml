@@ -68,3 +68,15 @@ jobs:
     env:
       OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Keep critical PR-Agent settings in the workflow so they are available
+      # even when .pr_agent.toml is introduced or changed by the current PR.
+      config.model: "openai/nvidia/nemotron-3-ultra-550b-a55b"
+      config.fallback_models: '["openai/nvidia/nemotron-3-super-120b-a12b"]'
+      config.custom_model_max_tokens: "131072"
+      OPENAI.API_BASE: "https://litellm.lrate.top/v1"
+      github_action_config.auto_review: "true"
+      github_action_config.auto_describe: "false"
+      github_action_config.auto_improve: "false"
+      github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested"]'
+      github_action_config.handle_push_trigger: "false"
