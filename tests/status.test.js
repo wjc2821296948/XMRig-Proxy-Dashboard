@@ -161,3 +161,63 @@ test("recovery from offline requires two positive samples", () => {
     { cls: "status-online", text: "在线" },
   );
 });
+
+test("fresh empty proxy stops waiting after the cold-start window", () => {
+  const tracker = createStatusTracker();
+
+  assert.deepEqual(
+    getStatusInfo(sample({ now: 0, max: 0, uptime: 59 }), tracker, 0),
+    { cls: "status-waiting", text: "等待中" },
+  );
+
+  assert.deepEqual(
+    getStatusInfo(sample({ now: 0, max: 0, uptime: 61 }), tracker, 61_000),
+    { cls: "status-offline", text: "离线" },
+  );
+});
+
+test("rolling peak expires after the configured peak window", () => {
+  const tracker = createStatusTracker();
+
+  getStatusInfo(sample({ now: 100, max: 100, uptime: 100 }), tracker, 0);
+
+  assert.deepEqual(
+    getStatusInfo(sample({ now: 20, max: 100, uptime: 110 }), tracker, 10_000),
+    { cls: "status-warning", text: "预警" },
+  );
+
+  assert.deepEqual(
+    getStatusInfo(sample({ now: 20, max: 100, uptime: 1_010 }), tracker, 16 * 60 * 1000),
+    { cls: "status-online", text: "在线" },
+  );
+});
+
+test("counter resets do not create a false health warning", () => {
+  const tracker = createStatusTracker();
+
+  getStatusInfo(
+    sample({ now: 10, max: 10, uptime: 100, accepted: 200, rejected: 10 }),
+    tracker,
+    0,
+  );
+
+  assert.deepEqual(
+    getStatusInfo(
+      sample({ now: 10, max: 10, uptime: 110, accepted: 5, rejected: 0 }),
+      tracker,
+      10_000,
+    ),
+    { cls: "status-online", text: "在线" },
+  );
+});
+
+test("missing miner data is treated as offline without mutating tracker state", () => {
+  const tracker = createStatusTracker();
+
+  assert.deepEqual(
+    getStatusInfo(undefined, tracker, 0),
+    { cls: "status-offline", text: "离线" },
+  );
+  assert.equal(tracker.samples.length, 0);
+  assert.equal(tracker.previousUptime, null);
+});
