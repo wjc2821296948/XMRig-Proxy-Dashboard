@@ -1,4 +1,4 @@
-name: Status state tests
+name: Dashboard CI
 
 on:
   push:
@@ -9,7 +9,27 @@ permissions:
   contents: read
 
 jobs:
-  status-tests:
+  unit-tests:
+    name: Unit tests (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["18.x", "20.x", "22.x"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run unit tests
+        run: node --experimental-default-type=module --test tests/status.test.js tests/api.test.js tests/storage.test.js tests/ui.test.js
+
+  static-security:
+    name: Static security and structure checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,7 +38,27 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.x
 
-      - name: Run status state tests
-        run: node --experimental-default-type=module --test tests/status.test.js
+      - name: Run static checks
+        run: node --experimental-default-type=module --test tests/static.test.js
+
+  syntax-check:
+    name: JavaScript syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in src/*.js tests/*.js; do
+            node --experimental-default-type=module --check "$file"
+          done
