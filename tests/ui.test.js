@@ -47,4 +47,5 @@ test("basic UI status helper preserves offline and warning boundaries", () => {
   assert.deepEqual(
     getStatusInfo({ now: 5, max: 10 }),
     { cls: "status-online", text: "在线" },
+  );
 });
