@@ -33,6 +33,8 @@ require_ticket_analysis_review = true
 require_risk_assessment = true
 require_merge_recommendation = false
 require_priority_files = true
+
 inline_key_issues = true
+
 enable_large_pr_chunking = true
 max_number_of_calls = 5
