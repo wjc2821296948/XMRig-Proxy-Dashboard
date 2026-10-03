@@ -15,4 +15,11 @@ pr_actions = ["opened", "reopened", "ready_for_review", "review_requested"]
 handle_push_trigger = false
 
 [pr_reviewer]
+require_score_review = true
+require_can_be_split_review = true
+require_todo_scan = true
+require_risk_assessment = true
+require_priority_files = true
+require_merge_recommendation = true
+
 inline_key_issues = true
