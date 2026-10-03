@@ -38,3 +38,9 @@ inline_key_issues = true
 
 enable_large_pr_chunking = true
 max_number_of_calls = 5
+
+[pr_code_suggestions]
+commitable_code_suggestions = false
+dual_publishing_score_threshold = 8
+focus_only_on_problems = true
+suggestions_score_threshold = 0
