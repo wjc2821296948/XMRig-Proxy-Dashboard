@@ -3,6 +3,7 @@ model = "openai/nvidia/nemotron-3-ultra-550b-a55b"
 fallback_models = ["openai/nvidia/nemotron-3-super-120b-a12b"]
 custom_model_max_tokens = 131072
 repo_context_files = ["CLAUDE.md"]
+persistent_inline_comments = true
 
 [openai]
 api_base = "https://litellm.lrate.top/v1"
@@ -12,14 +13,26 @@ auto_review = true
 auto_describe = false
 auto_improve = false
 pr_actions = ["opened", "reopened", "ready_for_review", "review_requested"]
-handle_push_trigger = false
+handle_push_trigger = true
+push_commands = ["/review"]
+push_trigger_ignore_merge_commits = true
+push_trigger_ignore_bot_commits = true
+review_states = ["changes_requested"]
+review_author_types = ["User"]
+review_commands = ["/improve"]
 
 [pr_reviewer]
 require_score_review = true
+require_tests_review = true
+require_estimate_effort_to_review = true
 require_can_be_split_review = true
+require_security_review = true
+require_estimate_contribution_time_cost = false
 require_todo_scan = true
+require_ticket_analysis_review = true
 require_risk_assessment = true
+require_merge_recommendation = false
 require_priority_files = true
-require_merge_recommendation = true
-
 inline_key_issues = true
+enable_large_pr_chunking = true
+max_number_of_calls = 5

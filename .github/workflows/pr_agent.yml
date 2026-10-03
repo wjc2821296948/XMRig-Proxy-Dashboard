@@ -1,6 +1,8 @@
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, review_requested]
+    types: [opened, reopened, ready_for_review, review_requested, synchronize]
+  pull_request_review:
+    types: [submitted]
   issue_comment:
 
 jobs:
@@ -60,7 +62,7 @@ jobs:
       pull-requests: write
       contents: write
       checks: write
-    name: Run PR Agent on pull requests and supported slash commands
+    name: Run PR Agent on pull requests, review events, and supported slash commands
     steps:
       - name: PR Agent action step
         id: pragent
@@ -79,4 +81,10 @@ jobs:
       github_action_config.auto_describe: "false"
       github_action_config.auto_improve: "false"
       github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested"]'
-      github_action_config.handle_push_trigger: "false"
+      github_action_config.handle_push_trigger: "true"
+      github_action_config.push_commands: '["/review"]'
+      github_action_config.push_trigger_ignore_merge_commits: "true"
+      github_action_config.push_trigger_ignore_bot_commits: "true"
+      github_action_config.review_states: '["changes_requested"]'
+      github_action_config.review_author_types: '["User"]'
+      github_action_config.review_commands: '["/improve"]'
