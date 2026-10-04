@@ -38,7 +38,30 @@ python3 -m http.server 8000
 # 访问 http://localhost:8000
 ```
 
-### 2️⃣ 静态托管部署（推荐）
+### 2️⃣ npm / GitHub Packages 安装
+
+如果希望把 Dashboard 作为一个完整的 npm package 管理，可以从 GitHub Packages 安装：
+
+```bash
+npm config set @wjc2821296948:registry=https://npm.pkg.github.com
+npm install @wjc2821296948/xmrig-proxy-dashboard
+```
+
+如果你的 GitHub Packages 访问需要认证，请先使用具有 package read 权限的 GitHub Token 登录 npm registry：
+
+```bash
+npm login --registry=https://npm.pkg.github.com
+```
+
+安装后可以直接使用内置的零依赖静态服务器：
+
+```bash
+npx @wjc2821296948/xmrig-proxy-dashboard
+```
+
+默认监听 `127.0.0.1:8000)。可通过 `HOST` 和 `PORT` 环境变量修改监听地址和端口。
+
+### 3️⃣ 静态托管部署（推荐）
 
 支持任意静态托管平台，**无需任何后端配置**：
 
@@ -170,6 +193,7 @@ A: 打开「⚙ 设置」即可管理 Proxy 配置列表。每组配置包含名
 ## 📋 下一步计划
 
 - [x] **多 Proxy 配置列表** —— 支持保存多组 Proxy 配置，一键切换
+- [x] **npm / GitHub Packages 分发** —— 可安装完整 Dashboard package，并通过内置 Node.js 静态服务器启动
 - [ ] **PWA 支持** —— 离线缓存最近一次数据，支持"添加到主屏幕"
 - [ ] **主题切换** —— 暗/亮主题切换，CSS 变量已就绪
 - [ ] **更多图表库集成** —— 可选的历史趋势图表（Chart.js / uPlot 等按需加载）
