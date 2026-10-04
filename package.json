@@ -1,0 +1,39 @@
+{
+  "name": "@wjc2821296948/xmrig-proxy-dashboard",
+  "version": "1.0.0",
+  "description": "Zero-knowledge, static XMRig Proxy monitoring dashboard.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "wjc2821296948",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wjc2821296948/XMRig-Proxy-Dashboard.git"
+  },
+  "homepage": "https://github.com/wjc2821296948/XMRig-Proxy-Dashboard",
+  "bugs": {
+    "url": "https://github.com/wjc2821296948/XMRig-Proxy-Dashboard/issues"
+  },
+  "files": [
+    "index.html",
+    "styles.css",
+    "panel.png",
+    "src/",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "bin/"
+  ],
+  "bin": {
+    "xmrig-proxy-dashboard": "bin/server.js"
+  },
+  "scripts": {
+    "start": "xmrig-proxy-dashboard",
+    "serve": "xmrig-proxy-dashboard"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
