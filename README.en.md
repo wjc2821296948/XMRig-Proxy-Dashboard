@@ -169,7 +169,7 @@ A: Current version single instance. Switch via "Settings" to change URL/Token; f
 
 ## 📋 Roadmap
 
-- [ ] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
+- [X] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
 - [ ] **PWA Support** — Offline cache last data, "Add to Home Screen"
 - [ ] **Theme Toggle** — Dark/Light theme switching, CSS variables ready
 - [ ] **More Chart Libraries** — Optional historical trends (Chart.js / uPlot, lazy-loaded)
