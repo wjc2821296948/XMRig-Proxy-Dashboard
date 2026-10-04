@@ -120,6 +120,7 @@ export function deleteProfile(id) {
   writeProfiles(next);
   if (localStorage.getItem(ACTIVE_PROFILE_KEY) === id) {
     localStorage.setItem(ACTIVE_PROFILE_KEY, next[0].id);
+    saveConfig(next[0]);
   }
   return true;
 }
@@ -213,6 +214,7 @@ export function loadConfig() {
 export function clearConfig() {
   localStorage.removeItem(CONFIG_KEY);
   sessionStorage.removeItem(CONFIG_KEY);
+  localStorage.removeItem(ACTIVE_PROFILE_KEY);
 }
 
 /* --------------------------------------------------------------------------
