@@ -12,6 +12,8 @@
 import { request, probeWriteAccess } from "./api.js";
 import {
   loadConfig, saveConfig, clearConfig, getConfig,
+  loadProfiles, saveProfile, deleteProfile, setActiveProfile,
+  loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
 } from "./storage.js";
@@ -447,8 +449,18 @@ async function handleConnect() {
     return;
   }
 
-  // Save config first (so request() can read it)
-  saveConfig({ apiUrl: url, apiToken: token, remember });
+  // Save the connection as a profile so the current single-config flow
+  // automatically participates in the multi-Proxy profile list.
+  const existingProfile = getActiveProfile();
+  const profileName = existingProfile?.name || "Proxy 1";
+  saveProfile({
+    ...(existingProfile || {}),
+    name: profileName,
+    apiUrl: url,
+    apiToken: token,
+    remember,
+    refreshInterval: existingProfile?.refreshInterval ?? 10,
+  });
 
   // Show loading skeleton
   renderSkeleton(els.dashboard, 6);
@@ -729,42 +741,87 @@ function initChartTooltips() {
 /* ==========================================================================
    Settings Modal
    ========================================================================== */
-function openSettingsModal() {
-  const cfg = getConfig() || { apiUrl: "", apiToken: "", remember: true, refreshInterval: 10 };
+function profileRowHtml(profile, activeId) {
+  const active = profile.id === activeId;
+  return `
+    <div class="profile-row ${active ? "is-active" : ""}" data-profile-id="${escapeHtml(profile.id)}">
+      <button class="profile-select" type="button" data-action="select-profile" data-profile-id="${escapeHtml(profile.id)}">
+        <span class="profile-status-dot" aria-hidden="true"></span>
+        <span class="profile-info">
+          <strong class="profile-name">${escapeHtml(profile.name)}</strong>
+          <span class="profile-url">${escapeHtml(profile.apiUrl)}</span>
+        </span>
+      </button>
+      <button class="profile-delete btn btn-danger" type="button" data-action="delete-profile" data-profile-id="${escapeHtml(profile.id)}" aria-label="删除 ${escapeHtml(profile.name)}" ${loadProfiles().length <= 1 ? "disabled" : ""}>删除</button>
+    </div>
+  `;
+}
+
+function openSettingsModal(selectedProfileId = null) {
+  const profiles = loadProfiles();
+  const activeId = loadActiveProfileId();
+  const selectedId = selectedProfileId || activeId || profiles[0]?.id || null;
+  const selected = selectedId === "__new__" ? null : (profiles.find(profile => profile.id === selectedId) || null);
+  const cfg = selected || {
+    id: "",
+    name: "",
+    apiUrl: "",
+    apiToken: "",
+    remember: true,
+    refreshInterval: 10,
+  };
   const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
-      <div class="modal">
+      <div class="modal profile-modal">
         <div class="modal-header">
-          <h3 class="modal-title" id="modal-title">设置</h3>
+          <h3 class="modal-title" id="modal-title">Proxy 配置</h3>
           <button class="modal-close" aria-label="关闭">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="input-group">
-            <label class="input-label" for="sApiUrl">API URL</label>
-            <input type="url" class="input-field" id="sApiUrl" value="${escapeHtml(cfg.apiUrl)}" required>
+          <div class="profile-list-header">
+            <span class="input-label">已保存的 Proxy</span>
+            <button class="btn btn-secondary btn-small" id="newProfile">+ 新建 Proxy</button>
           </div>
-          <div class="input-group">
-            <label class="input-label" for="sApiToken">Access Token</label>
-            <input type="password" class="input-field" id="sApiToken" value="${escapeHtml(cfg.apiToken)}" autocomplete="password">
+          <div class="profile-list" id="profileList">
+            ${profiles.length ? profiles.map(profile => profileRowHtml(profile, activeId)).join("") : '<p class="profile-empty">暂无保存的 Proxy 配置</p>'}
           </div>
-          <div class="input-group">
-            <label class="input-label" for="sRefreshInterval">自动刷新间隔 (秒)</label>
-            <input type="number" class="input-field" id="sRefreshInterval" value="${cfg.refreshInterval ?? 10}" min="1" max="120" required>
-            <span class="input-hint">最小 1 秒，最大 120 秒</span>
-          </div>
-          <div class="checkbox-group">
-            <input type="checkbox" id="sRemember" ${cfg.remember ? "checked" : ""}>
-            <label for="sRemember">记住我 (localStorage)</label>
-          </div>
-          <div class="checkbox-group">
-            <input type="checkbox" id="sTheme" ${currentTheme === 'dark' ? "checked" : ""}>
-            <label for="sTheme">深色模式</label>
-          </div>
-          <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
-            <button class="btn btn-secondary" id="cancelSettings">取消</button>
-            <button class="btn btn-danger" id="logoutBtn">登出</button>
-            <button class="btn" id="saveSettings">保存并重连</button>
+          <div class="profile-editor" id="profileEditor">
+            <div class="profile-editor-heading">
+              <span class="input-label">${selected ? "编辑配置" : "新建配置"}</span>
+              ${selected && selected.id === activeId ? '<span class="profile-active-label">当前使用</span>' : ""}
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="sProfileName">配置名称</label>
+              <input type="text" class="input-field" id="sProfileName" value="${escapeHtml(cfg.name)}" maxlength="64" placeholder="例如：主 Proxy">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="sApiUrl">API URL</label>
+              <input type="url" class="input-field" id="sApiUrl" value="${escapeHtml(cfg.apiUrl)}" required>
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="sApiToken">Access Token</label>
+              <input type="password" class="input-field" id="sApiToken" value="${escapeHtml(cfg.apiToken)}" autocomplete="password">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="sRefreshInterval">自动刷新间隔 (秒)</label>
+              <input type="number" class="input-field" id="sRefreshInterval" value="${cfg.refreshInterval ?? 10}" min="1" max="120" required>
+              <span class="input-hint">最小 1 秒，最大 120 秒</span>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="sRemember" ${cfg.remember ? "checked" : ""}>
+              <label for="sRemember">记住我 (localStorage)</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="sTheme" ${currentTheme === "dark" ? "checked" : ""}>
+              <label for="sTheme">深色模式</label>
+            </div>
+            <div class="config-actions">
+              <button class="btn btn-secondary" id="cancelSettings">取消</button>
+              <button class="btn btn-danger" id="logoutBtn">登出</button>
+              <button class="btn" id="saveSettings">保存并切换</button>
+            </div>
           </div>
         </div>
       </div>
@@ -773,80 +830,126 @@ function openSettingsModal() {
 
   document.body.insertAdjacentHTML("beforeend", modalHtml);
   const overlay = document.getElementById("settingsModal");
-  // Force reflow then open
   requestAnimationFrame(() => overlay.classList.add("open"));
 
-  // Event listeners
+  const reconnectProfile = async profile => {
+    closeModal(overlay);
+    showToast("正在连接 " + profile.name + "...", "info");
+    renderSkeleton(els.dashboard, 6);
+    resetStatusTracker(statusTracker);
+    try {
+      const summaryPromise = request("/1/summary");
+      const probePromise = probeWriteAccess();
+      const data = await summaryPromise;
+      renderDashboard(data);
+      applyProbeResult(await probePromise, true);
+      setRibbonConnectState("connected");
+      syncModePickerAltRow();
+      startAutoRefresh();
+      showToast("已切换到 " + profile.name, "success");
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        clearConfig();
+        markDisconnected({ clearWriteAccess: true });
+        showToast("认证失败，请检查 Token", "error");
+        renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
+      } else {
+        showToast("连接失败: " + err.message, "error");
+        stopAutoRefresh();
+      }
+    }
+  };
+
   overlay.querySelector(".modal-close").addEventListener("click", () => closeModal(overlay));
   document.getElementById("cancelSettings").addEventListener("click", () => closeModal(overlay));
+  document.getElementById("newProfile").addEventListener("click", () => {
+    closeModal(overlay);
+    openSettingsModal("__new__");
+  });
+
+  overlay.querySelectorAll('[data-action="select-profile"]').forEach(button => {
+    button.addEventListener("click", async () => {
+      const profile = setActiveProfile(button.dataset.profileId);
+      if (!profile) {
+        showToast("找不到该 Proxy 配置", "error");
+        return;
+      }
+      await reconnectProfile(profile);
+    });
+  });
+
+  overlay.querySelectorAll('[data-action="delete-profile"]').forEach(button => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.profileId;
+      const profile = loadProfiles().find(item => item.id === id);
+      if (!profile) return;
+      if (loadProfiles().length <= 1) {
+        showToast("至少保留一个 Proxy 配置", "warn");
+        return;
+      }
+      if (!confirm("确定删除「" + profile.name + "」？")) return;
+      const wasActive = id === loadActiveProfileId();
+      deleteProfile(id);
+      if (wasActive) {
+        const next = getActiveProfile();
+        if (next) setActiveProfile(next.id);
+      }
+      closeModal(overlay);
+      openSettingsModal();
+      showToast("已删除 " + profile.name, "info");
+    });
+  });
+
   document.getElementById("logoutBtn").addEventListener("click", () => {
     clearConfig();
     resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
-    showToast("已登出", "info");
+    showToast("已登出，已保存的 Proxy 配置仍保留", "info");
     renderConnectForm();
     stopAutoRefresh();
   });
+
   document.getElementById("saveSettings").addEventListener("click", async () => {
+    const name = document.getElementById("sProfileName").value.trim();
     const url = document.getElementById("sApiUrl").value.trim();
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
     const themeWantsDark = document.getElementById("sTheme").checked;
     const refreshInput = document.getElementById("sRefreshInterval");
-    const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10))
-      ? parseInt(refreshInput.value, 10)
-      : 10;
+    const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10)) ? parseInt(refreshInput.value, 10) : 10;
 
+    if (!name) { showToast("请输入配置名称", "error"); return; }
     if (!url) { showToast("请输入 API URL", "error"); return; }
     try { new URL(url); } catch { showToast("无效的 URL", "error"); return; }
-    if (refreshInterval < 1 || refreshInterval > 120) { showToast("刷新间隔必须在 1-120 秒之间", "error"); return; }
+    if (refreshInterval < 1 || refreshInterval > 120) {
+      showToast("刷新间隔必须在 1-120 秒之间", "error");
+      return;
+    }
 
-    saveConfig({ apiUrl: url, apiToken: token, remember, refreshInterval });
-    resetStatusTracker(statusTracker);
-    // Theme lives in its own storage slot — see storage.js.
+    const profile = saveProfile({
+      id: selectedId === "__new__" ? undefined : selectedId,
+      name,
+      apiUrl: url,
+      apiToken: token,
+      remember,
+      refreshInterval,
+    });
+    if (!profile) {
+      showToast("配置保存失败", "error");
+      return;
+    }
+
     const theme = themeWantsDark ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
     saveTheme(theme);
     syncViewModeBadgeText(theme);
     modePickerTheme = null;
-
-    closeModal(overlay);
-    showToast("设置已保存，正在重新连接...", "info");
-
-    renderSkeleton(els.dashboard, 6);
-    try {
-      // Same parallel-probe pattern as handleConnect — settings save
-      // is just a reconnect with a possibly-different proxy URL.
-      const summaryPromise = request("/1/summary");
-      const probePromise   = probeWriteAccess();
-      const data = await summaryPromise;
-      renderDashboard(data);
-      // Probe on save too — the operator may have switched to a
-      // different proxy with a different restricted setting.
-      applyProbeResult(await probePromise, /* showUnknownToast */ true);
-      setRibbonConnectState("connected");
-      syncModePickerAltRow();
-      startAutoRefresh();
-      showToast("重新连接成功", "success");
-    } catch (err) {
-      if (err.status === 401 || err.status === 403) {
-        clearConfig();
-        markDisconnected({ clearWriteAccess: true });
-        showToast("认证失败，请检查 Token", "error");
-        renderConnectForm({ apiUrl: url, apiToken: token, remember });
-      } else {
-        showToast(`连接失败: ${err.message}`, "error");
-      }
-      stopAutoRefresh();
-    }
+    await reconnectProfile(profile);
   });
 
-  // Close on overlay click
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(overlay); });
-  // Escape key — listener is removed by closeModal() so every close path
-  // (X, cancel, overlay click, save, logout) cleans it up.
   const escHandler = e => { if (e.key === "Escape" && overlay.parentNode) closeModal(overlay); };
   document.addEventListener("keydown", escHandler);
   overlay._escHandler = escHandler;
