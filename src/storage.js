@@ -259,6 +259,7 @@ export function loadConfig() {
 export function clearConfig() {
   localStorage.removeItem(CONFIG_KEY);
   sessionStorage.removeItem(CONFIG_KEY);
+  sessionStorage.removeItem(PROFILE_TOKENS_KEY);
   localStorage.removeItem(ACTIVE_PROFILE_KEY);
 }
 
