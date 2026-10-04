@@ -170,3 +170,141 @@ test("write-access values are coerced to booleans", () => {
   saveWriteAccess(0, url);
   assert.equal(loadWriteAccess(url), false);
 });
+
+
+test("legacy single config is lazily migrated into the first Proxy profile", async () => {
+  saveConfig({
+    apiUrl: "https://legacy.example:8080",
+    apiToken: "legacy-token",
+    remember: true,
+    refreshInterval: 20,
+  });
+
+  const { loadProfiles, loadActiveProfileId, getActiveProfile } = await import("../src/storage.js");
+  const profiles = loadProfiles();
+
+  assert.equal(profiles.length, 1);
+  assert.equal(profiles[0].id, "legacy-1");
+  assert.equal(profiles[0].name, "Proxy 1");
+  assert.equal(loadActiveProfileId(), "legacy-1");
+  assert.deepEqual(getActiveProfile(), profiles[0]);
+});
+
+test("profiles can be created, updated, selected, and deleted without losing other entries", async () => {
+  const {
+    saveProfile,
+    loadProfiles,
+    setActiveProfile,
+    loadActiveProfileId,
+    deleteProfile,
+    getActiveProfile,
+  } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "proxy-a",
+    name: "Main",
+    apiUrl: "https://main.example:8080",
+    apiToken: "a",
+    remember: true,
+    refreshInterval: 10,
+  });
+  saveProfile({
+    id: "proxy-b",
+    name: "Backup",
+    apiUrl: "https://backup.example:8080",
+    apiToken: "b",
+    remember: false,
+    refreshInterval: 30,
+  });
+
+  assert.deepEqual(loadProfiles().map(profile => profile.name), ["Main", "Backup"]);
+  assert.equal(loadActiveProfileId(), "proxy-b");
+
+  const selected = setActiveProfile("proxy-a");
+  assert.equal(selected.name, "Main");
+  assert.equal(loadActiveProfileId(), "proxy-a");
+  assert.equal(getActiveProfile().apiUrl, "https://main.example:8080");
+
+  const deleted = deleteProfile("proxy-a");
+  assert.equal(deleted, true);
+  assert.equal(loadActiveProfileId(), "proxy-b");
+  assert.equal(getActiveProfile().name, "Backup");
+});
+
+test("logout clears the active connection but keeps saved profiles", async () => {
+  const {
+    saveProfile,
+    clearConfig,
+    loadProfiles,
+    loadActiveProfileId,
+    getConfig,
+  } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "proxy-a",
+    name: "Main",
+    apiUrl: "https://main.example:8080",
+    apiToken: "a",
+    remember: true,
+    refreshInterval: 10,
+  });
+
+  clearConfig();
+
+  assert.equal(loadActiveProfileId(), null);
+  assert.equal(getConfig(), null);
+  assert.equal(loadProfiles().length, 1);
+});
+
+test("the last saved Proxy cannot be deleted", async () => {
+  const { saveProfile, deleteProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "proxy-only",
+    name: "Only",
+    apiUrl: "https://only.example:8080",
+    apiToken: "",
+    remember: true,
+    refreshInterval: 10,
+  });
+
+  assert.equal(deleteProfile("proxy-only"), false);
+  assert.equal(loadProfiles().length, 1);
+});
+
+
+test("non-remembered profile tokens stay in sessionStorage", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "session-profile",
+    name: "Session",
+    apiUrl: "https://session.example:8080",
+    apiToken: "session-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  const rawProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  assert.ok(rawProfiles);
+  assert.equal(rawProfiles.includes("session-secret"), false);
+  assert.equal(loadProfiles()[0].apiToken, "session-secret");
+  assert.ok(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"));
+});
+
+test("remembered profile tokens persist with the profile", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "remembered-profile",
+    name: "Remembered",
+    apiUrl: "https://remembered.example:8080",
+    apiToken: "persistent-secret",
+    remember: true,
+    refreshInterval: 10,
+  });
+
+  const rawProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  assert.ok(rawProfiles?.includes("persistent-secret"));
+  assert.equal(loadProfiles()[0].apiToken, "persistent-secret");
+});

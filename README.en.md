@@ -12,6 +12,7 @@
 
 | Feature | Description |
 |---------|-------------|
+| **Multiple Proxy profiles** | Save multiple Proxy URLs / tokens locally and switch between them with one click |
 | **Real-time Monitoring** | Auto-refreshes every 10 seconds, showing hashrate, miners, upstream pools, system resources |
 | **Zero-Knowledge Architecture** | Server **only serves static files**, **knows nothing** about your Proxy address, Token, or any config |
 | **Local Auth** | Access Token stored only in browser `localStorage` / `sessionStorage`, cleared on browser close |
@@ -81,7 +82,7 @@ Enable HTTP API in your `config.json`:
 3. Check **Remember Me** → uses `localStorage` (persistent); unchecked → `sessionStorage` (cleared on tab close)
 4. Click **Connect** → Frontend connects directly to your Proxy, validates Token
 5. Success → Dashboard loads, auto-refreshes every 10 seconds
-6. Click **⚙ Settings** (top-right) → Change URL / Token / Remember Me / Logout
+6. Click **⚙ Settings** (top-right) → Manage saved Proxy profiles, create/edit/delete profiles, and switch between them with one click
 
 ---
 
@@ -168,7 +169,7 @@ A: Current version single instance. Switch via "Settings" to change URL/Token; f
 
 ## 📋 Roadmap
 
-- [ ] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
+- [X] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
 - [ ] **PWA Support** — Offline cache last data, "Add to Home Screen"
 - [ ] **Theme Toggle** — Dark/Light theme switching, CSS variables ready
 - [ ] **More Chart Libraries** — Optional historical trends (Chart.js / uPlot, lazy-loaded)
