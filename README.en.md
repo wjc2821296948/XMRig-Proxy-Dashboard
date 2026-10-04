@@ -38,7 +38,30 @@ python3 -m http.server 8000
 # Visit http://localhost:8000
 ```
 
-### 2️⃣ Static Hosting Deployment (Recommended)
+### 2️⃣ npm / GitHub Packages
+
+Install the complete Dashboard package from GitHub Packages:
+
+```bash
+npm config set @wjc2821296948:registry=https://npm.pkg.github.com
+npm install @wjc2821296948/xmrig-proxy-dashboard
+```
+
+If your GitHub Packages access requires authentication, log in with a GitHub Token that has package read access:
+
+```bash
+npm login --registry=https://npm.pkg.github.com
+```
+
+After installation, the package includes a zero-dependency Node.js static server:
+
+```bash
+npx @wjc2821296948/xmrig-proxy-dashboard
+```
+
+It listens on `127.0.0.1:8000` by default. Set `HOST` and `PORT` to change the bind address and port.
+
+### 3️⃣ Static Hosting Deployment (Recommended)
 
 Deploy to any static hosting platform, **no backend config needed**:
 
@@ -162,14 +185,15 @@ A: Panel cannot recover it. Check `config.json` on your Proxy server for `access
 **Q: Deploy panel publicly without exposing Proxy?**  
 A: Panel on public (GitHub Pages, etc.), Proxy on internal network/cloud server. **Only the browser running the panel** connects directly to Proxy IP. Panel server knows nothing.
 
-**Q: Multiple Proxy switching?**  
-A: Current version single instance. Switch via "Settings" to change URL/Token; future versions may support multi-config list.
+**Q: How do I save and switch between multiple Proxies?**  
+A: Open "Settings" to manage Proxy profiles. Each profile stores its name, API URL, Access Token, refresh interval, and Remember Me preference locally. Select a saved profile to switch immediately.
 
 ---
 
 ## 📋 Roadmap
 
-- [ ] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
+- [x] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
+- [x] **npm / GitHub Packages Distribution** — Install the complete Dashboard package and run it with the built-in Node.js server
 - [ ] **PWA Support** — Offline cache last data, "Add to Home Screen"
 - [ ] **Theme Toggle** — Dark/Light theme switching, CSS variables ready
 - [ ] **More Chart Libraries** — Optional historical trends (Chart.js / uPlot, lazy-loaded)
