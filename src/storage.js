@@ -21,6 +21,8 @@
 const CONFIG_KEY    = "xmrig_proxy_config";
 const THEME_KEY     = "dashboard_theme";
 const WRITE_KEY     = "dashboard_write_access";
+const PROFILES_KEY  = "xmrig_proxy_profiles";
+const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 
 /* --------------------------------------------------------------------------
    Connection config
@@ -41,6 +43,106 @@ export function saveConfig(cfg) {
   const sibling = cfg.remember ? sessionStorage : localStorage;
   sibling.removeItem(CONFIG_KEY);
   target.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
+function normalizeProfile(profile) {
+  if (!profile || typeof profile !== "object") return null;
+  if (!isValidApiUrl(profile.apiUrl)) return null;
+  const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
+  if (!id) return null;
+  const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
+  const refreshInterval = Math.min(120, Math.max(1, Number(profile.refreshInterval) || 10));
+  return {
+    id,
+    name,
+    apiUrl: profile.apiUrl,
+    apiToken: profile.apiToken ?? "",
+    remember: profile.remember ?? true,
+    refreshInterval,
+  };
+}
+
+function readProfiles() {
+  const raw = localStorage.getItem(PROFILES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(normalizeProfile).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeProfiles(profiles) {
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+}
+
+/**
+ * Load all saved Proxy profiles, lazily migrating the legacy single config.
+ */
+export function loadProfiles() {
+  const profiles = readProfiles();
+  if (profiles.length > 0) return profiles;
+
+  const legacy = loadConfig();
+  if (!legacy) return [];
+
+  const migrated = [{ id: "legacy-1", name: "Proxy 1", ...legacy }];
+  writeProfiles(migrated);
+  localStorage.setItem(ACTIVE_PROFILE_KEY, migrated[0].id);
+  return migrated;
+}
+
+/** Save or update one Proxy profile and make it active. */
+export function saveProfile(profile) {
+  const normalized = normalizeProfile({
+    ...profile,
+    id: profile.id || `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  });
+  if (!normalized) return null;
+
+  const profiles = loadProfiles();
+  const index = profiles.findIndex(item => item.id === normalized.id);
+  if (index >= 0) profiles[index] = normalized;
+  else profiles.push(normalized);
+  writeProfiles(profiles);
+  localStorage.setItem(ACTIVE_PROFILE_KEY, normalized.id);
+  saveConfig(normalized);
+  return normalized;
+}
+
+/** Remove a saved Proxy profile. The last profile cannot be removed. */
+export function deleteProfile(id) {
+  const profiles = loadProfiles();
+  if (profiles.length <= 1) return false;
+  const next = profiles.filter(profile => profile.id !== id);
+  if (next.length === profiles.length) return false;
+  writeProfiles(next);
+  if (localStorage.getItem(ACTIVE_PROFILE_KEY) === id) {
+    localStorage.setItem(ACTIVE_PROFILE_KEY, next[0].id);
+  }
+  return true;
+}
+
+/** Select a saved Proxy profile and make its connection config active. */
+export function setActiveProfile(id) {
+  const profile = loadProfiles().find(item => item.id === id);
+  if (!profile) return null;
+  localStorage.setItem(ACTIVE_PROFILE_KEY, profile.id);
+  saveConfig(profile);
+  return profile;
+}
+
+/** @returns {string|null} */
+export function loadActiveProfileId() {
+  return localStorage.getItem(ACTIVE_PROFILE_KEY);
+}
+
+/** @returns {object|null} */
+export function getActiveProfile() {
+  const profiles = loadProfiles();
+  const activeId = loadActiveProfileId();
+  return profiles.find(profile => profile.id === activeId) || profiles[0] || null;
 }
 
 /**
@@ -248,5 +350,6 @@ function writeWriteAccessMap(map) {
  * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}|null}
  */
 export function getConfig() {
-  return loadConfig();
+  const active = getActiveProfile();
+  return active || loadConfig();
 }
