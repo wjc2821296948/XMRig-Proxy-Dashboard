@@ -1,6 +1,6 @@
 {
   "name": "@wjc2821296948/xmrig-proxy-dashboard",
-  "version": "1.0.0",
+  "version": "v1.2",
   "description": "Zero-knowledge, static XMRig Proxy monitoring dashboard.",
   "type": "module",
   "license": "Apache-2.0",
