@@ -15,6 +15,7 @@
 | **实时监控** | 自动每 10 秒刷新一次，展示算力、矿工、上游矿池、系统资源等关键指标 |
 | **零知识架构** | 服务器**仅提供静态文件**，**不知晓**用户连接的 Proxy 地址、Token、任何配置 |
 | **本地认证** | Access Token 仅保存在浏览器 `localStorage` / `sessionStorage`，关闭浏览器即可清除 |
+| **多 Proxy 配置** | 可保存多组 Proxy URL / Token，一键切换当前监控目标 |
 | **记住我** | 可选 `localStorage` 持久化，或 `sessionStorage` 仅会话保留 |
 | **现代 UI** | 深色主题、响应式布局、Skeleton 加载、Toast 通知、Loading 动画 |
 | **安全优先** | CSP、XSS 防护、Token 脱敏日志、无 `eval`/`innerHTML` 注入风险 |
@@ -81,7 +82,7 @@ python3 -m http.server 8000
 3. 可勾选 **记住我** → 使用 `localStorage` 持久化；不勾选 → `sessionStorage`，关闭标签页自动清除
 4. 点击 **连接** → 前端直连你的 Proxy，验证 Token
 5. 成功后进入 Dashboard，自动每 10 秒刷新
-6. 点击右上角 **⚙ 设置** → 修改 URL / Token / 记住我 / 登出
+6. 点击右上角 **⚙ 设置** → 管理多组 Proxy 配置，可新建、编辑、删除并一键切换
 
 ---
 
@@ -161,14 +162,14 @@ A: 面板无法找回。请到 Proxy 服务器的 `config.json` 查看 `access-t
 **Q: 如何在公网部署面板又不暴露 Proxy？**  
 A: 面板部署在公网（GitHub Pages 等），Proxy 部署在内网/云服务器，**仅面板所在浏览器** 直连 Proxy IP。面板服务器完全不知情。
 
-**Q: 支持多个 Proxy 切换？**  
-A: 当前版本单实例。可通过「设置」修改 URL/Token 实现切换；未来可扩展多配置列表。
+**Q: 如何保存多个 Proxy 并快速切换？**  
+A: 打开「⚙ 设置」即可管理 Proxy 配置列表。每组配置包含名称、API URL、Access Token、刷新间隔和 Remember Me 设置；点击列表中的配置即可立即切换。配置仅保存在浏览器本地，不会上传到部署服务器。
 
 ---
 
 ## 📋 下一步计划
 
-- [ ] **多 Proxy 配置列表** —— 支持保存多组 Proxy 配置，一键切换
+- [x] **多 Proxy 配置列表** —— 支持保存多组 Proxy 配置，一键切换
 - [ ] **PWA 支持** —— 离线缓存最近一次数据，支持"添加到主屏幕"
 - [ ] **主题切换** —— 暗/亮主题切换，CSS 变量已就绪
 - [ ] **更多图表库集成** —— 可选的历史趋势图表（Chart.js / uPlot 等按需加载）
