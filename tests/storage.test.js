@@ -271,3 +271,40 @@ test("the last saved Proxy cannot be deleted", async () => {
   assert.equal(deleteProfile("proxy-only"), false);
   assert.equal(loadProfiles().length, 1);
 });
+
+
+test("non-remembered profile tokens stay in sessionStorage", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "session-profile",
+    name: "Session",
+    apiUrl: "https://session.example:8080",
+    apiToken: "session-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  const rawProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  assert.ok(rawProfiles);
+  assert.equal(rawProfiles.includes("session-secret"), false);
+  assert.equal(loadProfiles()[0].apiToken, "session-secret");
+  assert.ok(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"));
+});
+
+test("remembered profile tokens persist with the profile", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "remembered-profile",
+    name: "Remembered",
+    apiUrl: "https://remembered.example:8080",
+    apiToken: "persistent-secret",
+    remember: true,
+    refreshInterval: 10,
+  });
+
+  const rawProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  assert.ok(rawProfiles?.includes("persistent-secret"));
+  assert.equal(loadProfiles()[0].apiToken, "persistent-secret");
+});

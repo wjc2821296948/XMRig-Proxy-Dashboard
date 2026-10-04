@@ -23,6 +23,7 @@ const THEME_KEY     = "dashboard_theme";
 const WRITE_KEY     = "dashboard_write_access";
 const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
+const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
 
 /* --------------------------------------------------------------------------
    Connection config
@@ -62,19 +63,46 @@ function normalizeProfile(profile) {
   };
 }
 
+function readProfileTokens() {
+  const raw = sessionStorage.getItem(PROFILE_TOKENS_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeProfileTokens(tokens) {
+  sessionStorage.setItem(PROFILE_TOKENS_KEY, JSON.stringify(tokens));
+}
+
 function readProfiles() {
   const raw = localStorage.getItem(PROFILES_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(normalizeProfile).filter(Boolean) : [];
+    if (!Array.isArray(parsed)) return [];
+    const tokens = readProfileTokens();
+    return parsed
+      .map(normalizeProfile)
+      .filter(Boolean)
+      .map(profile => profile.remember
+        ? profile
+        : { ...profile, apiToken: tokens[profile.id] ?? "" });
   } catch {
     return [];
   }
 }
 
 function writeProfiles(profiles) {
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  const persistent = profiles.map(profile => {
+    if (profile.remember) return profile;
+    const { apiToken, ...metadata } = profile;
+    return metadata;
+  });
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(persistent));
 }
 
 /**
@@ -89,6 +117,11 @@ export function loadProfiles() {
 
   const migrated = [{ id: "legacy-1", name: "Proxy 1", ...legacy }];
   writeProfiles(migrated);
+  if (!legacy.remember) {
+    const tokens = readProfileTokens();
+    tokens[migrated[0].id] = legacy.apiToken;
+    writeProfileTokens(tokens);
+  }
   localStorage.setItem(ACTIVE_PROFILE_KEY, migrated[0].id);
   return migrated;
 }
@@ -105,6 +138,14 @@ export function saveProfile(profile) {
   const index = profiles.findIndex(item => item.id === normalized.id);
   if (index >= 0) profiles[index] = normalized;
   else profiles.push(normalized);
+
+  const tokens = readProfileTokens();
+  if (normalized.remember) {
+    delete tokens[normalized.id];
+  } else {
+    tokens[normalized.id] = normalized.apiToken;
+  }
+  writeProfileTokens(tokens);
   writeProfiles(profiles);
   localStorage.setItem(ACTIVE_PROFILE_KEY, normalized.id);
   saveConfig(normalized);
@@ -117,6 +158,9 @@ export function deleteProfile(id) {
   if (profiles.length <= 1) return false;
   const next = profiles.filter(profile => profile.id !== id);
   if (next.length === profiles.length) return false;
+  const tokens = readProfileTokens();
+  delete tokens[id];
+  writeProfileTokens(tokens);
   writeProfiles(next);
   if (localStorage.getItem(ACTIVE_PROFILE_KEY) === id) {
     localStorage.setItem(ACTIVE_PROFILE_KEY, next[0].id);
