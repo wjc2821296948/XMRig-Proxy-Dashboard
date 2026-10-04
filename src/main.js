@@ -451,7 +451,7 @@ async function handleConnect() {
 
   // Save the connection as a profile so the current single-config flow
   // automatically participates in the multi-Proxy profile list.
-  const existingProfile = getActiveProfile();
+  const existingProfile = getActiveProfile() || loadProfiles()[0] || null;
   const profileName = existingProfile?.name || "Proxy 1";
   saveProfile({
     ...(existingProfile || {}),

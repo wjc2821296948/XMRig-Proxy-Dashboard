@@ -143,7 +143,8 @@ export function loadActiveProfileId() {
 export function getActiveProfile() {
   const profiles = loadProfiles();
   const activeId = loadActiveProfileId();
-  return profiles.find(profile => profile.id === activeId) || profiles[0] || null;
+  if (!activeId) return null;
+  return profiles.find(profile => profile.id === activeId) || null;
 }
 
 /**
