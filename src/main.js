@@ -782,7 +782,7 @@ function openSettingsModal(selectedProfileId = null) {
         <div class="modal-body">
           <div class="profile-list-header">
             <span class="input-label">已保存的 Proxy</span>
-            <button class="btn btn-secondary btn-small" id="newProfile">+ 新建 Proxy</button>
+            <button class="btn btn-secondary btn-sm" id="newProfile">+ 新建 Proxy</button>
           </div>
           <div class="profile-list" id="profileList">
             ${profiles.length ? profiles.map(profile => profileRowHtml(profile, activeId)).join("") : '<p class="profile-empty">暂无保存的 Proxy 配置</p>'}
