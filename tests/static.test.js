@@ -157,3 +157,15 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
   assert.equal(matchesAllowlistedPath("src/main.js", "src/main.js", "linux"), true);
   assert.equal(matchesAllowlistedPath("Src/main.js", "src/main.js", "linux"), false);
 });
+
+
+test("AI review commands are restricted to trusted repository collaborators", () => {
+  const geminiWorkflow = read(".github/workflows/code-review.yml");
+  const prAgentWorkflow = read(".github/workflows/pr_agent.yml");
+  const trustedAssociationGate =
+    /contains\(fromJSON\('\["OWNER", "MEMBER", "COLLABORATOR"\]'\), github\.event\.comment\.author_association\)/;
+
+  assert.match(geminiWorkflow, trustedAssociationGate);
+  assert.match(prAgentWorkflow, trustedAssociationGate);
+  assert.match(prAgentWorkflow, /issue_comment:\s*\n\s+types:\s+\[created\]/);
+});
