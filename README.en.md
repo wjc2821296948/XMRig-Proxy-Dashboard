@@ -18,7 +18,7 @@
 | **Local Auth** | Access Token stored only in browser `localStorage` / `sessionStorage`, cleared on browser close |
 | **Remember Me** | Optional `localStorage` persistence, or `sessionStorage` for session-only |
 | **Modern UI** | Dark theme, responsive layout, Skeleton loading, Toast notifications, Loading animations |
-| **Security First** | CSP, XSS protection, Token sanitized logs, no `eval`/`innerHTML` injection risks |
+| **Security First** | CSP restrictions, escaped dynamic values, sanitized token logs; anti-framing requires HTTP response headers |
 | **No Framework Deps** | Native ES Modules, < 50 KB gzip, instant load |
 
 ---
@@ -164,7 +164,7 @@ xmrig-proxy-dashboard/
 | Threat | Mitigation |
 |--------|------------|
 | **Token Leak** | Stored only in browser local storage, console logs sanitized `Bearer **********` |
-| **XSS** | No `innerHTML` injection of user data, unified `escapeHtml()`, CSP blocks inline scripts |
+| **XSS** | Dynamic text in HTML templates is escaped with `escapeHtml()`, and CSP restricts script sources; dynamic rendering still needs ongoing review |
 | **MITM** | Recommend Proxy enables HTTPS (self-signed needs browser trust) or access via VPN/tunnel |
 | **CSRF** | Pure GET + Bearer Token, no Cookies, naturally immune to CSRF |
 | **Config Injection** | URL validated via `new URL()`, Token only sent as Header |
