@@ -1,10 +1,16 @@
 # XMRig Proxy Dashboard
 
-> **纯前端、零知识、静态部署** 的 XMRig Proxy 实时监控面板。
+> **XMRig Proxy Web Dashboard —— 无需后端的实时监控 Web UI。**
+>
+> 实时查看算力、矿工、上游矿池、Share 与系统状态。浏览器直接连接你的 XMRig Proxy，**Proxy URL 与 Access Token 不会上传到面板服务器**。
 
-🔗 **开放预览网站**：<https://xmrig-proxy-dashboard.lrate.top/>
+[**在线体验**](https://xmrig-proxy-dashboard.lrate.top/) · [**快速开始**](#-快速开始) · [**English**](README.en.md)
 
-[English](README.en.md) | [中文](README.md)
+![XMRig Proxy Dashboard 实时监控界面](panel.png)
+
+**⚡ 实时监控 · 🔒 Token 仅留在浏览器 · 🚀 零后端 · 🖥 多 Proxy · 📦 < 50 KB gzip**
+
+适合正在寻找 **XMRig Proxy Web UI / Dashboard / Monitoring Frontend** 的用户：无需数据库、无需 Docker、无需构建流程，只要一个静态文件服务器即可部署。
 
 ---
 
