@@ -869,6 +869,9 @@ function openSettingsModal(selectedProfileId = null) {
       showToast("已切换到 " + profile.name, "success");
     } catch (err) {
       if (err.status === 401 || err.status === 403) {
+        // The previous profile's timer may still be active while switching.
+        // Stop it before clearing credentials to avoid repeated config errors.
+        stopAutoRefresh();
         clearConfig();
         markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
@@ -876,6 +879,9 @@ function openSettingsModal(selectedProfileId = null) {
       } else {
         showToast("连接失败: " + err.message, "error");
         stopAutoRefresh();
+        // The selected profile is already active. Restore an actionable
+        // connection form instead of leaving the dashboard on a skeleton.
+        renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
       }
     }
   };
@@ -1088,8 +1094,13 @@ function init() {
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
-    fetchAndRender().then(() => startAutoRefresh()).catch(() => {
-      // If fetch fails, show connect form with prefilled values
+    fetchAndRender().then(() => {
+      // fetchAndRender handles errors internally. On an authentication
+      // failure it clears the saved connection, so don't restart polling
+      // after the user has been returned to the connect form.
+      if (getConfig()) startAutoRefresh();
+    }).catch(() => {
+      // If initialization itself fails unexpectedly, show the connect form.
       renderConnectForm(cfg);
     });
   } else {

@@ -166,3 +166,32 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
   assert.equal(matchesAllowlistedPath("src/main.js", "src/main.js", "linux"), true);
   assert.equal(matchesAllowlistedPath("Src/main.js", "src/main.js", "linux"), false);
 });
+
+test("startup does not restart polling after authentication clears the config", () => {
+  const source = read("src/main.js");
+
+  assert.match(
+    source,
+    /fetchAndRender\(\)\.then\(\(\) => \{[\s\S]*?if \(getConfig\(\)\) startAutoRefresh\(\);/,
+    "startup should only start auto-refresh when a saved connection still exists",
+  );
+  assert.doesNotMatch(
+    source,
+    /fetchAndRender\(\)\.then\(\(\) => startAutoRefresh\(\)\)/,
+    "do not unconditionally restart polling after an auth failure",
+  );
+
+  const reconnectStart = source.indexOf("const reconnectProfile = async profile =>");
+  const reconnectEnd = source.indexOf('overlay.querySelector(".modal-close")', reconnectStart);
+  const reconnectProfile = source.slice(reconnectStart, reconnectEnd);
+  assert.match(
+    reconnectProfile,
+    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfig\(\);/,
+    "profile-switch authentication failures must stop the previous profile's timer",
+  );
+  assert.match(
+    reconnectProfile,
+    /else \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?renderConnectForm\(\{ apiUrl: profile\.apiUrl/,
+    "network failures must restore an actionable connection form",
+  );
+});
