@@ -18,7 +18,7 @@
 | **多 Proxy 配置** | 可保存多组 Proxy URL / Token，一键切换当前监控目标 |
 | **记住我** | 可选 `localStorage` 持久化，或 `sessionStorage` 仅会话保留 |
 | **现代 UI** | 深色主题、响应式布局、Skeleton 加载、Toast 通知、Loading 动画 |
-| **安全优先** | CSP、XSS 防护、Token 脱敏日志、无 `eval`/`innerHTML` 注入风险 |
+| **安全优先** | CSP 限制、动态数据转义、Token 脱敏日志；防嵌入依赖 HTTP 响应头 |
 | **无框架依赖** | 原生 ES Module，< 50 KB gzip，秒开 |
 
 ---
@@ -164,7 +164,7 @@ xmrig-proxy-dashboard/
 | 威胁 | 防护措施 |
 |------|----------|
 | **Token 泄露** | 仅存在浏览器本地存储，控制台日志自动脱敏 `Bearer **********` |
-| **XSS** | 无 `innerHTML` 注入用户数据，统一 `escapeHtml()`，CSP 禁止内联脚本执行 |
+| **XSS** | HTML 模板中的动态文本使用 `escapeHtml()` 转义，CSP 限制脚本来源；仍需持续审查动态渲染路径 |
 | **中间人攻击** | 建议 Proxy 开启 HTTPS（自签证书需浏览器信任）或通过 VPN/隧道访问 |
 | **CSRF** | 纯 GET 请求 + Bearer Token，无 Cookie，天然免疫 CSRF |
 | **配置注入** | URL 经 `new URL()` 校验，Token 仅作 Header 传输 |
