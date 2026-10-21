@@ -2,6 +2,7 @@
    CSS Variables – Theme & Spacing
    ========================================================================== */
 :root {
+  color-scheme: dark;
   /* "Midnight Ledger" — dark theme palette (default)
      Backgrounds are deep ink-indigo, not pure black, so the canvas
      reads as "live instrument" rather than "blank terminal". */
@@ -63,6 +64,7 @@
    from the dark theme. The card surface is cream, not pure white, so
    the copper reads warmer against it. */
 [data-theme="light"] {
+  color-scheme: light;
   --bg-primary: #f4eee5;
   --bg-secondary: #fbf6ee;
   --bg-card: #fffdf7;
