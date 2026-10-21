@@ -25,18 +25,21 @@
 
 ## 🚀 Quick Start
 
-### 1️⃣ Open Directly (No Server Needed)
+### 1️⃣ Run Locally (Static Server Required)
+
+This project uses native ES Modules. Most browsers restrict module loading from the `file://` protocol, so **do not open `index.html` directly**. Serve the files over local HTTP instead:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourname/xmrig-proxy-dashboard.git
-cd xmrig-proxy-dashboard
+git clone https://github.com/wjc2821296948/XMRig-Proxy-Dashboard.git
+cd XMRig-Proxy-Dashboard
 
-# Open index.html directly in browser
-# Or use any static server
+# Start any static server
 python3 -m http.server 8000
 # Visit http://localhost:8000
 ```
+
+You can also use the built-in server included in the npm package below.
 
 ### 2️⃣ npm / GitHub Packages
 
@@ -194,7 +197,7 @@ A: Open "Settings" to manage Proxy profiles. Each profile stores its name, API U
 
 - [X] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
 - [ ] **PWA Support** — Offline cache last data, "Add to Home Screen"
-- [ ] **Theme Toggle** — Dark/Light theme switching, CSS variables ready
+- [x] **Theme Toggle** — Dark and light themes are supported
 - [ ] **More Chart Libraries** — Optional historical trends (Chart.js / uPlot, lazy-loaded)
 - [ ] **Optional Backend Proxy Mode** — Users may deploy stateless forwarder on own server, only forwards `/1/summary`, no logs, no Token storage
 - [ ] **Alert/Notification System** — Hashrate anomalies, miner offline thresholds (browser notifications / Webhook)
@@ -204,14 +207,18 @@ A: Open "Settings" to manage Proxy profiles. Each profile stores its name, API U
 
 ## 🩺 Status Mapping & Production Semantics
 
-The "Offline / Warning / Online" badge in the dashboard header is
-computed by `getStatusInfo(data.miners)` in `src/ui.js`. The rules:
+The dashboard header's status badge is computed by the state machine
+`getStatusInfo(data, tracker)` in `src/status.js`. It considers recent miner
+samples, Proxy uptime, and accepted/rejected share deltas rather than relying
+directly on the sticky lifetime peak:
 
-| Display | Trigger | Real-world meaning (inferred) |
+| Display | Main trigger | Real-world meaning (inferred) |
 |---|---|---|
-| **Offline** (red) | `data.miners.now === 0` | No miners are currently connected to this Proxy. Possible causes: every rig is powered down / the Proxy just started and no miner has dialed in yet / every Stratum connection timed out and was kicked / all miners failed over to a backup Proxy. |
-| **Warning** (yellow) | `0 < now < max × 0.5` | Active miner count is below half of the historical peak. Possible causes: rigs signing off after a peak hour / a batch dropped and hasn't reconnected yet / a pool outage triggered failover / a miner config change is rolling out. |
-| **Online** (green) | `now >= max × 0.5` | Most of the historical miners are still connected and stable. |
+| **Waiting** (yellow) | A new Proxy has no miners during its first 60 seconds | The Proxy may have just started and miners have not connected yet |
+| **Restarting** (yellow) | Uptime decreases and no miners are currently present | The Proxy process is restarting or recovering |
+| **Offline** (red) | No miners for about 20 seconds, outside waiting/restart grace states | No miners are currently connected to this Proxy |
+| **Warning** (yellow) | Miner count falls well below the rolling 15-minute peak, or recent share acceptance health is low | Miner connections have dropped or the rejected-share ratio has risen |
+| **Online** (green) | No waiting, restart, offline, or health-warning condition is active | Current miner count and recent share health have not triggered a warning |
 
 ### Current status state machine
 
@@ -232,7 +239,7 @@ different questions:
 | Element | Question it answers | Driven by |
 |---|---|---|
 | Header Ribbon (dot + "Read-only viewer") | **Login state**: am I successfully talking to a Proxy right now? | `setRibbonConnectState("connected" \| "disconnected")` |
-| Status badge (dot + Offline / Warning / Online) | **Business state**: are there enough miners connected? | `getStatusInfo(data.miners)` |
+| Status badge (dot + Waiting / Restarting / Offline / Warning / Online) | **Business state**: miner connectivity and recent share health | `getStatusInfo(data, tracker)` |
 
 Ribbon green = the last `/1/summary` returned 2xx. Ribbon yellow =
 no config saved, or a 401 / connect failure happened. The badge
