@@ -8,7 +8,6 @@
 export const PUBLIC_ASSET_PATHS = Object.freeze([
   "index.html",
   "styles.css",
-  "panel.png",
   "src/api.js",
   "src/main.js",
   "src/status.js",
