@@ -308,3 +308,22 @@ test("remembered profile tokens persist with the profile", async () => {
   assert.ok(rawProfiles?.includes("persistent-secret"));
   assert.equal(loadProfiles()[0].apiToken, "persistent-secret");
 });
+
+
+test("session-only tokens persist for profile IDs that are special object keys", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "__proto__",
+    name: "Special ID",
+    apiUrl: "https://special.example:8080",
+    apiToken: "session-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  const rawTokens = globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens");
+  assert.ok(rawTokens);
+  assert.equal(JSON.parse(rawTokens)["__proto__"], "session-secret");
+  assert.equal(loadProfiles()[0].apiToken, "session-secret");
+});
