@@ -13,6 +13,39 @@ import { getConfig } from "./storage.js";
 
 const REQUEST_TIMEOUT_MS = 8000;
 
+function combineRequestSignals(timeoutSignal, callerSignal) {
+  if (!callerSignal) return { signal: timeoutSignal, cleanup() {} };
+  if (typeof AbortSignal.any === "function") {
+    return { signal: AbortSignal.any([timeoutSignal, callerSignal]), cleanup() {} };
+  }
+
+  // Compatibility fallback: propagate either abort and remove listeners
+  // when the request settles so caller signals do not retain completed work.
+  const controller = new AbortController();
+  const abortFrom = signal => {
+    if (!controller.signal.aborted) controller.abort(signal.reason);
+  };
+  const onCallerAbort = () => abortFrom(callerSignal);
+  const onTimeout = () => abortFrom(timeoutSignal);
+  const listen = (signal, handler) => {
+    if (signal.aborted) {
+      abortFrom(signal);
+      return;
+    }
+    signal.addEventListener("abort", handler, { once: true });
+    if (signal.aborted) abortFrom(signal);
+  };
+  listen(callerSignal, onCallerAbort);
+  listen(timeoutSignal, onTimeout);
+  return {
+    signal: controller.signal,
+    cleanup() {
+      callerSignal.removeEventListener("abort", onCallerAbort);
+      timeoutSignal.removeEventListener("abort", onTimeout);
+    },
+  };
+}
+
 /**
  * Central request wrapper.
  *
@@ -67,13 +100,14 @@ export async function request(path, options = {}) {
   // 8-second timeout via the platform-native AbortSignal so the underlying
   // fetch is actually cancelled (Promise.race used to leave it draining).
   const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const requestSignals = combineRequestSignals(timeoutSignal, options.signal);
 
   try {
     const response = await fetch(url, {
       ...options,
       method: options.method || "GET",
       headers,
-      signal: timeoutSignal,
+      signal: requestSignals.signal,
     });
     if (!response.ok) {
       // 401 / 403 trigger a logout flow upstream.
@@ -98,6 +132,8 @@ export async function request(path, options = {}) {
     }
     console.error(`API error (masked): ${e.message}`);
     throw e;
+  } finally {
+    requestSignals.cleanup();
   }
 }
 
