@@ -25,18 +25,21 @@
 
 ## 🚀 Quick Start
 
-### 1️⃣ Open Directly (No Server Needed)
+### 1️⃣ Run Locally (Static Server Required)
+
+This project uses native ES Modules. Most browsers restrict module loading from the `file://` protocol, so **do not open `index.html` directly**. Serve the files over local HTTP instead:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourname/xmrig-proxy-dashboard.git
-cd xmrig-proxy-dashboard
+git clone https://github.com/wjc2821296948/XMRig-Proxy-Dashboard.git
+cd XMRig-Proxy-Dashboard
 
-# Open index.html directly in browser
-# Or use any static server
+# Start any static server
 python3 -m http.server 8000
 # Visit http://localhost:8000
 ```
+
+You can also use the built-in server included in the npm package below.
 
 ### 2️⃣ npm / GitHub Packages
 
