@@ -166,3 +166,18 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
   assert.equal(matchesAllowlistedPath("src/main.js", "src/main.js", "linux"), true);
   assert.equal(matchesAllowlistedPath("Src/main.js", "src/main.js", "linux"), false);
 });
+
+test("startup does not restart polling after authentication clears the config", () => {
+  const source = read("src/main.js");
+
+  assert.match(
+    source,
+    /fetchAndRender\(\)\.then\(\(\) => \{[\s\S]*?if \(getConfig\(\)\) startAutoRefresh\(\);/,
+    "startup should only start auto-refresh when a saved connection still exists",
+  );
+  assert.doesNotMatch(
+    source,
+    /fetchAndRender\(\)\.then\(\(\) => startAutoRefresh\(\)\)/,
+    "do not unconditionally restart polling after an auth failure",
+  );
+});
