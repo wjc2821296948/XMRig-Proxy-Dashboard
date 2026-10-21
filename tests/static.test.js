@@ -140,6 +140,14 @@ test("PR Agent action is immutable-pinned and cannot write repository content", 
 
 
 
+test("dashboard theme transitions respect reduced-motion preferences", () => {
+  const css = read("styles.css");
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
+  assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
+  assert.doesNotMatch(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]{0,400}?transition:\s*none/);
+});
+
 test("every static-server allowlist entry exists in this checkout", () => {
   assert.ok(PUBLIC_ASSET_PATHS.length > 0, "public asset allowlist must not be empty");
 
