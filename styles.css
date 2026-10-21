@@ -634,6 +634,19 @@ h1 {
 }
 .checkbox-group label { font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; }
 
+/* Keep keyboard focus visible across native controls in both color themes.
+   Theme tokens are used rather than a hard-coded hue so the indicator follows
+   the active palette. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent-copper);
+  outline-offset: 2px;
+}
+
 /* ==========================================================================
    Config Panel (Connection Screen)
    ========================================================================== */
