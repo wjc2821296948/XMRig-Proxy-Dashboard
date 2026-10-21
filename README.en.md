@@ -1,10 +1,16 @@
 # XMRig Proxy Dashboard
 
-> **Pure frontend, zero-knowledge, static deployment** real-time monitoring panel for XMRig Proxy.
+> **A real-time XMRig Proxy web dashboard with no backend required.**
+>
+> Monitor hashrate, miners, upstream pools, shares, and system health from a clean web UI. Your browser connects directly to your XMRig Proxy, so **the Proxy URL and Access Token are never uploaded to the dashboard server**.
 
-🔗 **Live Preview**: <https://xmrig-proxy-dashboard.lrate.top/>
+[**Live Demo**](https://xmrig-proxy-dashboard.lrate.top/) · [**Quick Start**](#-quick-start) · [**中文**](README.md)
 
-[English](README.en.md) | [中文](README.md)
+![XMRig Proxy Dashboard real-time monitoring interface](panel.png)
+
+**⚡ Real-time monitoring · 🔒 Token stays in your browser · 🚀 Zero backend · 🖥 Multi-Proxy · 📦 < 50 KB gzip**
+
+Built for users looking for an **XMRig Proxy web UI, monitoring dashboard, or lightweight frontend**: no database, no Docker, no build step — just serve the static files.
 
 ---
 
