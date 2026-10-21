@@ -180,4 +180,13 @@ test("startup does not restart polling after authentication clears the config", 
     /fetchAndRender\(\)\.then\(\(\) => startAutoRefresh\(\)\)/,
     "do not unconditionally restart polling after an auth failure",
   );
+
+  const reconnectStart = source.indexOf("const reconnectProfile = async profile =>");
+  const reconnectEnd = source.indexOf('overlay.querySelector(".modal-close")', reconnectStart);
+  const reconnectProfile = source.slice(reconnectStart, reconnectEnd);
+  assert.match(
+    reconnectProfile,
+    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfig\(\);/,
+    "profile-switch authentication failures must stop the previous profile's timer",
+  );
 });
