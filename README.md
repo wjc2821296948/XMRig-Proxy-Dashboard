@@ -6,8 +6,6 @@
 
 [**在线体验**](https://xmrig-proxy-dashboard.lrate.top/) · [**快速开始**](#-快速开始) · [**English**](README.en.md)
 
-![XMRig Proxy Dashboard 实时监控界面](panel.png)
-
 **⚡ 实时监控 · 🔒 Token 仅留在浏览器 · 🚀 零后端 · 🖥 多 Proxy · 📦 < 50 KB gzip**
 
 适合正在寻找 **XMRig Proxy Web UI / Dashboard / Monitoring Frontend** 的用户：无需数据库、无需 Docker、无需构建流程，只要一个静态文件服务器即可部署。
@@ -154,7 +152,6 @@ npx @wjc2821296948/xmrig-proxy-dashboard
 xmrig-proxy-dashboard/
 ├── index.html          # 入口 HTML
 ├── styles.css          # 完整样式（CSS 变量、响应式、动画）
-├── panel.png           # 预览图
 ├── README.md           # 中文文档
 ├── README.en.md        # 英文文档
 ├── CLAUDE.md           # 项目记忆（供 AI 协作参考）
