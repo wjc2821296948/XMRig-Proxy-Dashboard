@@ -51,7 +51,11 @@ export async function request(path, options = {}) {
   const authorizationForLog = hasToken
     ? "Bearer **********"
     : headers.has("Authorization") ? "custom (redacted)" : "(none)";
-  console.debug(`API request → ${url} – Authorization: ${authorizationForLog}`);
+  // URLs may contain API keys or other secrets in query parameters. Keep
+  // diagnostics useful without ever recording query strings or fragments.
+  const parsedUrl = new URL(url);
+  const safeUrl = `${parsedUrl.origin}${parsedUrl.pathname}`;
+  console.debug(`API request → ${safeUrl} – Authorization: ${authorizationForLog}`);
 
   // 8-second timeout via the platform-native AbortSignal so the underlying
   // fetch is actually cancelled (Promise.race used to leave it draining).
