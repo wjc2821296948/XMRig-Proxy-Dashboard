@@ -6,8 +6,6 @@
 
 [**Live Demo**](https://xmrig-proxy-dashboard.lrate.top/) · [**Quick Start**](#-quick-start) · [**中文**](README.md)
 
-![XMRig Proxy Dashboard real-time monitoring interface](panel.png)
-
 **⚡ Real-time monitoring · 🔒 Token stays in your browser · 🚀 Zero backend · 🖥 Multi-Proxy · 📦 < 50 KB gzip**
 
 Built for users looking for an **XMRig Proxy web UI, monitoring dashboard, or lightweight frontend**: no database, no Docker, no build step — just serve the static files.
@@ -154,7 +152,6 @@ Enable HTTP API in your `config.json`:
 xmrig-proxy-dashboard/
 ├── index.html          # Entry HTML
 ├── styles.css          # Complete styles (CSS vars, responsive, animations)
-├── panel.png           # Preview image
 ├── README.md           # Chinese version
 ├── README.en.md        # English version (this file)
 ├── CLAUDE.md           # Project memory (for AI collaboration)
