@@ -204,3 +204,23 @@ test("request preserves an explicitly supplied custom auth scheme without a conf
   assert.match(debugMessages[0], /custom \(redacted\)/);
   assert.doesNotMatch(debugMessages[0], /example-credential/);
 });
+
+test("request respects a caller-provided AbortSignal as well as its timeout", async () => {
+  const controller = new AbortController();
+  let receivedSignal;
+  globalThis.fetch = async (_url, options) => {
+    receivedSignal = options.signal;
+    return new Promise((resolve, reject) => {
+      receivedSignal.addEventListener("abort", () => {
+        reject(new DOMException("The operation was aborted", "AbortError"));
+      }, { once: true });
+    });
+  };
+
+  const pending = request("/1/summary", { signal: controller.signal });
+  await Promise.resolve();
+  assert.ok(receivedSignal instanceof AbortSignal);
+  assert.notEqual(receivedSignal, controller.signal);
+  controller.abort();
+  await assert.rejects(pending, { name: "AbortError" });
+});
