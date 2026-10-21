@@ -1,3 +1,4 @@
+# Security response headers for all static routes
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
