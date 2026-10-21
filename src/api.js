@@ -89,8 +89,12 @@ export async function request(path, options = {}) {
     // case the upstream message is already a generic "The operation was
     // aborted" so we keep it. The point of this branch was always to label
     // timeout cancellations consistently — only relabel that case.
-    if (e.name === "TimeoutError") {
-      e.message = "Request timed out";
+    if (e?.name === "TimeoutError") {
+      // DOMException.message is read-only in browsers. Mutating it can throw
+      // a TypeError and hide the original timeout from the UI.
+      e = Object.assign(new Error("Request timed out", { cause: e }), {
+        name: "TimeoutError",
+      });
     }
     console.error(`API error (masked): ${e.message}`);
     throw e;
