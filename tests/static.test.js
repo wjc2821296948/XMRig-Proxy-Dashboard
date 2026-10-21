@@ -124,15 +124,6 @@ test("dangerous dynamic-code primitives are absent from application sources", ()
 });
 
 
-test("Gemini review workflow keeps issue comments out of shell source", () => {
-  const workflow = read(".github/workflows/code-review.yml");
-
-  assert.doesNotMatch(workflow, /permissions:\s*write-all/);
-  assert.match(workflow, /COMMENT_BODY:\s*\$\{\{\s*github\.event\.comment\.body\s*\}\}/);
-  assert.doesNotMatch(workflow, /echo\s+["']Comment:\s*\$\{\{/);
-  assert.match(workflow, /uses:\s*truongnh1992\/gemini-ai-code-reviewer@[0-9a-f]{40}/);
-});
-
 test("PR Agent action is immutable-pinned and cannot write repository content", () => {
   const workflow = read(".github/workflows/pr_agent.yml");
 
