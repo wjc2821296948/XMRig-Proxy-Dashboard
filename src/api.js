@@ -13,6 +13,25 @@ import { getConfig } from "./storage.js";
 
 const REQUEST_TIMEOUT_MS = 8000;
 
+function combineRequestSignals(timeoutSignal, callerSignal) {
+  if (!callerSignal) return timeoutSignal;
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([timeoutSignal, callerSignal]);
+  }
+
+  // Compatibility fallback for browsers with AbortSignal.timeout() but not
+  // AbortSignal.any(). Preserve cancellation from either source.
+  const controller = new AbortController();
+  const abortFrom = signal => {
+    if (!controller.signal.aborted) controller.abort(signal.reason);
+  };
+  if (callerSignal.aborted) abortFrom(callerSignal);
+  else callerSignal.addEventListener("abort", () => abortFrom(callerSignal), { once: true });
+  if (timeoutSignal.aborted) abortFrom(timeoutSignal);
+  else timeoutSignal.addEventListener("abort", () => abortFrom(timeoutSignal), { once: true });
+  return controller.signal;
+}
+
 /**
  * Central request wrapper.
  *
@@ -73,7 +92,7 @@ export async function request(path, options = {}) {
       ...options,
       method: options.method || "GET",
       headers,
-      signal: timeoutSignal,
+      signal: combineRequestSignals(timeoutSignal, options.signal),
     });
     if (!response.ok) {
       // 401 / 403 trigger a logout flow upstream.
