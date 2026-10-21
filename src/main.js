@@ -869,6 +869,9 @@ function openSettingsModal(selectedProfileId = null) {
       showToast("已切换到 " + profile.name, "success");
     } catch (err) {
       if (err.status === 401 || err.status === 403) {
+        // The previous profile's timer may still be active while switching.
+        // Stop it before clearing credentials to avoid repeated config errors.
+        stopAutoRefresh();
         clearConfig();
         markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
