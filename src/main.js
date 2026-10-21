@@ -1088,8 +1088,13 @@ function init() {
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
-    fetchAndRender().then(() => startAutoRefresh()).catch(() => {
-      // If fetch fails, show connect form with prefilled values
+    fetchAndRender().then(() => {
+      // fetchAndRender handles errors internally. On an authentication
+      // failure it clears the saved connection, so don't restart polling
+      // after the user has been returned to the connect form.
+      if (getConfig()) startAutoRefresh();
+    }).catch(() => {
+      // If initialization itself fails unexpectedly, show the connect form.
       renderConnectForm(cfg);
     });
   } else {
