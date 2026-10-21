@@ -36,6 +36,28 @@ let refreshInterval = null;
 let isFetching = false;
 const statusTracker = createStatusTracker();
 
+/** Return a localized validation reason for a Proxy API URL, or null when valid. */
+function getApiUrlValidationError(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return "invalid";
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "protocol";
+  if (parsed.username || parsed.password) return "credentials";
+  return null;
+}
+
+function showApiUrlValidationError(reason, invalidMessage = "无效的 URL 格式") {
+  const messages = {
+    invalid: invalidMessage,
+    protocol: "API URL 必须使用 HTTP 或 HTTPS",
+    credentials: "请勿在 API URL 中填写用户名或密码",
+  };
+  showToast(messages[reason] || invalidMessage, "error");
+}
+
 /* ==========================================================================
    Theme Management
    The theme is owned by storage.js — never read or write localStorage
@@ -441,21 +463,9 @@ async function handleConnect() {
     return;
   }
 
-  // Only HTTP(S) endpoints are valid for the Proxy API. Reject other
-  // schemes before persisting the profile or attempting a network request.
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(url);
-  } catch {
-    showToast("无效的 URL 格式", "error");
-    return;
-  }
-  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-    showToast("API URL 必须使用 HTTP 或 HTTPS", "error");
-    return;
-  }
-  if (parsedUrl.username || parsedUrl.password) {
-    showToast("请勿在 API URL 中填写用户名或密码", "error");
+  const urlError = getApiUrlValidationError(url);
+  if (urlError) {
+    showApiUrlValidationError(urlError);
     return;
   }
 
@@ -932,19 +942,9 @@ function openSettingsModal(selectedProfileId = null) {
 
     if (!name) { showToast("请输入配置名称", "error"); return; }
     if (!url) { showToast("请输入 API URL", "error"); return; }
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      showToast("无效的 URL", "error");
-      return;
-    }
-    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-      showToast("API URL 必须使用 HTTP 或 HTTPS", "error");
-      return;
-    }
-    if (parsedUrl.username || parsedUrl.password) {
-      showToast("请勿在 API URL 中填写用户名或密码", "error");
+    const urlError = getApiUrlValidationError(url);
+    if (urlError) {
+      showApiUrlValidationError(urlError, "无效的 URL");
       return;
     }
     if (refreshInterval < 1 || refreshInterval > 120) {
