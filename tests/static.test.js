@@ -189,4 +189,9 @@ test("startup does not restart polling after authentication clears the config", 
     /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfig\(\);/,
     "profile-switch authentication failures must stop the previous profile's timer",
   );
+  assert.match(
+    reconnectProfile,
+    /else \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?renderConnectForm\(\{ apiUrl: profile\.apiUrl/,
+    "network failures must restore an actionable connection form",
+  );
 });
