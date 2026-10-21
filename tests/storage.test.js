@@ -308,3 +308,82 @@ test("remembered profile tokens persist with the profile", async () => {
   assert.ok(rawProfiles?.includes("persistent-secret"));
   assert.equal(loadProfiles()[0].apiToken, "persistent-secret");
 });
+
+
+test("session-only tokens persist for profile IDs that are special object keys", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "__proto__",
+    name: "Special ID",
+    apiUrl: "https://special.example:8080",
+    apiToken: "session-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  const rawTokens = globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens");
+  assert.ok(rawTokens);
+  assert.equal(JSON.parse(rawTokens)["__proto__"], "session-secret");
+  assert.equal(loadProfiles()[0].apiToken, "session-secret");
+});
+
+test("missing session token for a profile named constructor does not inherit Object.prototype", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "constructor",
+    name: "Special ID",
+    apiUrl: "https://special.example:8080",
+    apiToken: "temporary-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", "{}");
+  assert.equal(loadProfiles()[0].apiToken, "");
+});
+
+test("special profile IDs remain ordinary own keys when tokens are removed", async () => {
+  const { saveProfile, deleteProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "__proto__",
+    name: "Proto",
+    apiUrl: "https://proto.example:8080",
+    apiToken: "proto-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+  saveProfile({
+    id: "ordinary",
+    name: "Ordinary",
+    apiUrl: "https://ordinary.example:8080",
+    apiToken: "ordinary-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  assert.equal(deleteProfile("__proto__"), true);
+  assert.equal(loadProfiles()[0].apiToken, "ordinary-secret");
+  assert.equal(JSON.parse(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens")).ordinary, "ordinary-secret");
+});
+
+
+test("malformed and non-object session token payloads safely fall back to empty tokens", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "constructor",
+    name: "Special ID",
+    apiUrl: "https://special.example:8080",
+    apiToken: "temporary-secret",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  for (const malformed of ["{bad json", "null", "[]", '"token-string"']) {
+    globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", malformed);
+    assert.equal(loadProfiles()[0].apiToken, "", `payload ${malformed} should not produce an inherited token`);
+  }
+});
