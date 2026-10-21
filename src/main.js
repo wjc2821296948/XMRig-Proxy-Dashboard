@@ -441,11 +441,21 @@ async function handleConnect() {
     return;
   }
 
-  // Validate URL format
+  // Only HTTP(S) endpoints are valid for the Proxy API. Reject other
+  // schemes before persisting the profile or attempting a network request.
+  let parsedUrl;
   try {
-    new URL(url);
+    parsedUrl = new URL(url);
   } catch {
     showToast("无效的 URL 格式", "error");
+    return;
+  }
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    showToast("API URL 必须使用 HTTP 或 HTTPS", "error");
+    return;
+  }
+  if (parsedUrl.username || parsedUrl.password) {
+    showToast("请勿在 API URL 中填写用户名或密码", "error");
     return;
   }
 
