@@ -217,3 +217,52 @@ test("timeout DOMExceptions are normalized without mutating read-only message", 
     return true;
   });
 });
+
+
+test("request respects a caller-provided AbortSignal as well as its timeout", async () => {
+  const controller = new AbortController();
+  let receivedSignal;
+  globalThis.fetch = async (_url, options) => {
+    receivedSignal = options.signal;
+    return new Promise((resolve, reject) => {
+      receivedSignal.addEventListener("abort", () => {
+        reject(new DOMException("The operation was aborted", "AbortError"));
+      }, { once: true });
+    });
+  };
+
+  const pending = request("/1/summary", { signal: controller.signal });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(receivedSignal instanceof AbortSignal);
+  assert.notEqual(receivedSignal, controller.signal);
+  controller.abort();
+  await assert.rejects(pending, { name: "AbortError" });
+});
+
+test("fallback request signal listeners are removed when the request completes", async () => {
+  const originalAny = AbortSignal.any;
+  Object.defineProperty(AbortSignal, "any", { configurable: true, writable: true, value: undefined });
+  const controller = new AbortController();
+  const originalAdd = controller.signal.addEventListener.bind(controller.signal);
+  const originalRemove = controller.signal.removeEventListener.bind(controller.signal);
+  const listeners = new Set();
+  controller.signal.addEventListener = (type, listener, options) => {
+    if (type === "abort") listeners.add(listener);
+    return originalAdd(type, listener, options);
+  };
+  controller.signal.removeEventListener = (type, listener, options) => {
+    if (type === "abort") listeners.delete(listener);
+    return originalRemove(type, listener, options);
+  };
+  globalThis.fetch = async (_url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    return { ok: true, status: 200, async json() { return {}; } };
+  };
+
+  try {
+    await request("/1/summary", { signal: controller.signal });
+    assert.equal(listeners.size, 0);
+  } finally {
+    Object.defineProperty(AbortSignal, "any", { configurable: true, writable: true, value: originalAny });
+  }
+});
