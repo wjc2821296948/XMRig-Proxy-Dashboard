@@ -25,18 +25,21 @@
 
 ## 🚀 快速开始
 
-### 1️⃣ 直接打开（无需服务器）
+### 1️⃣ 本地运行（需要静态服务器）
+
+本项目使用原生 ES Module。多数浏览器在 `file://` 协议下会限制模块加载，因此**不要直接双击打开 `index.html`**；请通过本地 HTTP 静态服务器访问：
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourname/xmrig-proxy-dashboard.git
-cd xmrig-proxy-dashboard
+git clone https://github.com/wjc2821296948/XMRig-Proxy-Dashboard.git
+cd XMRig-Proxy-Dashboard
 
-# 直接双击 index.html 用浏览器打开即可
-# 或使用任意静态服务器
+# 启动任意静态服务器
 python3 -m http.server 8000
-# 访问 http://localhost:8000
+# 浏览器访问 http://localhost:8000
 ```
+
+也可以使用下方提供的 npm 包内置服务器。
 
 ### 2️⃣ npm / GitHub Packages 安装
 
