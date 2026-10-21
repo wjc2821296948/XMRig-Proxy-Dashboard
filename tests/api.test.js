@@ -266,3 +266,49 @@ test("fallback request signal listeners are removed when the request completes",
     Object.defineProperty(AbortSignal, "any", { configurable: true, writable: true, value: originalAny });
   }
 });
+
+
+test("fallback request signal propagates timeout aborts and cleans up listeners", async () => {
+  const originalAny = Object.getOwnPropertyDescriptor(AbortSignal, "any");
+  const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, "timeout");
+  const timeoutController = new AbortController();
+  const callerController = new AbortController();
+  Object.defineProperty(AbortSignal, "any", { configurable: true, writable: true, value: undefined });
+  Object.defineProperty(AbortSignal, "timeout", {
+    configurable: true,
+    writable: true,
+    value: () => timeoutController.signal,
+  });
+  const originalAdd = callerController.signal.addEventListener.bind(callerController.signal);
+  const originalRemove = callerController.signal.removeEventListener.bind(callerController.signal);
+  const listeners = new Set();
+  callerController.signal.addEventListener = (type, listener, options) => {
+    if (type === "abort") listeners.add(listener);
+    return originalAdd(type, listener, options);
+  };
+  callerController.signal.removeEventListener = (type, listener, options) => {
+    if (type === "abort") listeners.delete(listener);
+    return originalRemove(type, listener, options);
+  };
+  globalThis.fetch = async (_url, options) => new Promise((resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+  });
+
+  try {
+    const pending = request("/1/summary", { signal: callerController.signal });
+    await new Promise(resolve => setImmediate(resolve));
+    timeoutController.abort(new DOMException("The operation timed out", "TimeoutError"));
+    await assert.rejects(pending, err => {
+      assert.equal(err.name, "TimeoutError");
+      assert.equal(err.message, "Request timed out");
+      assert.ok(err.cause instanceof DOMException);
+      return true;
+    });
+    assert.equal(listeners.size, 0);
+  } finally {
+    if (originalAny) Object.defineProperty(AbortSignal, "any", originalAny);
+    else delete AbortSignal.any;
+    if (originalTimeout) Object.defineProperty(AbortSignal, "timeout", originalTimeout);
+    else delete AbortSignal.timeout;
+  }
+});
