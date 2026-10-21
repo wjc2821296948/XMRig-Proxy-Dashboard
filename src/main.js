@@ -879,6 +879,9 @@ function openSettingsModal(selectedProfileId = null) {
       } else {
         showToast("连接失败: " + err.message, "error");
         stopAutoRefresh();
+        // The selected profile is already active. Restore an actionable
+        // connection form instead of leaving the dashboard on a skeleton.
+        renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
       }
     }
   };
