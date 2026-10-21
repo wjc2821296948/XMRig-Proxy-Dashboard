@@ -51,7 +51,18 @@ export async function request(path, options = {}) {
   const authorizationForLog = hasToken
     ? "Bearer **********"
     : headers.has("Authorization") ? "custom (redacted)" : "(none)";
-  console.debug(`API request → ${url} – Authorization: ${authorizationForLog}`);
+  // URLs may contain API keys or other secrets in query parameters. Keep
+  // diagnostics useful without ever recording query strings or fragments.
+  let safeUrl = "(invalid URL)";
+  try {
+    const parsedUrl = new URL(url);
+    safeUrl = `${parsedUrl.origin}${parsedUrl.pathname}`;
+  } catch {
+    // Logging must never be the reason an API request fails. URL construction
+    // above normally guarantees a valid URL, but persisted state can be stale
+    // or corrupted, so keep diagnostics defensive.
+  }
+  console.debug(`API request → ${safeUrl} – Authorization: ${authorizationForLog}`);
 
   // 8-second timeout via the platform-native AbortSignal so the underlying
   // fetch is actually cancelled (Promise.race used to leave it draining).

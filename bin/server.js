@@ -108,7 +108,10 @@ const server = createServer((req, res) => {
     "Content-Type": asset.contentType,
     "Content-Length": String(asset.data.byteLength),
     "Cache-Control": "no-cache",
-    "X-Content-Type-Options": "nosniff"
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": "frame-ancestors 'none'"
   });
   res.end(req.method === "HEAD" ? undefined : asset.data);
 });
