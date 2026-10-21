@@ -932,7 +932,21 @@ function openSettingsModal(selectedProfileId = null) {
 
     if (!name) { showToast("请输入配置名称", "error"); return; }
     if (!url) { showToast("请输入 API URL", "error"); return; }
-    try { new URL(url); } catch { showToast("无效的 URL", "error"); return; }
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      showToast("无效的 URL", "error");
+      return;
+    }
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      showToast("API URL 必须使用 HTTP 或 HTTPS", "error");
+      return;
+    }
+    if (parsedUrl.username || parsedUrl.password) {
+      showToast("请勿在 API URL 中填写用户名或密码", "error");
+      return;
+    }
     if (refreshInterval < 1 || refreshInterval > 120) {
       showToast("刷新间隔必须在 1-120 秒之间", "error");
       return;
