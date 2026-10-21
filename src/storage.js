@@ -65,12 +65,16 @@ function normalizeProfile(profile) {
 
 function readProfileTokens() {
   const raw = sessionStorage.getItem(PROFILE_TOKENS_KEY);
-  if (!raw) return {};
+  if (!raw) return Object.create(null);
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return Object.create(null);
+    }
+    // Keep profile IDs as own data keys; never inherit values from Object.prototype.
+    return Object.assign(Object.create(null), parsed);
   } catch {
-    return {};
+    return Object.create(null);
   }
 }
 
@@ -90,7 +94,7 @@ function readProfiles() {
       .filter(Boolean)
       .map(profile => profile.remember
         ? profile
-        : { ...profile, apiToken: tokens[profile.id] ?? "" });
+        : { ...profile, apiToken: Object.hasOwn(tokens, profile.id) ? tokens[profile.id] : "" });
   } catch {
     return [];
   }
