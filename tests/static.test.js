@@ -49,10 +49,10 @@ test("anti-framing policy is delivered through HTTP response headers", () => {
   const staticHeaders = read("_headers");
   const server = read("bin/server.js");
 
-  assert.match(staticHeaders, /Content-Security-Policy:\\s*frame-ancestors 'none'/);
-  assert.match(staticHeaders, /X-Frame-Options:\\s*DENY/i);
-  assert.match(server, /"Content-Security-Policy":\\s*"frame-ancestors 'none'"/);
-  assert.match(server, /"X-Frame-Options":\\s*"DENY"/);
+  assert.match(staticHeaders, /Content-Security-Policy:\s*frame-ancestors 'none'/);
+  assert.match(staticHeaders, /X-Frame-Options:\s*DENY/i);
+  assert.match(server, /"Content-Security-Policy":\s*"frame-ancestors 'none'"/);
+  assert.match(server, /"X-Frame-Options":\s*"DENY"/);
 });
 
 test("index does not load executable JavaScript from third-party URLs", () => {
