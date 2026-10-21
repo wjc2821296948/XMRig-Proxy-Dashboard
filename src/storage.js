@@ -203,7 +203,14 @@ export function getActiveProfile() {
  */
 function isValidApiUrl(url) {
   if (typeof url !== "string" || url.length === 0) return false;
-  try { new URL(url); return true; } catch { return false; }
+  try {
+    const parsed = new URL(url);
+    // The dashboard only talks to HTTP APIs. Reject other schemes (for
+    // example file:, data:, and javascript:) before storing a profile.
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /**
