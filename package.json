@@ -15,6 +15,7 @@
   },
   "files": [
     "index.html",
+    "_headers",
     "styles.css",
     "panel.png",
     "src/",
