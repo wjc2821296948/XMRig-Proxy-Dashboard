@@ -205,9 +205,12 @@ function isValidApiUrl(url) {
   if (typeof url !== "string" || url.length === 0) return false;
   try {
     const parsed = new URL(url);
-    // The dashboard only talks to HTTP APIs. Reject other schemes (for
-    // example file:, data:, and javascript:) before storing a profile.
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    // The dashboard only talks to HTTP APIs. Reject other schemes and
+    // embedded credentials before persisting any profile, even when callers
+    // bypass the UI validation.
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && !parsed.username
+      && !parsed.password;
   } catch {
     return false;
   }
