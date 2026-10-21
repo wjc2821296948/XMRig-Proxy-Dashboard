@@ -139,7 +139,9 @@ export function saveProfile(profile) {
   if (index >= 0) profiles[index] = normalized;
   else profiles.push(normalized);
 
-  const tokens = readProfileTokens();
+  // Use a null-prototype dictionary so a valid profile ID such as "__proto__"
+  // is stored as data instead of mutating the token map's prototype.
+  const tokens = Object.assign(Object.create(null), readProfileTokens());
   if (normalized.remember) {
     delete tokens[normalized.id];
   } else {
