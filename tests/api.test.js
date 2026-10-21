@@ -204,3 +204,16 @@ test("request preserves an explicitly supplied custom auth scheme without a conf
   assert.match(debugMessages[0], /custom \(redacted\)/);
   assert.doesNotMatch(debugMessages[0], /example-credential/);
 });
+
+test("timeout DOMExceptions are normalized without mutating read-only message", async () => {
+  globalThis.fetch = async () => {
+    throw new DOMException("The operation timed out", "TimeoutError");
+  };
+
+  await assert.rejects(request("/1/summary"), err => {
+    assert.equal(err.name, "TimeoutError");
+    assert.equal(err.message, "Request timed out");
+    assert.ok(err.cause instanceof DOMException);
+    return true;
+  });
+});
