@@ -225,11 +225,10 @@ test("startup does not restart polling after authentication clears the config", 
   );
 });
 
-
 test("dashboard theme transitions respect reduced-motion preferences", () => {
   const css = read("styles.css");
-  assert.match(css, /@media\\s*\\(prefers-reduced-motion:\\s*reduce\\)/);
-  assert.match(css, /animation-duration:\\s*0\\.01ms\\s*!important/);
-  assert.match(css, /transition-duration:\\s*0\\.01ms\\s*!important/);
-  assert.doesNotMatch(css, /@media\\s*\\(prefers-reduced-motion:\\s*reduce\\)[\\s\\S]{0,400}?transition:\\s*none/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
+  assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
+  assert.doesNotMatch(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]{0,400}?transition:\s*none/);
 });
