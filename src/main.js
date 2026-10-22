@@ -83,10 +83,15 @@ function applyResolvedTheme(theme) {
 
 function syncSystemThemeListener(preference) {
   if (systemThemeMediaQuery && systemThemeChangeHandler) {
-    if (typeof systemThemeMediaQuery.removeEventListener === "function") {
-      systemThemeMediaQuery.removeEventListener("change", systemThemeChangeHandler);
-    } else if (typeof systemThemeMediaQuery.removeListener === "function") {
-      systemThemeMediaQuery.removeListener(systemThemeChangeHandler);
+    try {
+      if (typeof systemThemeMediaQuery.removeEventListener === "function") {
+        systemThemeMediaQuery.removeEventListener("change", systemThemeChangeHandler);
+      } else if (typeof systemThemeMediaQuery.removeListener === "function") {
+        systemThemeMediaQuery.removeListener(systemThemeChangeHandler);
+      }
+    } catch {
+      // A stale listener may be impossible to detach in a non-standard
+      // MediaQueryList implementation; its identity guard below makes it inert.
     }
   }
   systemThemeMediaQuery = null;
@@ -94,7 +99,11 @@ function syncSystemThemeListener(preference) {
   if (preference !== "system" || typeof window.matchMedia !== "function") return;
 
   const query = window.matchMedia("(prefers-color-scheme: light)");
-  const handler = event => applyResolvedTheme(event.matches ? "light" : "dark");
+  const handler = event => {
+    // Ignore callbacks from a previous preference/listener if cleanup failed.
+    if (systemThemeMediaQuery !== query || systemThemeChangeHandler !== handler) return;
+    applyResolvedTheme(event.matches ? "light" : "dark");
+  };
   systemThemeMediaQuery = query;
   systemThemeChangeHandler = handler;
   if (typeof query.addEventListener === "function") query.addEventListener("change", handler);
