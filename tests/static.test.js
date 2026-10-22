@@ -221,7 +221,7 @@ test("startup does not restart polling after authentication clears the config", 
   const reconnectProfile = source.slice(reconnectStart, reconnectEnd);
   assert.match(
     reconnectProfile,
-    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfig\(\);/,
+    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfigWithWarning\(\);/,
     "profile-switch authentication failures must stop the previous profile's timer",
   );
   assert.match(
