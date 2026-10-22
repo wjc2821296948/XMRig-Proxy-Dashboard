@@ -43,7 +43,7 @@ test("index keeps the dashboard CSP security boundaries intact", () => {
     "script-src 'self'",
     "font-src 'self' data:",
     "img-src 'self' data:",
-    "connect-src *",
+    "connect-src http: https:",
     "base-uri 'self'",
     "form-action 'self'",
   ]) {
@@ -68,7 +68,7 @@ test("anti-framing policy is delivered through HTTP response headers", () => {
 
   assert.match(staticHeaders, /Content-Security-Policy:\s*frame-ancestors 'none'/);
   assert.match(staticHeaders, /X-Frame-Options:\s*DENY/i);
-  assert.match(server, /"Content-Security-Policy":\s*"frame-ancestors 'none'"/);
+  assert.match(server, /"Content-Security-Policy":\s*"frame-ancestors 'none';/);
   assert.match(server, /"X-Frame-Options":\s*"DENY"/);
 });
 

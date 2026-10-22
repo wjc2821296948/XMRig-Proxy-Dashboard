@@ -13,6 +13,20 @@ import { getConfig } from "./storage.js";
 
 const REQUEST_TIMEOUT_MS = 8000;
 
+function createTimeoutSignal(timeoutMs) {
+  if (typeof AbortSignal.timeout === "function") {
+    return { signal: AbortSignal.timeout(timeoutMs), cleanup() {} };
+  }
+
+  // Older browsers may implement AbortController but not AbortSignal.timeout.
+  // Keep requests bounded there too, and release the timer as soon as fetch settles.
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException("The operation timed out", "TimeoutError"));
+  }, timeoutMs);
+  return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
+}
+
 function combineRequestSignals(timeoutSignal, callerSignal) {
   if (!callerSignal) return { signal: timeoutSignal, cleanup() {} };
   if (typeof AbortSignal.any === "function") {
@@ -58,7 +72,8 @@ function combineRequestSignals(timeoutSignal, callerSignal) {
  * constraint without having to dig.
  *
  * @param {string} path   Path relative to the XMRig-Proxy API base (e.g. "/1/summary").
- * @param {object} [options] Optional fetch options (method, body, etc.).
+ * @param {object} [options] Optional fetch options (headers and signal).
+ *   This client is read-only: only GET requests without a body are allowed.
  * @returns {Promise<any>} Resolves with parsed JSON on success.
  */
 export async function request(path, options = {}) {
@@ -67,7 +82,18 @@ export async function request(path, options = {}) {
     throw new Error("API configuration missing");
   }
 
-  const url = new URL(path, cfg.apiUrl).toString();
+  const baseUrl = new URL(cfg.apiUrl);
+  const requestUrl = new URL(path, baseUrl);
+  // Never attach a saved proxy token to a caller-supplied absolute URL or
+  // protocol-relative path that escapes the configured proxy's origin.
+  if (requestUrl.origin !== baseUrl.origin || requestUrl.username || requestUrl.password) {
+    throw new Error("API request URL must stay on the configured proxy origin");
+  }
+  const method = String(options.method || "GET").toUpperCase();
+  if (method !== "GET" || options.body != null) {
+    throw new Error("Dashboard API client is read-only");
+  }
+  const url = requestUrl.toString();
   const headers = new Headers(options.headers || {});
   const apiToken = typeof cfg.apiToken === "string" ? cfg.apiToken : "";
   const hasToken = apiToken.length > 0;
@@ -99,8 +125,8 @@ export async function request(path, options = {}) {
 
   // 8-second timeout via the platform-native AbortSignal so the underlying
   // fetch is actually cancelled (Promise.race used to leave it draining).
-  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const requestSignals = combineRequestSignals(timeoutSignal, options.signal);
+  const timeout = createTimeoutSignal(REQUEST_TIMEOUT_MS);
+  const requestSignals = combineRequestSignals(timeout.signal, options.signal);
 
   try {
     const response = await fetch(url, {
@@ -115,7 +141,16 @@ export async function request(path, options = {}) {
       err.status = response.status;
       throw err;
     }
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (error) {
+      // Do not surface raw response bodies or parser details: upstream proxies,
+      // captive portals, and reverse proxies may return sensitive HTML/text.
+      if (error instanceof SyntaxError) {
+        throw new Error("Invalid JSON response from Proxy API", { cause: error });
+      }
+      throw error;
+    }
   } catch (e) {
     // AbortSignal.timeout() throws a DOMException whose `name` is "TimeoutError"
     // (distinct from "AbortError" raised by AbortController.abort()). Browsers
@@ -134,6 +169,7 @@ export async function request(path, options = {}) {
     throw e;
   } finally {
     requestSignals.cleanup();
+    timeout.cleanup();
   }
 }
 
