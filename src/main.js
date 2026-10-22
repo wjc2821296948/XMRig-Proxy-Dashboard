@@ -112,7 +112,9 @@ function syncSystemThemeListener(preference) {
 
 function applyThemePreference(preference, { persist = false } = {}) {
   const themePreference = ["dark", "light", "system"].includes(preference) ? preference : "dark";
-  if (persist) saveTheme(themePreference);
+  if (persist && !saveTheme(themePreference)) {
+    showToast("主题已切换，但浏览器存储不可用，刷新后不会保留该设置", "warning");
+  }
   applyResolvedTheme(resolveThemePreference(themePreference));
   syncSystemThemeListener(themePreference);
   return themePreference;
@@ -513,7 +515,7 @@ async function handleConnect() {
   // automatically participates in the multi-Proxy profile list.
   const existingProfile = getActiveProfile() || loadProfiles()[0] || null;
   const profileName = existingProfile?.name || "Proxy 1";
-  saveProfile({
+  const savedProfile = saveProfile({
     ...(existingProfile || {}),
     name: profileName,
     apiUrl: url,
@@ -521,6 +523,10 @@ async function handleConnect() {
     remember,
     refreshInterval: existingProfile?.refreshInterval ?? 10,
   });
+  if (!savedProfile) {
+    showToast("浏览器存储不可用或空间不足，连接配置未保存。请检查存储设置后重试", "error");
+    return;
+  }
 
   // Show loading skeleton
   renderSkeleton(els.dashboard, 6);
@@ -942,7 +948,7 @@ function openSettingsModal(selectedProfileId = null) {
     button.addEventListener("click", async () => {
       const profile = setActiveProfile(button.dataset.profileId);
       if (!profile) {
-        showToast("找不到该 Proxy 配置", "error");
+        showToast("无法切换配置：浏览器存储不可用或该配置已不存在", "error");
         return;
       }
       await reconnectProfile(profile);
@@ -960,10 +966,16 @@ function openSettingsModal(selectedProfileId = null) {
       }
       if (!confirm("确定删除「" + profile.name + "」？")) return;
       const wasActive = id === loadActiveProfileId();
-      deleteProfile(id);
+      if (!deleteProfile(id)) {
+        showToast("删除配置失败：浏览器存储不可用或空间不足", "error");
+        return;
+      }
       if (wasActive) {
         const next = getActiveProfile();
-        if (next) setActiveProfile(next.id);
+        if (next && !setActiveProfile(next.id)) {
+          showToast("配置已删除，但无法切换当前配置：浏览器存储不可用", "error");
+          return;
+        }
       }
       closeModal(overlay);
       openSettingsModal();
