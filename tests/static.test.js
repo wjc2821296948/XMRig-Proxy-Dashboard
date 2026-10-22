@@ -45,6 +45,17 @@ test("index keeps the dashboard CSP security boundaries intact", () => {
   }
 });
 
+test("browser theme-color metadata tracks the active dashboard theme", () => {
+  const html = read("index.html");
+  const source = read("src/theme-color.js");
+  assert.match(html, /<meta name="theme-color" content="#0e0f1a">/);
+  assert.match(html, /<script[^>]+src="src\/theme-color\.js"[^>]*><\/script>/);
+  assert.match(source, /dark:\s*"#0e0f1a"/);
+  assert.match(source, /light:\s*"#f4eee5"/);
+  assert.match(source, /MutationObserver/);
+  assert.match(source, /attributeFilter:\s*\["data-theme"\]/);
+});
+
 test("anti-framing policy is delivered through HTTP response headers", () => {
   const staticHeaders = read("_headers");
   const server = read("bin/server.js");
