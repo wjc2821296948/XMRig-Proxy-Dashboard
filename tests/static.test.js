@@ -51,6 +51,17 @@ test("index keeps the dashboard CSP security boundaries intact", () => {
   }
 });
 
+test("browser theme-color metadata tracks the active dashboard theme", () => {
+  const html = read("index.html");
+  const source = read("src/theme-color.js");
+  assert.match(html, /<meta name="theme-color" content="#0e0f1a">/);
+  assert.match(html, /<script[^>]+src="src\/theme-color\.js"[^>]*><\/script>/);
+  assert.match(source, /dark:\s*"#0e0f1a"/);
+  assert.match(source, /light:\s*"#f4eee5"/);
+  assert.match(source, /MutationObserver/);
+  assert.match(source, /attributeFilter:\s*\["data-theme"\]/);
+});
+
 test("anti-framing policy is delivered through HTTP response headers", () => {
   const staticHeaders = read("_headers");
   const server = read("bin/server.js");
@@ -59,6 +70,21 @@ test("anti-framing policy is delivered through HTTP response headers", () => {
   assert.match(staticHeaders, /X-Frame-Options:\s*DENY/i);
   assert.match(server, /"Content-Security-Policy":\s*"frame-ancestors 'none'"/);
   assert.match(server, /"X-Frame-Options":\s*"DENY"/);
+});
+
+test("interactive controls expose a theme-aware keyboard focus ring", () => {
+  const css = read("styles.css");
+  for (const selector of [
+    "button:focus-visible",
+    "input:focus-visible",
+    "select:focus-visible",
+    "textarea:focus-visible",
+    "a:focus-visible",
+    "[role=\"button\"]:focus-visible",
+  ]) {
+    assert.ok(css.includes(selector), `missing keyboard focus style: ${selector}`);
+  }
+  assert.match(css, /outline:\s*2px solid var\(--accent-copper\)/);
 });
 
 test("index does not load executable JavaScript from third-party URLs", () => {
@@ -146,6 +172,18 @@ test("PR Agent action is immutable-pinned and cannot write repository content", 
 
 
 
+test("system theme preference follows operating-system appearance changes", () => {
+  const main = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.match(storage, /new Set\(\["dark", "light", "system"\]\)/);
+  assert.match(main, /prefers-color-scheme:\s*light/);
+  assert.match(main, /query\.addEventListener\("change", handler\)/);
+  assert.match(main, /systemThemeMediaQuery !== query \|\| systemThemeChangeHandler !== handler/);
+  assert.match(main, /catch \{[\s\S]*?stale listener/i);
+  assert.match(main, /applyThemePreference\(themePreference, \{ persist: true \}\)/);
+  assert.match(main, /<option value="system"/);
+});
+
 test("every static-server allowlist entry exists in this checkout", () => {
   assert.ok(PUBLIC_ASSET_PATHS.length > 0, "public asset allowlist must not be empty");
 
@@ -191,4 +229,12 @@ test("startup does not restart polling after authentication clears the config", 
     /else \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?renderConnectForm\(\{ apiUrl: profile\.apiUrl/,
     "network failures must restore an actionable connection form",
   );
+});
+
+test("dashboard theme transitions respect reduced-motion preferences", () => {
+  const css = read("styles.css");
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
+  assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
+  assert.doesNotMatch(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]{0,400}?transition:\s*none/);
 });

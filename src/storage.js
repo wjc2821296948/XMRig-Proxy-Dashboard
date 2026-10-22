@@ -281,10 +281,10 @@ export function clearConfig() {
    UI preferences (theme)
    -------------------------------------------------------------------------- */
 
-const VALID_THEMES = new Set(["dark", "light"]);
+const VALID_THEMES = new Set(["dark", "light", "system"]);
 
 /**
- * @param {"dark" | "light"} theme
+ * @param {"dark" | "light" | "system"} theme
  */
 export function saveTheme(theme) {
   if (!VALID_THEMES.has(theme)) return;
@@ -292,7 +292,7 @@ export function saveTheme(theme) {
 }
 
 /**
- * @returns {"dark" | "light"}
+ * @returns {"dark" | "light" | "system"}
  */
 export function loadTheme() {
   const raw = localStorage.getItem(THEME_KEY);
