@@ -57,8 +57,11 @@ function normalizeProfile(profile) {
     id,
     name,
     apiUrl: profile.apiUrl,
-    apiToken: profile.apiToken ?? "",
-    remember: profile.remember ?? true,
+    // Persist only well-typed credentials and fail closed when a malformed
+    // remember flag is supplied, so a string like "false" cannot opt into
+    // persistent token storage by being truthy.
+    apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
+    remember: profile.remember == null ? true : profile.remember === true,
     refreshInterval,
   };
 }
