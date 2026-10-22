@@ -204,10 +204,10 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
 
 test("dashboard delegates visibility refresh to the tested helper", () => {
   const source = read("src/main.js");
-  assert.match(source, /import \\{ registerVisibilityRefresh \\} from "\\.\\/visibility-refresh\\.js"/);
-  assert.match(source, /registerVisibilityRefresh\\(\\{/);
-  assert.match(source, /shouldRefresh: \\(\\) => activeDashboardMode === "readonly"/);
-  assert.match(source, /refresh: fetchAndRender/);
+  assert.ok(source.includes('import { registerVisibilityRefresh } from "./visibility-refresh.js";'));
+  assert.ok(source.includes("registerVisibilityRefresh({"));
+  assert.ok(source.includes('shouldRefresh: () => activeDashboardMode === "readonly"'));
+  assert.ok(source.includes("refresh: fetchAndRender"));
 });
 
 test("startup does not restart polling after authentication clears the config", () => {
