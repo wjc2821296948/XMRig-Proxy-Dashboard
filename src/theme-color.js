@@ -19,7 +19,15 @@ function syncBrowserThemeColor() {
   }
 }
 
-syncBrowserThemeColor();
+// Modules are evaluated in document order, but defer the first paint sync
+// until the next animation frame so main.js has finished applying the saved
+// preference before browser chrome is updated. The observer still handles
+// later changes immediately.
+if (typeof requestAnimationFrame === "function") {
+  requestAnimationFrame(syncBrowserThemeColor);
+} else {
+  syncBrowserThemeColor();
+}
 
 if (typeof MutationObserver !== "undefined") {
   const themeObserver = new MutationObserver(syncBrowserThemeColor);
