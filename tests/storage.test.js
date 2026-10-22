@@ -476,3 +476,20 @@ test("write-access persistence reports quota failures", async () => {
   const { saveWriteAccess } = await import("../src/storage.js");
   assert.equal(saveWriteAccess(true, "https://proxy.example"), false);
 });
+
+
+test("clearConfig reports partial cleanup while still clearing accessible storage", () => {
+  class BlockedLocalStorage extends MemoryStorage {
+    removeItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new BlockedLocalStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://session.example", apiToken: "temporary", remember: false, refreshInterval: 10,
+  }));
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", JSON.stringify({ profile: "temporary" }));
+
+  assert.equal(clearConfig(), false);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
+});
