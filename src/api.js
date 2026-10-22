@@ -127,7 +127,16 @@ export async function request(path, options = {}) {
       err.status = response.status;
       throw err;
     }
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (error) {
+      // Do not surface raw response bodies or parser details: upstream proxies,
+      // captive portals, and reverse proxies may return sensitive HTML/text.
+      if (error instanceof SyntaxError) {
+        throw new Error("Invalid JSON response from Proxy API", { cause: error });
+      }
+      throw error;
+    }
   } catch (e) {
     // AbortSignal.timeout() throws a DOMException whose `name` is "TimeoutError"
     // (distinct from "AbortError" raised by AbortController.abort()). Browsers
