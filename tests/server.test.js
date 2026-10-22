@@ -87,6 +87,12 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(homepage.status, 200);
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 
+  const headResponse = await fetch(baseUrl, { method: "HEAD" });
+  assert.equal(headResponse.status, 200);
+  assert.equal(headResponse.headers.get("content-type"), homepage.headers.get("content-type"));
+  assert.equal(headResponse.headers.get("content-length"), homepage.headers.get("content-length"));
+  assert.equal(await headResponse.text(), "");
+
   const moduleResponse = await fetch(`${baseUrl}/src/main.js`);
   assert.equal(moduleResponse.status, 200);
   assert.match(moduleResponse.headers.get("content-type"), /javascript/);
