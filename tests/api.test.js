@@ -82,12 +82,49 @@ test("request builds the URL, injects auth, and exposes an abort signal", async 
   assert.equal(received.options.signal.aborted, false);
 });
 
+test("request refuses URLs outside the configured proxy origin before sending credentials", async () => {
+  let fetchCalled = false;
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    return { ok: true, status: 200, async json() { return {}; } };
+  };
+
+  await assert.rejects(
+    request("https://attacker.example/collect"),
+    { message: "API request URL must stay on the configured proxy origin" },
+  );
+  await assert.rejects(
+    request("//attacker.example/collect"),
+    { message: "API request URL must stay on the configured proxy origin" },
+  );
+  assert.equal(fetchCalled, false);
+});
+
+test("request client rejects write methods and request bodies", async () => {
+  let fetchCalled = false;
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    return { ok: true, status: 200, async json() { return {}; } };
+  };
+
+  await assert.rejects(
+    request("/1/config", { method: "PUT", body: JSON.stringify({ pools: [] }) }),
+    { message: "Dashboard API client is read-only" },
+  );
+  await assert.rejects(
+    request("/1/config", { body: JSON.stringify({ pools: [] }) }),
+    { message: "Dashboard API client is read-only" },
+  );
+  assert.equal(fetchCalled, false);
+});
+
+
 test("request has a timeout fallback when AbortSignal.timeout is unavailable", async () => {
   const originalTimeout = AbortSignal.timeout;
   const originalSetTimeout = globalThis.setTimeout;
   const originalClearTimeout = globalThis.clearTimeout;
   try {
-    Object.defineProperty(AbortSignal, "timeout", { configurable: true, value: undefined });
+    Object.defineProperty(AbortSignal, "timeout", { configurable: true, writable: true, value: undefined });
     globalThis.setTimeout = callback => {
       callback();
       return 123;
