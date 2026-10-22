@@ -36,6 +36,14 @@ let refreshInterval = null;
 let isFetching = false;
 const statusTracker = createStatusTracker();
 
+function clearConfigWithWarning() {
+  const cleared = clearConfig();
+  if (!cleared) {
+    showToast("浏览器存储不可用，部分凭据可能仍保留。请清理站点数据后重试", "error");
+  }
+  return cleared;
+}
+
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
 function getApiUrlValidationError(value) {
   let parsed;
@@ -555,7 +563,7 @@ async function handleConnect() {
   } catch (err) {
     // Clear invalid config on auth failure
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       showToast("认证失败：Token 无效或已过期", "error");
     } else if (err.message.includes("timed out")) {
@@ -923,7 +931,7 @@ function openSettingsModal(selectedProfileId = null) {
         // The previous profile's timer may still be active while switching.
         // Stop it before clearing credentials to avoid repeated config errors.
         stopAutoRefresh();
-        clearConfig();
+        clearConfigWithWarning();
         markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
@@ -984,12 +992,17 @@ function openSettingsModal(selectedProfileId = null) {
   });
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
-    clearConfig();
+    const cleared = clearConfigWithWarning();
     resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
-    showToast("已登出，已保存的 Proxy 配置仍保留", "info");
+    showToast(
+      cleared
+        ? "已登出，已保存的 Proxy 配置仍保留"
+        : "已退出当前视图，但部分凭据可能仍保留在浏览器存储中",
+      cleared ? "info" : "error",
+    );
     renderConnectForm();
     stopAutoRefresh();
   });
@@ -1076,7 +1089,7 @@ async function fetchAndRender() {
     renderDashboard(data);
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       // Auth failure invalidates the persisted write flag (the token no
       // longer matches), but a transient network/5xx does not — see
