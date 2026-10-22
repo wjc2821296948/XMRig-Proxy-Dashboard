@@ -16,7 +16,7 @@
   /* Cool slate text — sits better against indigo than warm gray. */
   --text-primary: #e4e7f1;
   --text-secondary: #9aa1c0;
-  --text-muted: #5e6585;
+  --text-muted: #7f88ad;
 
   /* Primary action / "live signal" — copper-amber.
      Replaces emerald as the loud brand color; copper reads as an
@@ -74,7 +74,7 @@
 
   --text-primary: #2a2418;
   --text-secondary: #6e6450;
-  --text-muted: #9a907a;
+  --text-muted: #786b54;
 
   --shadow-sm: 0 2px 4px rgba(60,40,20,0.08);
   --shadow-md: 0 4px 10px rgba(60,40,20,0.12);

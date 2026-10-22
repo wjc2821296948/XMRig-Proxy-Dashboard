@@ -23,6 +23,12 @@ test("index references the expected local application entry points", () => {
   assert.equal(existsSync(join(root, "src/main.js")), true);
 });
 
+test("theme muted text tokens use higher-contrast colors in both palettes", () => {
+  const css = read("styles.css");
+  assert.match(css, /--text-muted:\s*#7f88ad;/, "dark theme muted text should remain legible on indigo surfaces");
+  assert.match(css, /--text-muted:\s*#786b54;/, "light theme muted text should remain legible on cream surfaces");
+});
+
 test("index keeps the dashboard CSP security boundaries intact", () => {
   const html = read("index.html");
   const match = html.match(
