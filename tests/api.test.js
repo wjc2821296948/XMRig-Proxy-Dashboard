@@ -85,6 +85,7 @@ test("request builds the URL, injects auth, and exposes an abort signal", async 
 test("request has a timeout fallback when AbortSignal.timeout is unavailable", async () => {
   const originalTimeout = AbortSignal.timeout;
   const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
   try {
     Object.defineProperty(AbortSignal, "timeout", { configurable: true, value: undefined });
     globalThis.setTimeout = callback => {
@@ -100,6 +101,7 @@ test("request has a timeout fallback when AbortSignal.timeout is unavailable", a
   } finally {
     Object.defineProperty(AbortSignal, "timeout", { configurable: true, writable: true, value: originalTimeout });
     globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });
 
