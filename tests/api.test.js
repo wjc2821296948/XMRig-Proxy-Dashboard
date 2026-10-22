@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 import { probeWriteAccess, request } from "../src/api.js";
-import { saveConfig } from "../src/storage.js";
+import { loadProfiles, saveConfig, saveProfile } from "../src/storage.js";
 
 class MemoryStorage {
   #data = new Map();
@@ -311,4 +311,21 @@ test("fallback request signal propagates timeout aborts and cleans up listeners"
     if (originalTimeout) Object.defineProperty(AbortSignal, "timeout", originalTimeout);
     else delete AbortSignal.timeout;
   }
+});
+
+
+test("malformed remember flags do not persist profile tokens", () => {
+  const profile = saveProfile({ id: "profile-a", name: "Proxy A", apiUrl: "https://proxy.example:8080/", apiToken: "secret-token", remember: "false", refreshInterval: 10 });
+  assert.equal(profile.remember, false);
+  assert.equal(profile.apiToken, "secret-token");
+  const persistedProfiles = JSON.parse(localStorage.getItem("xmrig_proxy_profiles"));
+  assert.equal("apiToken" in persistedProfiles[0], false);
+  assert.equal(JSON.parse(sessionStorage.getItem("xmrig_proxy_session_tokens"))["profile-a"], "secret-token");
+  assert.equal(loadProfiles()[0].remember, false);
+});
+
+test("non-string profile tokens are discarded during normalization", () => {
+  const profile = saveProfile({ id: "profile-b", apiUrl: "https://proxy.example:8080/", apiToken: { token: "must-not-be-used" }, remember: true, refreshInterval: 10 });
+  assert.equal(profile.apiToken, "");
+  assert.equal(loadProfiles()[0].apiToken, "");
 });
