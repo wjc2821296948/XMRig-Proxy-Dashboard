@@ -66,6 +66,21 @@ test("anti-framing policy is delivered through HTTP response headers", () => {
   assert.match(server, /"X-Frame-Options":\s*"DENY"/);
 });
 
+test("interactive controls expose a theme-aware keyboard focus ring", () => {
+  const css = read("styles.css");
+  for (const selector of [
+    "button:focus-visible",
+    "input:focus-visible",
+    "select:focus-visible",
+    "textarea:focus-visible",
+    "a:focus-visible",
+    "[role=\"button\"]:focus-visible",
+  ]) {
+    assert.ok(css.includes(selector), `missing keyboard focus style: ${selector}`);
+  }
+  assert.match(css, /outline:\s*2px solid var\(--accent-copper\)/);
+});
+
 test("index does not load executable JavaScript from third-party URLs", () => {
   const html = read("index.html");
   const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)];
@@ -150,6 +165,18 @@ test("PR Agent action is immutable-pinned and cannot write repository content", 
 });
 
 
+
+test("system theme preference follows operating-system appearance changes", () => {
+  const main = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.match(storage, /new Set\(\["dark", "light", "system"\]\)/);
+  assert.match(main, /prefers-color-scheme:\s*light/);
+  assert.match(main, /query\.addEventListener\("change", handler\)/);
+  assert.match(main, /systemThemeMediaQuery !== query \|\| systemThemeChangeHandler !== handler/);
+  assert.match(main, /catch \{[\s\S]*?stale listener/i);
+  assert.match(main, /applyThemePreference\(themePreference, \{ persist: true \}\)/);
+  assert.match(main, /<option value="system"/);
+});
 
 test("every static-server allowlist entry exists in this checkout", () => {
   assert.ok(PUBLIC_ASSET_PATHS.length > 0, "public asset allowlist must not be empty");
