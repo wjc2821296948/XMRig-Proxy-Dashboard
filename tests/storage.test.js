@@ -390,3 +390,27 @@ test("malformed and non-object session token payloads safely fall back to empty 
     assert.equal(loadProfiles()[0].apiToken, "", `payload ${malformed} should not produce an inherited token`);
   }
 });
+
+
+test("storage reads that throw degrade to empty config and default theme", () => {
+  globalThis.localStorage = { getItem() { throw new DOMException("blocked", "SecurityError"); }, setItem() { throw new DOMException("blocked", "SecurityError"); }, removeItem() { throw new DOMException("blocked", "SecurityError"); } };
+  globalThis.sessionStorage = { getItem() { throw new DOMException("blocked", "SecurityError"); }, setItem() { throw new DOMException("blocked", "SecurityError"); }, removeItem() { throw new DOMException("blocked", "SecurityError"); } };
+
+  assert.equal(loadConfig(), null);
+  assert.equal(loadTheme(), "dark");
+  assert.equal(saveConfig({ apiUrl: "https://proxy.example", apiToken: "", remember: true, refreshInterval: 10 }), false);
+  clearConfig();
+  clearTheme();
+});
+
+test("quota errors do not report profile or config saves as successful", async () => {
+  class QuotaStorage extends MemoryStorage {
+    setItem() { throw new DOMException("quota exceeded", "QuotaExceededError"); }
+  }
+  globalThis.localStorage = new QuotaStorage();
+  globalThis.sessionStorage = new QuotaStorage();
+  const { saveProfile } = await import("../src/storage.js");
+
+  assert.equal(saveConfig({ apiUrl: "https://proxy.example", apiToken: "", remember: true, refreshInterval: 10 }), false);
+  assert.equal(saveProfile({ id: "quota-profile", name: "Quota", apiUrl: "https://proxy.example", apiToken: "secret", remember: true, refreshInterval: 10 }), null);
+});
