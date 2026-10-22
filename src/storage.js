@@ -71,11 +71,19 @@ function safeRemove(kind, key) {
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
-  const target = cfg.remember ? "local" : "session";
-  const sibling = cfg.remember ? "session" : "local";
-  if (!safeSet(target, CONFIG_KEY, JSON.stringify(cfg))) return false;
-  safeRemove(sibling, CONFIG_KEY);
-  return true;
+  const serialized = JSON.stringify(cfg);
+  if (cfg.remember) {
+    // localStorage is authoritative in remember mode. A blocked session store
+    // must not prevent a persistent save; any stale session entry is ignored.
+    if (!safeSet("local", CONFIG_KEY, serialized)) return false;
+    safeRemove("session", CONFIG_KEY);
+    return true;
+  }
+
+  // In session-only mode, remove the higher-priority persistent entry first.
+  // If that cannot be done, do not claim the new config is safely active.
+  if (!safeRemove("local", CONFIG_KEY)) return false;
+  return safeSet("session", CONFIG_KEY, serialized);
 }
 
 function normalizeProfile(profile) {
