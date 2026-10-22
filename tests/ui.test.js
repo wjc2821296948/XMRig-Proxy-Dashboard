@@ -49,3 +49,57 @@ test("basic UI status helper preserves offline and warning boundaries", () => {
     { cls: "status-online", text: "在线" },
   );
 });
+
+
+test("toast notifications announce status and have a removal fallback", async () => {
+  const { showToast } = await import("../src/ui.js");
+  const originalDocument = globalThis.document;
+  const originalAnimationFrame = globalThis.requestAnimationFrame;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const nodes = [];
+
+  class FakeElement {
+    constructor() {
+      this.children = [];
+      this.attributes = {};
+      this.className = "";
+      this.textContent = "";
+      this.classList = {
+        add() {},
+        remove() {},
+      };
+    }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    appendChild(child) { child.parentNode = this; this.children.push(child); }
+    addEventListener() {}
+    remove() {
+      this.removed = true;
+      if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(node => node !== this);
+    }
+  }
+
+  const body = new FakeElement();
+  globalThis.document = {
+    body,
+    createElement() { const element = new FakeElement(); nodes.push(element); return element; },
+  };
+  globalThis.requestAnimationFrame = callback => callback();
+  globalThis.setTimeout = callback => { callback(); return 1; };
+  globalThis.clearTimeout = () => {};
+
+  try {
+    await showToast("test notice", "info", 0);
+    const container = body.children[0];
+    assert.equal(container.attributes.role, "status");
+    assert.equal(container.attributes["aria-live"], "polite");
+    assert.equal(container.attributes["aria-atomic"], "true");
+    assert.equal(container.children.length, 0);
+    assert.equal(nodes.some(node => node.className === "toast toast-info" && node.removed), true);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.requestAnimationFrame = originalAnimationFrame;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
