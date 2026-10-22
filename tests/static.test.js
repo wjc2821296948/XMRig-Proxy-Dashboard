@@ -55,6 +55,21 @@ test("anti-framing policy is delivered through HTTP response headers", () => {
   assert.match(server, /"X-Frame-Options":\s*"DENY"/);
 });
 
+test("interactive controls expose a theme-aware keyboard focus ring", () => {
+  const css = read("styles.css");
+  for (const selector of [
+    "button:focus-visible",
+    "input:focus-visible",
+    "select:focus-visible",
+    "textarea:focus-visible",
+    "a:focus-visible",
+    "[role=\"button\"]:focus-visible",
+  ]) {
+    assert.ok(css.includes(selector), `missing keyboard focus style: ${selector}`);
+  }
+  assert.match(css, /outline:\s*2px solid var\(--accent-copper\)/);
+});
+
 test("index does not load executable JavaScript from third-party URLs", () => {
   const html = read("index.html");
   const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)];
