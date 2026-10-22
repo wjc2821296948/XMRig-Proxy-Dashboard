@@ -10,6 +10,7 @@
  */
 
 import { request, probeWriteAccess } from "./api.js";
+import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
   loadConfig, saveConfig, clearConfig, getConfig,
   loadProfiles, saveProfile, deleteProfile, setActiveProfile,
@@ -1131,11 +1132,13 @@ function init() {
   setRibbonConnectState("disconnected");
 
   // Background tabs throttle timers, so refresh immediately when the user
-  // returns. fetchAndRender() already deduplicates in-flight requests.
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
-    if (!getConfig() || activeDashboardMode !== "readonly") return;
-    void fetchAndRender();
+  // returns. fetchAndRender() owns in-flight request deduplication. Keep the
+  // handler scoped to read-only mode so it cannot replace an open settings UI.
+  registerVisibilityRefresh({
+    documentRef: document,
+    hasConfig: () => Boolean(getConfig()),
+    shouldRefresh: () => activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
   });
 
   // Load saved config
