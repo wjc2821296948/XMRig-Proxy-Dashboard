@@ -2,6 +2,7 @@
    CSS Variables – Theme & Spacing
    ========================================================================== */
 :root {
+  color-scheme: dark;
   /* "Midnight Ledger" — dark theme palette (default)
      Backgrounds are deep ink-indigo, not pure black, so the canvas
      reads as "live instrument" rather than "blank terminal". */
@@ -63,6 +64,7 @@
    from the dark theme. The card surface is cream, not pure white, so
    the copper reads warmer against it. */
 [data-theme="light"] {
+  color-scheme: light;
   --bg-primary: #f4eee5;
   --bg-secondary: #fbf6ee;
   --bg-card: #fffdf7;
@@ -634,6 +636,19 @@ h1 {
 }
 .checkbox-group label { font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; }
 
+/* Keep keyboard focus visible across native controls in both color themes.
+   Theme tokens are used rather than a hard-coded hue so the indicator follows
+   the active palette. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent-copper);
+  outline-offset: 2px;
+}
+
 /* ==========================================================================
    Config Panel (Connection Screen)
    ========================================================================== */
@@ -1188,7 +1203,6 @@ h1 {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
-
 /* Respect reduced-motion preferences without removing transition events.
    Modal teardown listens for transitionend, so use a near-zero duration rather
    than transition:none. */

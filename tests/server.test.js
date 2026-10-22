@@ -37,6 +37,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/main.js": "trusted-startup-module",
     "src/status.js": "export const status = true;",
     "src/storage.js": "export const storage = true;",
+    "src/theme-color.js": "trusted-theme-color-module",
     "src/ui.js": "export const ui = true;",
     "package.json": "{ \"private\": true, \"type\": \"module\" }",
     "README.md": "private readme",
@@ -90,6 +91,11 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(moduleResponse.status, 200);
   assert.match(moduleResponse.headers.get("content-type"), /javascript/);
   assert.equal(await moduleResponse.text(), "trusted-startup-module");
+
+  const themeColorResponse = await fetch(`${baseUrl}/src/theme-color.js`);
+  assert.equal(themeColorResponse.status, 200);
+  assert.match(themeColorResponse.headers.get("content-type"), /javascript/);
+  assert.equal(await themeColorResponse.text(), "trusted-theme-color-module");
 
   // Replacing an allowed path with an external symlink after startup must not
   // change what the server serves: requests only read the validated memory map.
