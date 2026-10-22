@@ -439,3 +439,39 @@ test("remembered profiles still save when sessionStorage writes are blocked", as
   });
   assert.equal(profile?.id, "persistent-only");
 });
+
+
+test("session-only config remains usable when localStorage is inaccessible", () => {
+  class BlockedLocalStorage extends MemoryStorage {
+    getItem() { throw new DOMException("blocked", "SecurityError"); }
+    removeItem() { throw new DOMException("blocked", "SecurityError"); }
+    setItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new BlockedLocalStorage();
+  const cfg = { apiUrl: "https://session.example", apiToken: "", remember: false, refreshInterval: 10 };
+
+  assert.equal(saveConfig(cfg), true);
+  assert.deepEqual(loadConfig(), cfg);
+});
+
+test("session-only config does not shadow a readable persistent config when cleanup fails", () => {
+  class CannotRemoveLocalStorage extends MemoryStorage {
+    removeItem() { throw new DOMException("locked", "SecurityError"); }
+  }
+  globalThis.localStorage = new CannotRemoveLocalStorage();
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://old.example", apiToken: "old", remember: true, refreshInterval: 10,
+  }));
+
+  assert.equal(saveConfig({ apiUrl: "https://new.example", apiToken: "", remember: false, refreshInterval: 10 }), false);
+  assert.equal(loadConfig().apiUrl, "https://old.example");
+});
+
+test("write-access persistence reports quota failures", async () => {
+  class QuotaStorage extends MemoryStorage {
+    setItem() { throw new DOMException("quota exceeded", "QuotaExceededError"); }
+  }
+  globalThis.localStorage = new QuotaStorage();
+  const { saveWriteAccess } = await import("../src/storage.js");
+  assert.equal(saveWriteAccess(true, "https://proxy.example"), false);
+});
