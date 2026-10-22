@@ -24,6 +24,37 @@ const WRITE_KEY     = "dashboard_write_access";
 const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
+/** Storage access can throw in privacy-restricted contexts or at quota. */
+function storageFor(kind) {
+  try {
+    return kind === "session" ? globalThis.sessionStorage : globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function safeGet(kind, key) {
+  try { return storageFor(kind)?.getItem(key) ?? null; } catch { return null; }
+}
+
+function safeSet(kind, key, value) {
+  try {
+    const storage = storageFor(kind);
+    if (!storage) return false;
+    storage.setItem(key, value);
+    return true;
+  } catch { return false; }
+}
+
+function safeRemove(kind, key) {
+  try {
+    const storage = storageFor(kind);
+    if (!storage) return false;
+    storage.removeItem(key);
+    return true;
+  } catch { return false; }
+}
+
 
 /* --------------------------------------------------------------------------
    Connection config
@@ -40,10 +71,11 @@ const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
-  const target  = cfg.remember ? localStorage : sessionStorage;
-  const sibling = cfg.remember ? sessionStorage : localStorage;
-  sibling.removeItem(CONFIG_KEY);
-  target.setItem(CONFIG_KEY, JSON.stringify(cfg));
+  const target = cfg.remember ? "local" : "session";
+  const sibling = cfg.remember ? "session" : "local";
+  if (!safeSet(target, CONFIG_KEY, JSON.stringify(cfg))) return false;
+  safeRemove(sibling, CONFIG_KEY);
+  return true;
 }
 
 function normalizeProfile(profile) {
@@ -64,7 +96,7 @@ function normalizeProfile(profile) {
 }
 
 function readProfileTokens() {
-  const raw = sessionStorage.getItem(PROFILE_TOKENS_KEY);
+  const raw = safeGet("session", PROFILE_TOKENS_KEY);
   if (!raw) return Object.create(null);
   try {
     const parsed = JSON.parse(raw);
@@ -79,11 +111,11 @@ function readProfileTokens() {
 }
 
 function writeProfileTokens(tokens) {
-  sessionStorage.setItem(PROFILE_TOKENS_KEY, JSON.stringify(tokens));
+  return safeSet("session", PROFILE_TOKENS_KEY, JSON.stringify(tokens));
 }
 
 function readProfiles() {
-  const raw = localStorage.getItem(PROFILES_KEY);
+  const raw = safeGet("local", PROFILES_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -106,7 +138,7 @@ function writeProfiles(profiles) {
     const { apiToken, ...metadata } = profile;
     return metadata;
   });
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(persistent));
+  return safeSet("local", PROFILES_KEY, JSON.stringify(persistent));
 }
 
 /**
@@ -126,7 +158,7 @@ export function loadProfiles() {
     tokens[migrated[0].id] = legacy.apiToken;
     writeProfileTokens(tokens);
   }
-  localStorage.setItem(ACTIVE_PROFILE_KEY, migrated[0].id);
+  safeSet("local", ACTIVE_PROFILE_KEY, migrated[0].id);
   return migrated;
 }
 
@@ -149,10 +181,9 @@ export function saveProfile(profile) {
   } else {
     tokens[normalized.id] = normalized.apiToken;
   }
-  writeProfileTokens(tokens);
-  writeProfiles(profiles);
-  localStorage.setItem(ACTIVE_PROFILE_KEY, normalized.id);
-  saveConfig(normalized);
+  if (!writeProfileTokens(tokens) || !writeProfiles(profiles)
+      || !safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)
+      || !saveConfig(normalized)) return null;
   return normalized;
 }
 
@@ -166,8 +197,8 @@ export function deleteProfile(id) {
   delete tokens[id];
   writeProfileTokens(tokens);
   writeProfiles(next);
-  if (localStorage.getItem(ACTIVE_PROFILE_KEY) === id) {
-    localStorage.setItem(ACTIVE_PROFILE_KEY, next[0].id);
+  if (safeGet("local", ACTIVE_PROFILE_KEY) === id) {
+    safeSet("local", ACTIVE_PROFILE_KEY, next[0].id);
     saveConfig(next[0]);
   }
   return true;
@@ -177,14 +208,14 @@ export function deleteProfile(id) {
 export function setActiveProfile(id) {
   const profile = loadProfiles().find(item => item.id === id);
   if (!profile) return null;
-  localStorage.setItem(ACTIVE_PROFILE_KEY, profile.id);
+  safeSet("local", ACTIVE_PROFILE_KEY, profile.id);
   saveConfig(profile);
   return profile;
 }
 
 /** @returns {string|null} */
 export function loadActiveProfileId() {
-  return localStorage.getItem(ACTIVE_PROFILE_KEY);
+  return safeGet("local", ACTIVE_PROFILE_KEY);
 }
 
 /** @returns {object|null} */
@@ -246,7 +277,7 @@ function hydrateConnection(raw) {
  * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}|null}
  */
 export function loadConfig() {
-  let raw = localStorage.getItem(CONFIG_KEY);
+  let raw = safeGet("local", CONFIG_KEY);
   if (raw) {
     try {
       const hydrated = hydrateConnection(raw);
@@ -254,9 +285,9 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — fall through to sessionStorage.
     }
-    localStorage.removeItem(CONFIG_KEY);
+    safeRemove("local", CONFIG_KEY);
   }
-  raw = sessionStorage.getItem(CONFIG_KEY);
+  raw = safeGet("session", CONFIG_KEY);
   if (raw) {
     try {
       const hydrated = hydrateConnection(raw);
@@ -264,17 +295,17 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — return null below.
     }
-    sessionStorage.removeItem(CONFIG_KEY);
+    safeRemove("session", CONFIG_KEY);
   }
   return null;
 }
 
 /** Clear connection config from both storages (logout). Does NOT touch theme. */
 export function clearConfig() {
-  localStorage.removeItem(CONFIG_KEY);
-  sessionStorage.removeItem(CONFIG_KEY);
-  sessionStorage.removeItem(PROFILE_TOKENS_KEY);
-  localStorage.removeItem(ACTIVE_PROFILE_KEY);
+  safeRemove("local", CONFIG_KEY);
+  safeRemove("session", CONFIG_KEY);
+  safeRemove("session", PROFILE_TOKENS_KEY);
+  safeRemove("local", ACTIVE_PROFILE_KEY);
 }
 
 /* --------------------------------------------------------------------------
@@ -288,20 +319,20 @@ const VALID_THEMES = new Set(["dark", "light", "system"]);
  */
 export function saveTheme(theme) {
   if (!VALID_THEMES.has(theme)) return;
-  localStorage.setItem(THEME_KEY, theme);
+  safeSet("local", THEME_KEY, theme);
 }
 
 /**
  * @returns {"dark" | "light" | "system"}
  */
 export function loadTheme() {
-  const raw = localStorage.getItem(THEME_KEY);
+  const raw = safeGet("local", THEME_KEY);
   return VALID_THEMES.has(raw) ? raw : "dark";
 }
 
 /** Clear the persisted theme preference. */
 export function clearTheme() {
-  localStorage.removeItem(THEME_KEY);
+  safeRemove("local", THEME_KEY);
 }
 
 /* --------------------------------------------------------------------------
@@ -369,7 +400,7 @@ export function clearWriteAccess(apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
   if (!target) {
     // No URL provided and no config saved — clear everything for safety.
-    localStorage.removeItem(WRITE_KEY);
+    safeRemove("local", WRITE_KEY);
     return;
   }
   const map = readWriteAccessMap();
@@ -389,7 +420,7 @@ export function clearWriteAccess(apiUrl) {
  */
 
 function readWriteAccessMap() {
-  const raw = localStorage.getItem(WRITE_KEY);
+  const raw = safeGet("local", WRITE_KEY);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -401,7 +432,7 @@ function readWriteAccessMap() {
 }
 
 function writeWriteAccessMap(map) {
-  localStorage.setItem(WRITE_KEY, JSON.stringify(map));
+  safeSet("local", WRITE_KEY, JSON.stringify(map));
 }
 
 /* --------------------------------------------------------------------------
