@@ -96,7 +96,14 @@ const server = createServer((req, res) => {
     return;
   }
 
-  const requestPath = new URL(req.url || "/", "http://localhost").pathname;
+  let requestPath;
+  try {
+    requestPath = new URL(req.url || "/", "http://localhost").pathname;
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Bad Request");
+    return;
+  }
   const asset = findPublicAsset(requestPath);
   if (!asset) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
