@@ -91,7 +91,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   // before they reach the server. The server must answer safely with 400.
   const malformedResponse = await new Promise((resolve, reject) => {
     const socket = connect(port, "127.0.0.1", () => {
-      socket.write("GET http://[::1/ HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n");
+      socket.write("GET http://[::1/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
     });
     let response = "";
     socket.setEncoding("utf8");
@@ -99,8 +99,8 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     socket.on("error", reject);
     socket.on("end", () => resolve(response));
   });
-  assert.match(malformedResponse, /^HTTP\\/1\\.1 400 Bad Request/);
-  assert.match(malformedResponse, /content-type: text\\/plain; charset=utf-8/i);
+  assert.match(malformedResponse, /^HTTP\/1\.1 400 Bad Request/);
+  assert.match(malformedResponse, /content-type: text\/plain; charset=utf-8/i);
 
   const moduleResponse = await fetch(`${baseUrl}/src/main.js`);
   assert.equal(moduleResponse.status, 200);
