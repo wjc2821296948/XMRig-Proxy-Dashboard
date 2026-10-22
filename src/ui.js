@@ -112,6 +112,7 @@ export function formatUptime(seconds) {
  * Format number with thousand separators.
  */
 export function formatNumber(num) {
+  if (!Number.isFinite(num)) return "—";
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
