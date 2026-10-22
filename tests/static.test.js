@@ -205,7 +205,8 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
 test("dashboard delegates visibility refresh to the tested helper", () => {
   const source = read("src/main.js");
   assert.ok(source.includes('import { registerVisibilityRefresh } from "./visibility-refresh.js";'));
-  assert.ok(source.includes("registerVisibilityRefresh({"));
+  assert.ok(source.includes("cleanupVisibilityRefresh?.();"));
+  assert.ok(source.includes("cleanupVisibilityRefresh = registerVisibilityRefresh({"));
   assert.ok(source.includes('shouldRefresh: () => activeDashboardMode === "readonly"'));
   assert.ok(source.includes("refresh: fetchAndRender"));
 });
