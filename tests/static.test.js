@@ -43,7 +43,7 @@ test("index keeps the dashboard CSP security boundaries intact", () => {
     "script-src 'self'",
     "font-src 'self' data:",
     "img-src 'self' data:",
-    "connect-src *",
+    "connect-src http: https:",
     "base-uri 'self'",
     "form-action 'self'",
   ]) {
