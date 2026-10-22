@@ -212,12 +212,13 @@ export function deleteProfile(id) {
   if (!removed) return false;
   const next = profiles.filter(profile => profile.id !== id);
   const tokens = readProfileTokens();
+  const hadSessionToken = Object.hasOwn(tokens, id);
   delete tokens[id];
 
-  // Session tokens are only required for profiles that opted out of
-  // persistent credential storage. For remembered profiles, cleanup is best
-  // effort because sessionStorage may be unavailable.
-  if (Object.hasOwn(readProfileTokens(), id) && !writeProfileTokens(tokens)) return false;
+  // Only require a token-map write when there was a token to remove. This
+  // avoids making deletion of unrelated remembered profiles depend on
+  // sessionStorage, while still reporting failed cleanup of an actual token.
+  if (hadSessionToken && !writeProfileTokens(tokens)) return false;
   if (!writeProfiles(next)) return false;
   if (safeGet("local", ACTIVE_PROFILE_KEY) === id) {
     if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id) || !saveConfig(next[0])) return false;
