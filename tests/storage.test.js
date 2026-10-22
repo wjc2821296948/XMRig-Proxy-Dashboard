@@ -390,3 +390,62 @@ test("malformed and non-object session token payloads safely fall back to empty 
     assert.equal(loadProfiles()[0].apiToken, "", `payload ${malformed} should not produce an inherited token`);
   }
 });
+
+test("saveConfig rejects oversized config payloads", () => {
+  const hugeToken = "x".repeat(5000);
+  assert.throws(() => saveConfig({
+    apiUrl: "https://proxy.example:8080",
+    apiToken: hugeToken,
+    remember: true,
+    refreshInterval: 10,
+  }), { message: /exceeds maximum length/ });
+});
+
+test("saveConfig rejects oversized URL", () => {
+  const hugeUrl = "https://proxy.example:8080/" + "x".repeat(3000);
+  assert.throws(() => saveConfig({
+    apiUrl: hugeUrl,
+    apiToken: "token",
+    remember: true,
+    refreshInterval: 10,
+  }), { message: /exceeds maximum length/ });
+});
+
+test("saveConfig rejects config exceeding total size limit", () => {
+  const hugeConfig = {
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "x".repeat(50000),
+    remember: true,
+    refreshInterval: 10,
+  };
+  assert.throws(() => saveConfig(hugeConfig), { message: /exceeds maximum size/ });
+});
+
+test("normalizeProfile rejects profiles with oversized token", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+  // The saveProfile path will reject via normalizeProfile
+  const result = saveProfile({
+    id: "big-token",
+    name: "Big Token",
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "x".repeat(5000),
+    remember: true,
+    refreshInterval: 10,
+  });
+  assert.equal(result, null);
+  assert.equal(loadProfiles().find(p => p.id === "big-token"), undefined);
+});
+
+test("normalizeProfile rejects profiles with oversized name", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+  const result = saveProfile({
+    id: "big-name",
+    name: "x".repeat(200),
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "token",
+    remember: true,
+    refreshInterval: 10,
+  });
+  assert.equal(result, null);
+  assert.equal(loadProfiles().find(p => p.id === "big-name"), undefined);
+});

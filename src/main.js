@@ -33,7 +33,7 @@ import {
 
 // Global state
 let refreshInterval = null;
-let isFetching = false;
+let fetchAbortController = null;
 const statusTracker = createStatusTracker();
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
@@ -603,18 +603,19 @@ function renderDashboard(data) {
     "var(--chart-red)",
   ];
 
-  // Line chart data points for SVG
-  const chartWidth = 280;
-  const chartHeight = 60;
-  const padding = 20;
+  // Line chart data points for SVG - use percentage-based coordinates for responsiveness
+  // The SVG uses a 1000x200 viewBox with 50px padding, rendering at 100% width
+  const chartVPWidth = 1000;
+  const chartVPHeight = 200;
+  const padding = 50;
   const points = hashrates.map((h, i) => {
-    const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
-    const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
+    const x = padding + (i / (hashrates.length - 1)) * (chartVPWidth - 2 * padding);
+    const y = chartVPHeight - padding - ((h / maxHr) * (chartVPHeight - 2 * padding));
     return { x, y, value: formatHashrate(h), label: timeLabels[i], color: chartColors[i] };
   });
   const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const lineChart = `
-    <svg class="hashrate-line-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="100%" height="100%">
+    <svg class="hashrate-line-chart" viewBox="0 0 ${chartVPWidth} ${chartVPHeight}" width="100%" height="100%" preserveAspectRatio="none">
       <defs>
         <linearGradient id="hrGradient" x1="0%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stop-color="var(--accent-copper-deep)" stop-opacity="0.3"/>
@@ -629,12 +630,12 @@ function renderDashboard(data) {
       </defs>
       <!-- Grid lines -->
       <g class="chart-grid" stroke="var(--border-light)" stroke-width="0.5">
-        <line x1="${padding}" y1="${padding}" x2="${chartWidth - padding}" y2="${padding}"/>
-        <line x1="${padding}" y1="${chartHeight / 2}" x2="${chartWidth - padding}" y2="${chartHeight / 2}"/>
-        <line x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}"/>
+        <line x1="${padding}" y1="${padding}" x2="${chartVPWidth - padding}" y2="${padding}"/>
+        <line x1="${padding}" y1="${chartVPHeight / 2}" x2="${chartVPWidth - padding}" y2="${chartVPHeight / 2}"/>
+        <line x1="${padding}" y1="${chartVPHeight - padding}" x2="${chartVPWidth - padding}" y2="${chartVPHeight - padding}"/>
       </g>
       <!-- Area under curve -->
-      <path d="${pathData} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z"
+      <path d="${pathData} L ${chartVPWidth - padding} ${chartVPHeight - padding} L ${padding} ${chartVPHeight - padding} Z"
             fill="url(#hrGradient)" stroke="none"/>
       <!-- Line segments with different colors -->
       ${points.slice(1).map((p, i) => `
@@ -642,14 +643,14 @@ function renderDashboard(data) {
       `).join('')}
       <!-- Data points with individual colors -->
       ${points.map((p, i) => `
-        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
+        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="6"
                 fill="${p.color}" stroke="var(--bg-card)" stroke-width="2"
                 data-label="${escapeHtml(p.label)}" data-value="${escapeHtml(p.value)}" />
       `).join('')}
       <!-- X-axis labels -->
       ${points.map(p => `
-        <text x="${p.x}" y="${chartHeight - 4}" text-anchor="middle"
-              font-size="0.55rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
+        <text x="${p.x}" y="${chartVPHeight - 8}" text-anchor="middle"
+              font-size="0.7rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
       `).join('')}
     </svg>
   `;
@@ -1057,12 +1058,20 @@ function closeModal(overlay) {
    Auto-refresh Management
    ========================================================================== */
 async function fetchAndRender() {
-  if (isFetching) return;
-  isFetching = true;
+  // Cancel any in-flight request to avoid race conditions
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+  }
+  fetchAbortController = new AbortController();
+
   try {
-    const data = await request("/1/summary");
+    const data = await request("/1/summary", { signal: fetchAbortController.signal });
     renderDashboard(data);
   } catch (err) {
+    // Ignore abort errors — they're expected when a new request supersedes
+    if (err.name === "AbortError" || err.name === "CancellationError") {
+      return;
+    }
     if (err.status === 401 || err.status === 403) {
       clearConfig();
       resetStatusTracker(statusTracker);
@@ -1077,7 +1086,10 @@ async function fetchAndRender() {
       showToast(`刷新失败: ${err.message}`, "error");
     }
   } finally {
-    isFetching = false;
+    // Only clear if this is still our controller (not superseded)
+    if (fetchAbortController && fetchAbortController.signal.aborted) {
+      fetchAbortController = null;
+    }
   }
 }
 
@@ -1093,12 +1105,17 @@ function stopAutoRefresh() {
     clearInterval(refreshInterval);
     refreshInterval = null;
   }
+  // Also cancel any in-flight fetch
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
 }
 
 /* ==========================================================================
    Initialization
    ========================================================================== */
-function init() {
+async function init() {
   // Initialize theme
   initTheme();
 
@@ -1135,15 +1152,11 @@ function init() {
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
-    fetchAndRender().then(() => {
-      // fetchAndRender handles errors internally. On an authentication
-      // failure it clears the saved connection, so don't restart polling
-      // after the user has been returned to the connect form.
-      if (getConfig()) startAutoRefresh();
-    }).catch(() => {
-      // If initialization itself fails unexpectedly, show the connect form.
-      renderConnectForm(cfg);
-    });
+    await fetchAndRender();
+    // fetchAndRender handles errors internally. On an authentication
+    // failure it clears the saved connection, so don't restart polling
+    // after the user has been returned to the connect form.
+    if (getConfig()) startAutoRefresh();
   } else {
     renderConnectForm();
   }
@@ -1152,7 +1165,13 @@ function init() {
 /* ==========================================================================
    Utility: HTML Escape (XSS prevention)
    ========================================================================== */
-function escapeHtml(str) {
+/**
+ * Escape HTML special characters to prevent XSS.
+ * Exported for testing.
+ * @param {string|null|undefined} str
+ * @returns {string}
+ */
+export function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   // Build entity strings by concatenation so the leading '&' and
   // trailing ';' cannot be silently stripped (see PR code-review fix,
@@ -1162,17 +1181,19 @@ function escapeHtml(str) {
   // writes of apiUrl/apiToken).
   // '&' must be replaced first to avoid double-encoding the entities
   // produced by the remaining rules.
-  const ENT_AMP  = "&" + "amp;";
-  const ENT_LT   = "&" + "lt;";
-  const ENT_GT   = "&" + "gt;";
-  const ENT_QUOT = "&" + "quot;";
-  const ENT_APOS = "&" + "#039;";
+  const ENT_AMP   = "&" + "amp;";
+  const ENT_LT    = "&" + "lt;";
+  const ENT_GT    = "&" + "gt;";
+  const ENT_QUOT  = "&" + "quot;";
+  const ENT_APOS  = "&" + "#039;";
+  const ENT_SLASH = "&" + "#x2F;"; // forward slash for defense in depth
   return String(str)
     .replace(/&/g, ENT_AMP)
     .replace(/</g, ENT_LT)
     .replace(/>/g, ENT_GT)
     .replace(/\"/g, ENT_QUOT)
-    .replace(/'/g, ENT_APOS);
+    .replace(/'/g, ENT_APOS)
+    .replace(/\//g, ENT_SLASH);
 }
 
 /* ==========================================================================

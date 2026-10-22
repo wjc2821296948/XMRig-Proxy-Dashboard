@@ -480,7 +480,7 @@ h1 {
    ========================================================================== */
 .hashrate-chart {
   width: 100%;
-  height: 60px;
+  height: 80px;
   margin-top: 0.5rem;
 }
 
@@ -488,6 +488,12 @@ h1 {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+@media (max-width: 480px) {
+  .hashrate-chart {
+    height: 70px;
+  }
 }
 
 .chart-grid {

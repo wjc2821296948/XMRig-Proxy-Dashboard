@@ -25,6 +25,12 @@ const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
 
+// Size limits to prevent DoS via localStorage quota exhaustion
+const MAX_CONFIG_SIZE = 100 * 1024; // 100 KB
+const MAX_TOKEN_LENGTH = 4096;      // 4 KB
+const MAX_URL_LENGTH = 2048;        // 2 KB
+const MAX_NAME_LENGTH = 128;        // 128 chars
+
 /* --------------------------------------------------------------------------
    Connection config
    -------------------------------------------------------------------------- */
@@ -40,6 +46,18 @@ const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
+  // Validate size limits to prevent DoS via localStorage quota exhaustion
+  const jsonSize = JSON.stringify(cfg).length;
+  if (jsonSize > MAX_CONFIG_SIZE) {
+    throw new Error(`Configuration exceeds maximum size of ${MAX_CONFIG_SIZE} bytes`);
+  }
+  if (cfg.apiToken && cfg.apiToken.length > MAX_TOKEN_LENGTH) {
+    throw new Error(`API token exceeds maximum length of ${MAX_TOKEN_LENGTH} characters`);
+  }
+  if (cfg.apiUrl && cfg.apiUrl.length > MAX_URL_LENGTH) {
+    throw new Error(`API URL exceeds maximum length of ${MAX_URL_LENGTH} characters`);
+  }
+
   const target  = cfg.remember ? localStorage : sessionStorage;
   const sibling = cfg.remember ? sessionStorage : localStorage;
   sibling.removeItem(CONFIG_KEY);
@@ -49,6 +67,12 @@ export function saveConfig(cfg) {
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
   if (!isValidApiUrl(profile.apiUrl)) return null;
+  if (profile.apiToken && typeof profile.apiToken === "string" && profile.apiToken.length > MAX_TOKEN_LENGTH) {
+    return null;
+  }
+  if (profile.name && typeof profile.name === "string" && profile.name.length > MAX_NAME_LENGTH) {
+    return null;
+  }
   const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
@@ -262,7 +286,7 @@ export function loadConfig() {
       const hydrated = hydrateConnection(raw);
       if (hydrated) return hydrated;
     } catch {
-      // JSON parse failure — return null below.
+      // JSON parse failure — clear corrupted sessionStorage and return null.
     }
     sessionStorage.removeItem(CONFIG_KEY);
   }

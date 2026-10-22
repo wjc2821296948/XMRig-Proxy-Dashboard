@@ -138,9 +138,11 @@ export async function request(path, options = {}) {
     if (e?.name === "TimeoutError") {
       // DOMException.message is read-only in browsers. Mutating it can throw
       // a TypeError and hide the original timeout from the UI.
-      e = Object.assign(new Error("Request timed out", { cause: e }), {
-        name: "TimeoutError",
-      });
+      // Create a new Error with the proper name instead of using Object.assign
+      // on a DOMException (whose `name` is read-only in some engines).
+      const timeoutError = new Error("Request timed out", { cause: e });
+      timeoutError.name = "TimeoutError";
+      e = timeoutError;
     }
     console.error(`API error (masked): ${e.message}`);
     throw e;

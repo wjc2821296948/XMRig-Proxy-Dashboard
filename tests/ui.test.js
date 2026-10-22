@@ -7,7 +7,8 @@ import {
   formatNumber,
   formatUptime,
   getStatusInfo,
-} from "../src/ui.js";
+  escapeHtml,
+} from "../src/main.js";
 
 test("hashrate formatting handles zero, kilo, and mega ranges", () => {
   assert.equal(formatHashrate(0), "0 H/s");
@@ -48,4 +49,26 @@ test("basic UI status helper preserves offline and warning boundaries", () => {
     getStatusInfo({ now: 5, max: 10 }),
     { cls: "status-online", text: "在线" },
   );
+});
+
+test("escapeHtml escapes all dangerous characters including forward slash", () => {
+  const input = '<script>alert("xss")</script>&"\'/path';
+  const escaped = escapeHtml(input);
+  assert.ok(!escaped.includes("<"));
+  assert.ok(!escaped.includes(">"));
+  assert.ok(!escaped.includes("&"));
+  assert.ok(!escaped.includes('"'));
+  assert.ok(!escaped.includes("'"));
+  assert.ok(!escaped.includes("/"));
+  assert.ok(escaped.includes("<"));
+  assert.ok(escaped.includes(">"));
+  assert.ok(escaped.includes("&"));
+  assert.ok(escaped.includes("""));
+  assert.ok(escaped.includes("&#039;"));
+  assert.ok(escaped.includes("&#x2F;"));
+});
+
+test("escapeHtml handles null and undefined", () => {
+  assert.equal(escapeHtml(null), "");
+  assert.equal(escapeHtml(undefined), "");
 });

@@ -348,3 +348,42 @@ test("fallback request signal propagates timeout aborts and cleans up listeners"
     else delete AbortSignal.timeout;
   }
 });
+
+test("request handles network errors (CORS, DNS, connection refused) gracefully", async () => {
+  // Simulate network error (TypeError from fetch on CORS/DNS/connection issues)
+  globalThis.fetch = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  await assert.rejects(request("/1/summary"), err => {
+    assert.ok(err instanceof TypeError || err.name === "TypeError");
+    return true;
+  });
+});
+
+test("request handles AbortError from fetch (e.g., CORS preflight failure)", async () => {
+  globalThis.fetch = async () => {
+    throw new DOMException("The operation was aborted", "AbortError");
+  };
+
+  await assert.rejects(request("/1/summary"), err => {
+    assert.equal(err.name, "AbortError");
+    return true;
+  });
+});
+
+test("probeWriteAccess returns 'unknown' for network/CORS errors", async () => {
+  globalThis.fetch = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  assert.equal(await probeWriteAccess(), "unknown");
+});
+
+test("probeWriteAccess returns 'unknown' for DNS resolution failures", async () => {
+  globalThis.fetch = async () => {
+    throw new TypeError("DNS lookup failed");
+  };
+
+  assert.equal(await probeWriteAccess(), "unknown");
+});
