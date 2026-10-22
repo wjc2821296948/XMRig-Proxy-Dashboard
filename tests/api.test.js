@@ -150,6 +150,22 @@ test("non-success HTTP responses retain their status code", async () => {
   });
 });
 
+test("invalid JSON responses produce a safe diagnostic without exposing the body", async () => {
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      throw new SyntaxError("Unexpected token < in private upstream HTML");
+    },
+  });
+
+  await assert.rejects(request("/1/summary"), error => {
+    assert.equal(error.message, "Invalid JSON response from Proxy API");
+    assert.equal(error.cause.message, "Unexpected token < in private upstream HTML");
+    return true;
+  });
+});
+
 test("write-access probe maps restricted responses separately from unknown failures", async () => {
   for (const status of [401, 403, 404]) {
     globalThis.fetch = async () => ({ ok: false, status });
