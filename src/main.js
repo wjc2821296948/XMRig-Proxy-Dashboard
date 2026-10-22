@@ -63,29 +63,69 @@ function showApiUrlValidationError(reason, invalidMessage = "无效的 URL 格�
    The theme is owned by storage.js — never read or write localStorage
    directly here.
    ========================================================================== */
-function initTheme() {
-  const theme = loadTheme();
+let systemThemeMediaQuery = null;
+let systemThemeChangeHandler = null;
+
+function resolveThemePreference(preference) {
+  if (preference !== "system") return preference === "light" ? "light" : "dark";
+  if (typeof window.matchMedia !== "function") return "dark";
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyResolvedTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  // The view-mode badge lives in the header on every page; flip its label
-  // alongside the theme so the "you are looking, not driving" signal keeps
-  // speaking the user's language.
   syncViewModeBadgeText(theme);
+  // The mode picker has theme-dependent copy; close it rather than leave
+  // stale language/labels visible when the OS changes appearance.
+  modePickerTheme = null;
+  if (modePickerEl?.classList.contains("open")) closeModePicker();
+}
+
+function syncSystemThemeListener(preference) {
+  if (systemThemeMediaQuery && systemThemeChangeHandler) {
+    try {
+      if (typeof systemThemeMediaQuery.removeEventListener === "function") {
+        systemThemeMediaQuery.removeEventListener("change", systemThemeChangeHandler);
+      } else if (typeof systemThemeMediaQuery.removeListener === "function") {
+        systemThemeMediaQuery.removeListener(systemThemeChangeHandler);
+      }
+    } catch {
+      // A stale listener may be impossible to detach in a non-standard
+      // MediaQueryList implementation; its identity guard below makes it inert.
+    }
+  }
+  systemThemeMediaQuery = null;
+  systemThemeChangeHandler = null;
+  if (preference !== "system" || typeof window.matchMedia !== "function") return;
+
+  const query = window.matchMedia("(prefers-color-scheme: light)");
+  const handler = event => {
+    // Ignore callbacks from a previous preference/listener if cleanup failed.
+    if (systemThemeMediaQuery !== query || systemThemeChangeHandler !== handler) return;
+    applyResolvedTheme(event.matches ? "light" : "dark");
+  };
+  systemThemeMediaQuery = query;
+  systemThemeChangeHandler = handler;
+  if (typeof query.addEventListener === "function") query.addEventListener("change", handler);
+  else if (typeof query.addListener === "function") query.addListener(handler);
+}
+
+function applyThemePreference(preference, { persist = false } = {}) {
+  const themePreference = ["dark", "light", "system"].includes(preference) ? preference : "dark";
+  if (persist) saveTheme(themePreference);
+  applyResolvedTheme(resolveThemePreference(themePreference));
+  syncSystemThemeListener(themePreference);
+  return themePreference;
+}
+
+function initTheme() {
+  applyThemePreference(loadTheme());
 }
 
 function toggleTheme() {
   const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
   const newTheme = currentTheme === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", newTheme);
-  saveTheme(newTheme);
-  syncViewModeBadgeText(newTheme);
-  // Force the next picker open to rebuild so its labels and disabled-row
-  // title match the new language.
-  modePickerTheme = null;
-  // If the picker is currently open, close it first — its labels and
-  // tooltips are now stale until the next open rebuilds them. Leaving
-  // it open during the rebuild would show mixed-language content for
-  // a frame.
-  if (modePickerEl?.classList.contains("open")) closeModePicker();
+  applyThemePreference(newTheme, { persist: true });
   showToast(`已切换到${newTheme === "dark" ? "深色" : "浅色"}模式`, "info");
 }
 
@@ -790,7 +830,7 @@ function openSettingsModal(selectedProfileId = null) {
     remember: true,
     refreshInterval: 10,
   };
-  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  const themePreference = loadTheme();
 
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -833,9 +873,14 @@ function openSettingsModal(selectedProfileId = null) {
               <input type="checkbox" id="sRemember" ${cfg.remember ? "checked" : ""}>
               <label for="sRemember">记住我 (localStorage)</label>
             </div>
-            <div class="checkbox-group">
-              <input type="checkbox" id="sTheme" ${currentTheme === "dark" ? "checked" : ""}>
-              <label for="sTheme">深色模式</label>
+            <div class="input-group">
+              <label class="input-label" for="sTheme">外观主题</label>
+              <select class="input-field" id="sTheme">
+                <option value="system" ${themePreference === "system" ? "selected" : ""}>跟随系统</option>
+                <option value="dark" ${themePreference === "dark" ? "selected" : ""}>深色模式</option>
+                <option value="light" ${themePreference === "light" ? "selected" : ""}>浅色模式</option>
+              </select>
+              <span class="input-hint">选择“跟随系统”后，面板会随设备的明暗外观自动切换。</span>
             </div>
             <div class="config-actions">
               <button class="btn btn-secondary" id="cancelSettings">取消</button>
@@ -942,7 +987,7 @@ function openSettingsModal(selectedProfileId = null) {
     const url = document.getElementById("sApiUrl").value.trim();
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
-    const themeWantsDark = document.getElementById("sTheme").checked;
+    const themePreference = document.getElementById("sTheme").value;
     const refreshInput = document.getElementById("sRefreshInterval");
     const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10)) ? parseInt(refreshInput.value, 10) : 10;
 
@@ -971,11 +1016,7 @@ function openSettingsModal(selectedProfileId = null) {
       return;
     }
 
-    const theme = themeWantsDark ? "dark" : "light";
-    document.documentElement.setAttribute("data-theme", theme);
-    saveTheme(theme);
-    syncViewModeBadgeText(theme);
-    modePickerTheme = null;
+    applyThemePreference(themePreference, { persist: true });
     await reconnectProfile(profile);
   });
 

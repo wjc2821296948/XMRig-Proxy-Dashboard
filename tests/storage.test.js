@@ -137,6 +137,9 @@ test("theme storage ignores unsupported values and defaults to dark", () => {
   saveTheme("blue");
   assert.equal(loadTheme(), "dark");
 
+  saveTheme("system");
+  assert.equal(loadTheme(), "system");
+
   saveTheme("light");
   assert.equal(loadTheme(), "light");
 
