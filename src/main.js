@@ -35,6 +35,7 @@ import {
 // Global state
 let refreshInterval = null;
 let isFetching = false;
+let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
@@ -1134,7 +1135,8 @@ function init() {
   // Background tabs throttle timers, so refresh immediately when the user
   // returns. fetchAndRender() owns in-flight request deduplication. Keep the
   // handler scoped to read-only mode so it cannot replace an open settings UI.
-  registerVisibilityRefresh({
+  cleanupVisibilityRefresh?.();
+  cleanupVisibilityRefresh = registerVisibilityRefresh({
     documentRef: document,
     hasConfig: () => Boolean(getConfig()),
     shouldRefresh: () => activeDashboardMode === "readonly",
