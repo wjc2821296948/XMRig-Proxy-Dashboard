@@ -89,6 +89,12 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 
+  const headResponse = await fetch(baseUrl, { method: "HEAD" });
+  assert.equal(headResponse.status, homepage.status);
+  assert.equal(headResponse.headers.get("content-type"), homepage.headers.get("content-type"));
+  assert.equal(headResponse.headers.get("content-length"), homepage.headers.get("content-length"));
+  assert.equal(await headResponse.text(), "");
+
   // Send a raw HTTP request because fetch rejects malformed request targets
   // before they reach the server. The server must answer safely with 400.
   const malformedResponse = await new Promise((resolve, reject) => {
@@ -132,10 +138,21 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 404, `${path} must not be served`);
-    await response.arrayBuffer();
+    assert.match(response.headers.get("content-type"), /^text\/plain; charset=utf-8$/);
+    const body = await response.text();
+    assert.equal(body, "Not Found");
+    assert.doesNotMatch(body, /package\\.json|README\\.md|\\.git|outside-secret|private readme/i);
   }
 
   const postResponse = await fetch(baseUrl, { method: "POST" });
   assert.equal(postResponse.status, 405);
   assert.equal(postResponse.headers.get("allow"), "GET, HEAD");
+  assert.match(postResponse.headers.get("content-type"), /^text\/plain; charset=utf-8$/);
+  assert.equal(await postResponse.text(), "Method Not Allowed");
+
+  const unsupportedMethodResponse = await fetch(baseUrl, { method: "PUT" });
+  assert.equal(unsupportedMethodResponse.status, 405);
+  assert.equal(unsupportedMethodResponse.headers.get("allow"), "GET, HEAD");
+  assert.match(unsupportedMethodResponse.headers.get("content-type"), /^text\/plain; charset=utf-8$/);
+  assert.equal(await unsupportedMethodResponse.text(), "Method Not Allowed");
 });
