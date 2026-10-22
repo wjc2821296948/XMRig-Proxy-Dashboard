@@ -20,7 +20,7 @@
 |------|------|
 | **实时监控** | 自动每 10 秒刷新一次，展示算力、矿工、上游矿池、系统资源等关键指标 |
 | **零知识架构** | 服务器**仅提供静态文件**，**不知晓**用户连接的 Proxy 地址、Token、任何配置 |
-| **本地认证** | Access Token 仅保存在浏览器 `localStorage` / `sessionStorage`，关闭浏览器即可清除 |
+| **本地认证** | Access Token 仅保存在浏览器本地：`localStorage` 会持续保存，直到用户清除；`sessionStorage` 通常随当前标签页会话结束而清除 |
 | **多 Proxy 配置** | 可保存多组 Proxy URL / Token，一键切换当前监控目标 |
 | **记住我** | 可选 `localStorage` 持久化，或 `sessionStorage` 仅会话保留 |
 | **现代 UI** | 深色主题、响应式布局、Skeleton 加载、Toast 通知、Loading 动画 |
