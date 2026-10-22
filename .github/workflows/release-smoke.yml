@@ -1,0 +1,212 @@
+name: Release and deployment smoke
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package-contract:
+    name: Package contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Pack release artifact
+        run: npm pack --json > pack.json
+
+      - name: Verify release contents and dependency-free contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const pkg = require("./package.json");
+          const packed = JSON.parse(fs.readFileSync("pack.json", "utf8"))[0];
+          const files = new Set(packed.files.map(file => file.path));
+
+          const required = [
+            "package.json",
+            "LICENSE",
+            "README.md",
+            "README.en.md",
+            "index.html",
+            "_headers",
+            "styles.css",
+            "panel.png",
+            "bin/server.js",
+            "src/api.js",
+            "src/main.js",
+            "src/public-assets.js",
+            "src/status.js",
+            "src/storage.js",
+            "src/ui.js",
+          ];
+
+          for (const file of required) {
+            if (!files.has(file)) throw new Error(`release tarball is missing ${file}`);
+          }
+
+          for (const prefix of [".github/", "tests/"]) {
+            if ([...files].some(file => file.startsWith(prefix))) {
+              throw new Error(`release tarball must not contain ${prefix}`);
+            }
+          }
+
+          if (files.has("social-preview.png")) {
+            throw new Error("social-preview.png is repository metadata and should not inflate the npm package");
+          }
+
+          for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+            if (pkg[field] && Object.keys(pkg[field]).length > 0) {
+              throw new Error(`${field} must stay empty for the dependency-free dashboard package`);
+            }
+          }
+
+          if (pkg.scripts?.preinstall || pkg.scripts?.install || pkg.scripts?.postinstall) {
+            throw new Error("install lifecycle scripts are not allowed in this zero-dependency package");
+          }
+          NODE
+
+  installed-cli-smoke:
+    name: Installed CLI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Pack and install the exact release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(npm pack --silent)"
+          mkdir -p "$RUNNER_TEMP/xmrig-dashboard-smoke"
+          cd "$RUNNER_TEMP/xmrig-dashboard-smoke"
+          npm init -y >/dev/null 2>&1
+          npm install --ignore-scripts "$GITHUB_WORKSPACE/$archive"
+
+      - name: Start installed dashboard CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/xmrig-dashboard-smoke"
+          HOST=127.0.0.1 PORT=18080 ./node_modules/.bin/xmrig-proxy-dashboard >server.log 2>&1 &
+          echo $! >server.pid
+
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:18080/ >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+
+          cat server.log
+          exit 1
+
+      - name: Verify packaged server behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:18080
+
+          curl --fail --silent "$base/" | grep -q "XMRig Proxy Dashboard"
+          curl --fail --silent --head "$base/src/main.js" | grep -qi "^content-type: text/javascript"
+
+          headers="$(curl --fail --silent --head "$base/")"
+          grep -qi "^x-content-type-options: nosniff" <<<"$headers"
+          grep -qi "^x-frame-options: DENY" <<<"$headers"
+          grep -qi "^content-security-policy: frame-ancestors 'none'" <<<"$headers"
+
+          for path in /package.json /README.md /.git/config /tests/static.test.js; do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base$path")"
+            test "$code" = "404"
+          done
+
+      - name: Stop installed dashboard CLI
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/xmrig-dashboard-smoke/server.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/xmrig-dashboard-smoke/server.pid")" 2>/dev/null || true
+          fi
+
+  deployment-module-graph:
+    name: Deployment module graph smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Pack and unpack deployable artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(npm pack --silent)"
+          mkdir -p "$RUNNER_TEMP/xmrig-dashboard-package"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/xmrig-dashboard-package"
+
+      - name: Verify browser module graph exists in release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_ROOT="$RUNNER_TEMP/xmrig-dashboard-package/package" node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const root = process.env.PACKAGE_ROOT;
+          const entry = path.join(root, "src/main.js");
+          const seen = new Set();
+
+          function walk(file) {
+            const absolute = path.resolve(file);
+            if (seen.has(absolute)) return;
+            seen.add(absolute);
+
+            const source = fs.readFileSync(absolute, "utf8");
+            const imports = [
+              ...source.matchAll(/\bimport\s+(?:[^"'\n]+?\s+from\s+)?["'](.+?)["']/g),
+            ].map(match => match[1]);
+
+            for (const specifier of imports) {
+              if (!specifier.startsWith(".")) {
+                throw new Error(`browser bundle unexpectedly imports external module ${specifier} from ${path.relative(root, absolute)}`);
+              }
+
+              const target = path.resolve(path.dirname(absolute), specifier);
+              if (!target.startsWith(root + path.sep)) {
+                throw new Error(`module import escapes package root: ${specifier}`);
+              }
+              if (!fs.existsSync(target)) {
+                throw new Error(`packaged module is missing: ${path.relative(root, target)}`);
+              }
+              walk(target);
+            }
+          }
+
+          walk(entry);
+
+          if (seen.size < 2) {
+            throw new Error("module graph smoke test did not traverse application modules");
+          }
+
+          console.log(`Verified ${seen.size} packaged browser modules`);
+          NODE
