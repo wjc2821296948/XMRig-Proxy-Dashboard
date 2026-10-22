@@ -1130,6 +1130,14 @@ function init() {
   // operator sees the not-connected state at a glance.
   setRibbonConnectState("disconnected");
 
+  // Background tabs throttle timers, so refresh immediately when the user
+  // returns. fetchAndRender() already deduplicates in-flight requests.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!getConfig() || activeDashboardMode !== "readonly") return;
+    void fetchAndRender();
+  });
+
   // Load saved config
   const cfg = loadConfig();
   if (cfg) {
