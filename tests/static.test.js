@@ -202,12 +202,12 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
   assert.equal(matchesAllowlistedPath("Src/main.js", "src/main.js", "linux"), false);
 });
 
-test("dashboard refreshes when a background tab becomes visible", () => {
+test("dashboard delegates visibility refresh to the tested helper", () => {
   const source = read("src/main.js");
-  assert.match(source, /document\.addEventListener\("visibilitychange",\s*\(\) => \{/);
-  assert.match(source, /document\.visibilityState !== "visible"/);
-  assert.match(source, /!getConfig\(\) \|\| activeDashboardMode !== "readonly"/);
-  assert.match(source, /void fetchAndRender\(\)/);
+  assert.match(source, /import \\{ registerVisibilityRefresh \\} from "\\.\\/visibility-refresh\\.js"/);
+  assert.match(source, /registerVisibilityRefresh\\(\\{/);
+  assert.match(source, /shouldRefresh: \\(\\) => activeDashboardMode === "readonly"/);
+  assert.match(source, /refresh: fetchAndRender/);
 });
 
 test("startup does not restart polling after authentication clears the config", () => {
