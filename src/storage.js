@@ -80,9 +80,12 @@ export function saveConfig(cfg) {
     return true;
   }
 
-  // In session-only mode, remove the higher-priority persistent entry first.
-  // If that cannot be done, do not claim the new config is safely active.
-  if (!safeRemove("local", CONFIG_KEY)) return false;
+  // Prefer removing any persistent value before saving a session-only config.
+  // If localStorage is blocked entirely, sessionStorage can still be usable;
+  // only fail when a persistent value is readable but cannot be removed.
+  if (!safeRemove("local", CONFIG_KEY) && safeGet("local", CONFIG_KEY) !== null) {
+    return false;
+  }
   return safeSet("session", CONFIG_KEY, serialized);
 }
 
@@ -185,14 +188,16 @@ export function saveProfile(profile) {
 
   const tokens = readProfileTokens();
   if (normalized.remember) {
-    delete tokens[normalized.id];
+    // Do not depend on sessionStorage unless there is actually a stale token
+    // to remove for this profile ID.
+    if (Object.hasOwn(tokens, normalized.id)) {
+      delete tokens[normalized.id];
+      if (!writeProfileTokens(tokens)) return null;
+    }
   } else {
     tokens[normalized.id] = normalized.apiToken;
     if (!writeProfileTokens(tokens)) return null;
   }
-  // Session storage is optional for remembered profiles; failure to clear an
-  // old session token must not prevent saving the persistent profile.
-  if (normalized.remember) writeProfileTokens(tokens);
   if (!writeProfiles(profiles)
       || !safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)
       || !saveConfig(normalized)) return null;
@@ -212,8 +217,7 @@ export function deleteProfile(id) {
   // Session tokens are only required for profiles that opted out of
   // persistent credential storage. For remembered profiles, cleanup is best
   // effort because sessionStorage may be unavailable.
-  if (!removed.remember && !writeProfileTokens(tokens)) return false;
-  if (removed.remember) writeProfileTokens(tokens);
+  if (Object.hasOwn(readProfileTokens(), id) && !writeProfileTokens(tokens)) return false;
   if (!writeProfiles(next)) return false;
   if (safeGet("local", ACTIVE_PROFILE_KEY) === id) {
     if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id) || !saveConfig(next[0])) return false;
@@ -398,10 +402,10 @@ export function loadWriteAccess(apiUrl) {
  */
 export function saveWriteAccess(enabled, apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
-  if (!target) return;
+  if (!target) return false;
   const map = readWriteAccessMap();
   map[target] = Boolean(enabled);
-  writeWriteAccessMap(map);
+  return writeWriteAccessMap(map);
 }
 
 /**
@@ -416,14 +420,14 @@ export function clearWriteAccess(apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
   if (!target) {
     // No URL provided and no config saved — clear everything for safety.
-    safeRemove("local", WRITE_KEY);
-    return;
+    return safeRemove("local", WRITE_KEY);
   }
   const map = readWriteAccessMap();
   if (target in map) {
     delete map[target];
-    writeWriteAccessMap(map);
+    return writeWriteAccessMap(map);
   }
+  return true;
 }
 
 /* Write-access storage format:
@@ -448,7 +452,7 @@ function readWriteAccessMap() {
 }
 
 function writeWriteAccessMap(map) {
-  safeSet("local", WRITE_KEY, JSON.stringify(map));
+  return safeSet("local", WRITE_KEY, JSON.stringify(map));
 }
 
 /* --------------------------------------------------------------------------
