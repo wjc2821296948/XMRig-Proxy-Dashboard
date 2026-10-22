@@ -49,3 +49,21 @@ test("basic UI status helper preserves offline and warning boundaries", () => {
     { cls: "status-online", text: "在线" },
   );
 });
+
+
+test("metric formatters safely handle invalid API values", () => {
+  for (const value of [NaN, Infinity, -Infinity, -1]) {
+    assert.equal(formatHashrate(value), "—");
+    assert.equal(formatBytes(value), "—");
+    assert.equal(formatUptime(value), "—");
+  }
+  assert.equal(formatNumber(NaN), "—");
+  assert.equal(formatNumber(Infinity), "—");
+});
+
+test("zero metrics remain distinct from unavailable metrics", () => {
+  assert.equal(formatHashrate(0), "0 H/s");
+  assert.equal(formatBytes(0), "0 B");
+  assert.equal(formatUptime(0), "0d 0h 0m");
+  assert.equal(formatNumber(0), "0");
+});
