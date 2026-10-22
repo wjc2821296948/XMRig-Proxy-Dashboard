@@ -136,7 +136,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   ]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 404, `${path} must not be served`);
-    assert.match(response.headers.get("content-type"), /^text\\/plain; charset=utf-8$/);
+    assert.match(response.headers.get("content-type"), /^text\/plain; charset=utf-8$/);
     const body = await response.text();
     assert.equal(body, "Not Found");
     assert.doesNotMatch(body, /package\\.json|README\\.md|\\.git|outside-secret|private readme/i);
@@ -145,12 +145,12 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   const postResponse = await fetch(baseUrl, { method: "POST" });
   assert.equal(postResponse.status, 405);
   assert.equal(postResponse.headers.get("allow"), "GET, HEAD");
-  assert.match(postResponse.headers.get("content-type"), /^text\\/plain; charset=utf-8$/);
+  assert.match(postResponse.headers.get("content-type"), /^text\/plain; charset=utf-8$/);
   assert.equal(await postResponse.text(), "Method Not Allowed");
 
   const unsupportedMethodResponse = await fetch(baseUrl, { method: "PUT" });
   assert.equal(unsupportedMethodResponse.status, 405);
   assert.equal(unsupportedMethodResponse.headers.get("allow"), "GET, HEAD");
-  assert.match(unsupportedMethodResponse.headers.get("content-type"), /^text\\/plain; charset=utf-8$/);
+  assert.match(unsupportedMethodResponse.headers.get("content-type"), /^text\/plain; charset=utf-8$/);
   assert.equal(await unsupportedMethodResponse.text(), "Method Not Allowed");
 });
