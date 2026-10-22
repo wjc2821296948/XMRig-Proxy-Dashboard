@@ -118,6 +118,30 @@ test("request client rejects write methods and request bodies", async () => {
   assert.equal(fetchCalled, false);
 });
 
+test("request has a timeout fallback when AbortSignal.timeout is unavailable", async () => {
+  const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, "timeout");
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  try {
+    Object.defineProperty(AbortSignal, "timeout", { configurable: true, writable: true, value: undefined });
+    globalThis.setTimeout = callback => {
+      callback();
+      return 123;
+    };
+    globalThis.clearTimeout = () => {};
+    globalThis.fetch = async (_url, options) => {
+      if (options.signal.aborted) throw options.signal.reason;
+      return { ok: true, status: 200, async json() { return {}; } };
+    };
+    await assert.rejects(request("/1/summary"), error => error.name === "TimeoutError" && error.message === "Request timed out");
+  } finally {
+    if (originalTimeout) Object.defineProperty(AbortSignal, "timeout", originalTimeout);
+    else delete AbortSignal.timeout;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
 test("request masks the token in debug output", async () => {
   const debugMessages = [];
   console.debug = message => debugMessages.push(message);

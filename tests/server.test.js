@@ -85,6 +85,8 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   }
   assert.ok(homepage, `Static server did not start: ${lastError}`);
   assert.equal(homepage.status, 200);
+  assert.match(homepage.headers.get("content-security-policy"), /default-src 'self'/);
+  assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 
   const headResponse = await fetch(baseUrl, { method: "HEAD" });
