@@ -10,6 +10,7 @@
  */
 
 import { request, probeWriteAccess } from "./api.js";
+import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
   loadConfig, saveConfig, clearConfig, getConfig,
   loadProfiles, saveProfile, deleteProfile, setActiveProfile,
@@ -34,6 +35,7 @@ import {
 // Global state
 let refreshInterval = null;
 let isFetching = false;
+let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
@@ -1129,6 +1131,17 @@ function init() {
   // panel is not actually talking to anything — paint it yellow so the
   // operator sees the not-connected state at a glance.
   setRibbonConnectState("disconnected");
+
+  // Background tabs throttle timers, so refresh immediately when the user
+  // returns. fetchAndRender() owns in-flight request deduplication. Keep the
+  // handler scoped to read-only mode so it cannot replace an open settings UI.
+  cleanupVisibilityRefresh?.();
+  cleanupVisibilityRefresh = registerVisibilityRefresh({
+    documentRef: document,
+    hasConfig: () => Boolean(getConfig()),
+    shouldRefresh: () => activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
+  });
 
   // Load saved config
   const cfg = loadConfig();
