@@ -82,6 +82,27 @@ test("request builds the URL, injects auth, and exposes an abort signal", async 
   assert.equal(received.options.signal.aborted, false);
 });
 
+test("request has a timeout fallback when AbortSignal.timeout is unavailable", async () => {
+  const originalTimeout = AbortSignal.timeout;
+  const originalSetTimeout = globalThis.setTimeout;
+  try {
+    Object.defineProperty(AbortSignal, "timeout", { configurable: true, value: undefined });
+    globalThis.setTimeout = callback => {
+      callback();
+      return 123;
+    };
+    globalThis.clearTimeout = () => {};
+    globalThis.fetch = async (_url, options) => {
+      if (options.signal.aborted) throw options.signal.reason;
+      return { ok: true, status: 200, async json() { return {}; } };
+    };
+    await assert.rejects(request("/1/summary"), error => error.name === "TimeoutError" && error.message === "Request timed out");
+  } finally {
+    Object.defineProperty(AbortSignal, "timeout", { configurable: true, writable: true, value: originalTimeout });
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
 test("request masks the token in debug output", async () => {
   const debugMessages = [];
   console.debug = message => debugMessages.push(message);
