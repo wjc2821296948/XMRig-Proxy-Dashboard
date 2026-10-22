@@ -18,6 +18,9 @@ function ensureToastContainer() {
     toastContainerPromise = new Promise((resolve) => {
       const container = document.createElement("div");
       container.id = "toast-container";
+      container.setAttribute("role", "status");
+      container.setAttribute("aria-live", "polite");
+      container.setAttribute("aria-atomic", "true");
       document.body.appendChild(container);
       toastContainer = container;
       resolve(container);
@@ -42,7 +45,13 @@ export async function showToast(message, type = "info", durationMs = 3000) {
   requestAnimationFrame(() => toast.classList.add("show"));
   setTimeout(() => {
     toast.classList.remove("show");
-    toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+    // A transitionend event is not guaranteed (e.g. reduced motion or a
+    // detached document), so always provide a bounded cleanup fallback.
+    const removalTimer = setTimeout(() => toast.remove(), 500);
+    toast.addEventListener("transitionend", () => {
+      clearTimeout(removalTimer);
+      toast.remove();
+    }, { once: true });
   }, durationMs);
 }
 

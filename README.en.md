@@ -21,7 +21,7 @@ Built for users looking for an **XMRig Proxy web UI, monitoring dashboard, or li
 | **Multiple Proxy profiles** | Save multiple Proxy URLs / tokens locally and switch between them with one click |
 | **Real-time Monitoring** | Auto-refreshes every 10 seconds, showing hashrate, miners, upstream pools, system resources |
 | **Zero-Knowledge Architecture** | Server **only serves static files**, **knows nothing** about your Proxy address, Token, or any config |
-| **Local Auth** | Access Token stored only in browser `localStorage` / `sessionStorage`, cleared on browser close |
+| **Local Auth** | Access Token stays in browser storage: `localStorage` persists across browser restarts, while `sessionStorage` is scoped to the current tab session |
 | **Remember Me** | Optional `localStorage` persistence, or `sessionStorage` for session-only |
 | **Modern UI** | Dark theme, responsive layout, Skeleton loading, Toast notifications, Loading animations |
 | **Security First** | CSP restrictions, escaped dynamic values, sanitized token logs; anti-framing requires HTTP response headers |
