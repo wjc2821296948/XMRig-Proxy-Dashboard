@@ -180,8 +180,12 @@ export function saveProfile(profile) {
     delete tokens[normalized.id];
   } else {
     tokens[normalized.id] = normalized.apiToken;
+    if (!writeProfileTokens(tokens)) return null;
   }
-  if (!writeProfileTokens(tokens) || !writeProfiles(profiles)
+  // Session storage is optional for remembered profiles; failure to clear an
+  // old session token must not prevent saving the persistent profile.
+  if (normalized.remember) writeProfileTokens(tokens);
+  if (!writeProfiles(profiles)
       || !safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)
       || !saveConfig(normalized)) return null;
   return normalized;
@@ -318,8 +322,8 @@ const VALID_THEMES = new Set(["dark", "light", "system"]);
  * @param {"dark" | "light" | "system"} theme
  */
 export function saveTheme(theme) {
-  if (!VALID_THEMES.has(theme)) return;
-  safeSet("local", THEME_KEY, theme);
+  if (!VALID_THEMES.has(theme)) return false;
+  return safeSet("local", THEME_KEY, theme);
 }
 
 /**
