@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { createServer as createTcpServer } from "node:net";
+import { connect, createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,6 +88,21 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.match(homepage.headers.get("content-security-policy"), /default-src 'self'/);
   assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
+
+  // Send a raw HTTP request because fetch rejects malformed request targets
+  // before they reach the server. The server must answer safely with 400.
+  const malformedResponse = await new Promise((resolve, reject) => {
+    const socket = connect(port, "127.0.0.1", () => {
+      socket.write("GET http://[::1/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    });
+    let response = "";
+    socket.setEncoding("utf8");
+    socket.on("data", chunk => { response += chunk; });
+    socket.on("error", reject);
+    socket.on("end", () => resolve(response));
+  });
+  assert.match(malformedResponse, /^HTTP\/1\.1 400 Bad Request/);
+  assert.match(malformedResponse, /content-type: text\/plain; charset=utf-8/i);
 
   const moduleResponse = await fetch(`${baseUrl}/src/main.js`);
   assert.equal(moduleResponse.status, 200);
