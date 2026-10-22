@@ -5,11 +5,19 @@ export function registerVisibilityRefresh({
   shouldRefresh = () => true,
   refresh,
 }) {
-  const onVisibilityChange = () => {
+  let refreshing = false;
+  const onVisibilityChange = async () => {
     if (documentRef.visibilityState !== "visible") return;
-    if (!hasConfig() || !shouldRefresh()) return;
-    // The caller owns request deduplication and error handling.
-    void refresh();
+    if (!hasConfig() || !shouldRefresh() || refreshing) return;
+    refreshing = true;
+    try {
+      await refresh();
+    } catch {
+      // The refresh owner handles user-facing errors; avoid an unhandled
+      // rejection escaping from an event listener.
+    } finally {
+      refreshing = false;
+    }
   };
 
   documentRef.addEventListener("visibilitychange", onVisibilityChange);
