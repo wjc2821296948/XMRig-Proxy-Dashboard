@@ -448,6 +448,7 @@ test("session-only config remains usable when localStorage is inaccessible", () 
     setItem() { throw new DOMException("blocked", "SecurityError"); }
   }
   globalThis.localStorage = new BlockedLocalStorage();
+  globalThis.sessionStorage = new MemoryStorage();
   const cfg = { apiUrl: "https://session.example", apiToken: "", remember: false, refreshInterval: 10 };
 
   assert.equal(saveConfig(cfg), true);
