@@ -425,6 +425,7 @@ test("remembered profiles still save when sessionStorage writes are blocked", as
   class BlockedSessionStorage extends MemoryStorage {
     setItem() { throw new DOMException("blocked", "SecurityError"); }
   }
+  globalThis.localStorage = new MemoryStorage();
   globalThis.sessionStorage = new BlockedSessionStorage();
   const { saveProfile } = await import("../src/storage.js");
 
