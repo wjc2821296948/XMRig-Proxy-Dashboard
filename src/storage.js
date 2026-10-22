@@ -203,15 +203,20 @@ export function saveProfile(profile) {
 export function deleteProfile(id) {
   const profiles = loadProfiles();
   if (profiles.length <= 1) return false;
+  const removed = profiles.find(profile => profile.id === id);
+  if (!removed) return false;
   const next = profiles.filter(profile => profile.id !== id);
-  if (next.length === profiles.length) return false;
   const tokens = readProfileTokens();
   delete tokens[id];
-  writeProfileTokens(tokens);
-  writeProfiles(next);
+
+  // Session tokens are only required for profiles that opted out of
+  // persistent credential storage. For remembered profiles, cleanup is best
+  // effort because sessionStorage may be unavailable.
+  if (!removed.remember && !writeProfileTokens(tokens)) return false;
+  if (removed.remember) writeProfileTokens(tokens);
+  if (!writeProfiles(next)) return false;
   if (safeGet("local", ACTIVE_PROFILE_KEY) === id) {
-    safeSet("local", ACTIVE_PROFILE_KEY, next[0].id);
-    saveConfig(next[0]);
+    if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id) || !saveConfig(next[0])) return false;
   }
   return true;
 }
@@ -220,8 +225,7 @@ export function deleteProfile(id) {
 export function setActiveProfile(id) {
   const profile = loadProfiles().find(item => item.id === id);
   if (!profile) return null;
-  safeSet("local", ACTIVE_PROFILE_KEY, profile.id);
-  saveConfig(profile);
+  if (!safeSet("local", ACTIVE_PROFILE_KEY, profile.id) || !saveConfig(profile)) return null;
   return profile;
 }
 
