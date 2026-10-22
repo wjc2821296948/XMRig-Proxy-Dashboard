@@ -419,3 +419,22 @@ test("quota errors do not report profile or config saves as successful", async (
   assert.equal(saveConfig({ apiUrl: "https://proxy.example", apiToken: "", remember: true, refreshInterval: 10 }), false);
   assert.equal(saveProfile({ id: "quota-profile", name: "Quota", apiUrl: "https://proxy.example", apiToken: "secret", remember: true, refreshInterval: 10 }), null);
 });
+
+
+test("remembered profiles still save when sessionStorage writes are blocked", async () => {
+  class BlockedSessionStorage extends MemoryStorage {
+    setItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.sessionStorage = new BlockedSessionStorage();
+  const { saveProfile } = await import("../src/storage.js");
+
+  const profile = saveProfile({
+    id: "persistent-only",
+    name: "Persistent",
+    apiUrl: "https://proxy.example",
+    apiToken: "secret",
+    remember: true,
+    refreshInterval: 10,
+  });
+  assert.equal(profile?.id, "persistent-only");
+});
