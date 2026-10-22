@@ -322,10 +322,15 @@ export function loadConfig() {
 
 /** Clear connection config from both storages (logout). Does NOT touch theme. */
 export function clearConfig() {
-  safeRemove("local", CONFIG_KEY);
-  safeRemove("session", CONFIG_KEY);
-  safeRemove("session", PROFILE_TOKENS_KEY);
-  safeRemove("local", ACTIVE_PROFILE_KEY);
+  // Attempt every removal even if one store is blocked. Report partial cleanup
+  // so callers never claim credentials were definitely cleared when they were not.
+  const results = [
+    safeRemove("local", CONFIG_KEY),
+    safeRemove("session", CONFIG_KEY),
+    safeRemove("session", PROFILE_TOKENS_KEY),
+    safeRemove("local", ACTIVE_PROFILE_KEY),
+  ];
+  return results.every(Boolean);
 }
 
 /* --------------------------------------------------------------------------
