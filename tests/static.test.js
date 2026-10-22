@@ -146,6 +146,8 @@ test("system theme preference follows operating-system appearance changes", () =
   assert.match(storage, /new Set\(\["dark", "light", "system"\]\)/);
   assert.match(main, /prefers-color-scheme:\s*light/);
   assert.match(main, /query\.addEventListener\("change", handler\)/);
+  assert.match(main, /systemThemeMediaQuery !== query \|\| systemThemeChangeHandler !== handler/);
+  assert.match(main, /catch \{[\s\S]*?stale listener/i);
   assert.match(main, /applyThemePreference\(themePreference, \{ persist: true \}\)/);
   assert.match(main, /<option value="system"/);
 });
