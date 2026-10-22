@@ -72,7 +72,8 @@ function combineRequestSignals(timeoutSignal, callerSignal) {
  * constraint without having to dig.
  *
  * @param {string} path   Path relative to the XMRig-Proxy API base (e.g. "/1/summary").
- * @param {object} [options] Optional fetch options (method, body, etc.).
+ * @param {object} [options] Optional fetch options (headers and signal).
+ *   This client is read-only: only GET requests without a body are allowed.
  * @returns {Promise<any>} Resolves with parsed JSON on success.
  */
 export async function request(path, options = {}) {
@@ -81,7 +82,18 @@ export async function request(path, options = {}) {
     throw new Error("API configuration missing");
   }
 
-  const url = new URL(path, cfg.apiUrl).toString();
+  const baseUrl = new URL(cfg.apiUrl);
+  const requestUrl = new URL(path, baseUrl);
+  // Never attach a saved proxy token to a caller-supplied absolute URL or
+  // protocol-relative path that escapes the configured proxy's origin.
+  if (requestUrl.origin !== baseUrl.origin || requestUrl.username || requestUrl.password) {
+    throw new Error("API request URL must stay on the configured proxy origin");
+  }
+  const method = String(options.method || "GET").toUpperCase();
+  if (method !== "GET" || options.body != null) {
+    throw new Error("Dashboard API client is read-only");
+  }
+  const url = requestUrl.toString();
   const headers = new Headers(options.headers || {});
   const apiToken = typeof cfg.apiToken === "string" ? cfg.apiToken : "";
   const hasToken = apiToken.length > 0;
