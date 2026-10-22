@@ -393,8 +393,13 @@ test("malformed and non-object session token payloads safely fall back to empty 
 
 
 test("storage reads that throw degrade to empty config and default theme", () => {
-  globalThis.localStorage = { getItem() { throw new DOMException("blocked", "SecurityError"); }, setItem() { throw new DOMException("blocked", "SecurityError"); }, removeItem() { throw new DOMException("blocked", "SecurityError"); } };
-  globalThis.sessionStorage = { getItem() { throw new DOMException("blocked", "SecurityError"); }, setItem() { throw new DOMException("blocked", "SecurityError"); }, removeItem() { throw new DOMException("blocked", "SecurityError"); } };
+  class BlockedStorage extends MemoryStorage {
+    getItem() { throw new DOMException("blocked", "SecurityError"); }
+    setItem() { throw new DOMException("blocked", "SecurityError"); }
+    removeItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new BlockedStorage();
+  globalThis.sessionStorage = new BlockedStorage();
 
   assert.equal(loadConfig(), null);
   assert.equal(loadTheme(), "dark");
