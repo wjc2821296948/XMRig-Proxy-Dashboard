@@ -54,3 +54,29 @@ test("visibility refresh respects dashboard mode and unregisters cleanly", () =>
   documentRef.dispatchEvent(new Event("visibilitychange"));
   assert.equal(refreshes, 1);
 });
+
+
+test("visibility refresh deduplicates events while a refresh is in flight", async () => {
+  const documentRef = new TestDocument();
+  let releaseRefresh;
+  let refreshes = 0;
+  const pending = new Promise(resolve => { releaseRefresh = resolve; });
+  registerVisibilityRefresh({
+    documentRef,
+    hasConfig: () => true,
+    refresh: () => { refreshes += 1; return pending; },
+  });
+
+  documentRef.visibilityState = "visible";
+  documentRef.dispatchEvent(new Event("visibilitychange"));
+  documentRef.dispatchEvent(new Event("visibilitychange"));
+  await Promise.resolve();
+  assert.equal(refreshes, 1);
+
+  releaseRefresh();
+  await pending;
+  await new Promise(resolve => setImmediate(resolve));
+  documentRef.dispatchEvent(new Event("visibilitychange"));
+  await Promise.resolve();
+  assert.equal(refreshes, 2);
+});
