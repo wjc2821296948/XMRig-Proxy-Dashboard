@@ -600,6 +600,9 @@ test("unremovable corrupt config still falls back and surfaces a cleanup warning
 });
 
 test("failed session-only profile switches restore the previous active connection", async () => {
+  // Previous tests intentionally replace storage with throwing shims; start from usable stores.
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
   const { saveProfile, setActiveProfile, loadActiveProfileId, loadConfig } = await import("../src/storage.js");
   saveProfile({
     id: "remembered-before-switch", name: "Remembered", apiUrl: "https://remembered.example",
