@@ -37,8 +37,10 @@ globalThis.localStorage = new MemoryStorage();
 globalThis.sessionStorage = new MemoryStorage();
 
 beforeEach(() => {
-  globalThis.localStorage.clear();
-  globalThis.sessionStorage.clear();
+  // Replace, rather than merely clear, storage shims so a failure-mode fixture
+  // cannot leak a blocked/quota-exceeded implementation into later tests.
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
 });
 
 test("remembered config is stored in localStorage only", () => {
@@ -496,8 +498,8 @@ test("clearConfig overwrites credentials when removeItem fails but writes work",
   assert.equal(clearConfig(), true);
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), "");
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "");
-  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), "");
-  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), "{}");
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
 });
 
 test("clearConfig reports partial cleanup when credential storage is fully blocked", () => {
@@ -526,8 +528,8 @@ test("clearConfig reports partial cleanup when credential storage is fully block
 
   assert.equal(clearConfig(), false);
   assert.ok(globalThis.localStorage.getItem("xmrig_proxy_config").includes("local-secret"));
-  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), "");
-  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), "{}");
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
 });
 
 
