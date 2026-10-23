@@ -378,6 +378,8 @@ test("fallback request signal propagates timeout aborts and cleans up listeners"
       assert.equal(err.name, "TimeoutError");
       assert.equal(err.message, "Request timed out");
       assert.ok(err.cause instanceof DOMException);
+      assert.match(err.stack, /Caused by original timeout:/);
+      assert.match(err.stack, /The operation timed out/);
       return true;
     });
     assert.equal(listeners.size, 0);
