@@ -617,7 +617,7 @@ export function importProfiles(importedProfiles) {
     }
 
     if (merged.length > MAX_IMPORTED_PROFILES) {
-      throw new Error("导入后配置总数不能超过 100 个");
+      throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
     }
 
     const tokens = Object.assign(Object.create(null), readProfileTokens());
