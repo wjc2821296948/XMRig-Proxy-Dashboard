@@ -247,3 +247,13 @@ test("dashboard theme transitions respect reduced-motion preferences", () => {
   assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
   assert.doesNotMatch(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]{0,400}?transition:\s*none/);
 });
+
+
+test("single hashrate point avoids dividing by zero when computing chart coordinates", () => {
+  const source = read("src/main.js");
+  assert.match(
+    source,
+    /hashrates\.length <= 1 \? chartVPWidth \/ 2 : padding \+ \(i \/ \(hashrates\.length - 1\)\)/,
+  );
+  assert.doesNotMatch(source, /export \{ escapeHtml \};/);
+});
