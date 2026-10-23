@@ -249,6 +249,14 @@ test("dashboard theme transitions respect reduced-motion preferences", () => {
 });
 
 
+test("aborted refreshes are checked before rendering stale data", () => {
+  const source = read("src/main.js");
+  assert.match(
+    source,
+    /const data = await request\("\/1\/summary", \{ signal: controller\.signal \}\);\s*if \(controller\.signal\.aborted\) return;\s*renderDashboard\(data\);/,
+  );
+});
+
 test("single hashrate point avoids dividing by zero when computing chart coordinates", () => {
   const source = read("src/main.js");
   assert.match(
