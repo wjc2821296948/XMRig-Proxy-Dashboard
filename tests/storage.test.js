@@ -396,6 +396,43 @@ test("malformed and non-object session token payloads safely fall back to empty 
 });
 
 
+test("session token map rejects non-string and oversized credentials", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+  saveProfile({
+    id: "session-profile-token-validation",
+    name: "Session token validation",
+    apiUrl: "https://session.example:8080",
+    apiToken: "valid-token",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  const malformedValues = [
+    { apiToken: "object-value" },
+    ["array-token"],
+    123,
+    null,
+    "x".repeat(4097),
+  ];
+  for (const malformed of malformedValues) {
+    globalThis.sessionStorage.setItem(
+      "xmrig_proxy_session_tokens",
+      JSON.stringify({ "session-profile-token-validation": malformed }),
+    );
+    assert.equal(
+      loadProfiles()[0].apiToken,
+      "",
+      `malformed token value ${typeof malformed} must never be returned as a credential`,
+    );
+  }
+
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", JSON.stringify({
+    "session-profile-token-validation": "valid-token",
+  }));
+  assert.equal(loadProfiles()[0].apiToken, "valid-token");
+});
+
+
 test("storage reads that throw degrade to empty config and default theme", () => {
   class BlockedStorage extends MemoryStorage {
     getItem() { throw new DOMException("blocked", "SecurityError"); }

@@ -205,7 +205,17 @@ function readProfileTokens() {
       return Object.create(null);
     }
     // Keep profile IDs as own data keys; never inherit values from Object.prototype.
-    return Object.assign(Object.create(null), parsed);
+    // Session storage is user-controlled and may contain malformed values from
+    // old versions, devtools, or partial writes. Never hydrate a credential
+    // unless it is a bounded string, otherwise object values or oversized tokens
+    // could bypass normalizeProfile's token validation.
+    const tokens = Object.create(null);
+    for (const [id, token] of Object.entries(parsed)) {
+      if (typeof token === "string" && token.length <= MAX_TOKEN_LENGTH) {
+        tokens[id] = token;
+      }
+    }
+    return tokens;
   } catch {
     return Object.create(null);
   }
