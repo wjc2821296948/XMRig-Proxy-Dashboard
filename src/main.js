@@ -615,7 +615,7 @@ function renderDashboard(data) {
   });
   const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const lineChart = `
-    <svg class="hashrate-line-chart" viewBox="0 0 ${chartVPWidth} ${chartVPHeight}" width="100%" height="100%" preserveAspectRatio="none">
+    <svg class="hashrate-line-chart" viewBox="0 0 ${chartVPWidth} ${chartVPHeight}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
       <defs>
         <linearGradient id="hrGradient" x1="0%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stop-color="var(--accent-copper-deep)" stop-opacity="0.3"/>
@@ -1062,10 +1062,11 @@ async function fetchAndRender() {
   if (fetchAbortController) {
     fetchAbortController.abort();
   }
-  fetchAbortController = new AbortController();
+  const controller = new AbortController();
+  fetchAbortController = controller;
 
   try {
-    const data = await request("/1/summary", { signal: fetchAbortController.signal });
+    const data = await request("/1/summary", { signal: controller.signal });
     renderDashboard(data);
   } catch (err) {
     // Ignore abort errors — they're expected when a new request supersedes
@@ -1086,8 +1087,8 @@ async function fetchAndRender() {
       showToast(`刷新失败: ${err.message}`, "error");
     }
   } finally {
-    // Only clear if this is still our controller (not superseded)
-    if (fetchAbortController && fetchAbortController.signal.aborted) {
+    // Clear the completed controller, but never a newer request controller.
+    if (fetchAbortController === controller) {
       fetchAbortController = null;
     }
   }
@@ -1186,14 +1187,12 @@ export function escapeHtml(str) {
   const ENT_GT    = "&" + "gt;";
   const ENT_QUOT  = "&" + "quot;";
   const ENT_APOS  = "&" + "#039;";
-  const ENT_SLASH = "&" + "#x2F;"; // forward slash for defense in depth
   return String(str)
     .replace(/&/g, ENT_AMP)
     .replace(/</g, ENT_LT)
     .replace(/>/g, ENT_GT)
     .replace(/\"/g, ENT_QUOT)
     .replace(/'/g, ENT_APOS)
-    .replace(/\//g, ENT_SLASH);
 }
 
 /* ==========================================================================
