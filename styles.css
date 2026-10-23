@@ -480,7 +480,8 @@ h1 {
    ========================================================================== */
 .hashrate-chart {
   width: 100%;
-  height: 60px;
+  height: auto;
+  aspect-ratio: 5 / 1;
   margin-top: 0.5rem;
 }
 
@@ -489,6 +490,7 @@ h1 {
   height: 100%;
   display: block;
 }
+
 
 .chart-grid {
   stroke: var(--border-light);

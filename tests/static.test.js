@@ -216,7 +216,7 @@ test("startup does not restart polling after authentication clears the config", 
 
   assert.match(
     source,
-    /fetchAndRender\(\)\.then\(\(\) => \{[\s\S]*?if \(getConfig\(\)\) startAutoRefresh\(\);/,
+    /await fetchAndRender\(\);[\s\S]*?if \(getConfig\(\)\) startAutoRefresh\(\);/,
     "startup should only start auto-refresh when a saved connection still exists",
   );
   assert.doesNotMatch(
@@ -230,7 +230,7 @@ test("startup does not restart polling after authentication clears the config", 
   const reconnectProfile = source.slice(reconnectStart, reconnectEnd);
   assert.match(
     reconnectProfile,
-    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfig\(\);/,
+    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfigWithWarning\(\);/,
     "profile-switch authentication failures must stop the previous profile's timer",
   );
   assert.match(
@@ -246,4 +246,66 @@ test("dashboard theme transitions respect reduced-motion preferences", () => {
   assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
   assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
   assert.doesNotMatch(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]{0,400}?transition:\s*none/);
+});
+
+
+test("aborted refreshes are checked before rendering stale data", () => {
+  const source = read("src/main.js");
+  assert.match(
+    source,
+    /const data = await request\("\/1\/summary", \{ signal: controller\.signal \}\);\s*if \(controller\.signal\.aborted\) return;\s*renderDashboard\(data\);/,
+  );
+});
+
+test("single hashrate point avoids dividing by zero when computing chart coordinates", () => {
+  const source = read("src/main.js");
+  assert.match(
+    source,
+    /hashrates\.length <= 1 \? chartVPWidth \/ 2 : padding \+ \(i \/ \(hashrates\.length - 1\)\)/,
+  );
+  assert.doesNotMatch(source, /export \{ escapeHtml \};/);
+});
+
+
+test("write-access storage failures are surfaced to the dashboard user", () => {
+  const source = read("src/main.js");
+  assert.match(source, /if \(!saveWriteAccess\(state === "unrestricted"\)\)[\s\S]*?无法保存 Proxy 权限状态/);
+  assert.match(source, /shouldClear && !clearWriteAccess\(\)[\s\S]*?无法保存写入权限状态/);
+});
+
+
+test("hashrate chart preserves its aspect ratio on narrow and wide containers", () => {
+  const css = read("styles.css");
+  const main = read("src/main.js");
+  assert.match(css, /\.hashrate-chart\s*\{[^}]*aspect-ratio:\s*5\s*\/\s*1/s);
+  assert.match(main, /preserveAspectRatio="xMidYMid meet"/);
+  assert.doesNotMatch(main, /preserveAspectRatio="none"/);
+});
+
+
+test("profile reconnect stops old polling before requesting the new profile", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf("const reconnectProfile = async profile =>");
+  const requestAt = source.indexOf('const summaryPromise = request("/1/summary")', start);
+  const stopAt = source.indexOf("stopAutoRefresh();", start);
+  assert.ok(start >= 0 && stopAt > start && stopAt < requestAt);
+});
+
+
+test("logout shows one clear status message without duplicate cleanup toasts", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf('document.getElementById("logoutBtn")');
+  const end = source.indexOf('document.getElementById("saveSettings")', start);
+  const logout = source.slice(start, end);
+  assert.match(source, /function clearConfigWithWarning\(\{ showWarning = true \} = \{\}\)/);
+  assert.match(logout, /clearConfigWithWarning\(\{ showWarning: false \}\)/);
+  assert.match(logout, /已登出当前连接；不会删除你保存的 Proxy 配置/);
+  assert.doesNotMatch(logout, /clearConfigWithWarning\(\);/);
+});
+
+
+test("hashrate chart normalizes malformed samples and uses a nonzero scale floor", () => {
+  const source = read("src/main.js");
+  assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
+  assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });

@@ -25,6 +25,15 @@ const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
 
+let configCleanupWarningPending = false;
+
+/** Consume the warning raised when a corrupt config cannot be cleared. */
+export function consumeConfigCleanupWarning() {
+  const pending = configCleanupWarningPending;
+  configCleanupWarningPending = false;
+  return pending;
+}
+
 /* --------------------------------------------------------------------------
    Connection config
    -------------------------------------------------------------------------- */

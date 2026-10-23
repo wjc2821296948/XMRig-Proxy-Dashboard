@@ -12,7 +12,7 @@
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
-  loadConfig, saveConfig, clearConfig, getConfig,
+  loadConfig, saveConfig, clearConfig, getConfig, consumeConfigCleanupWarning,
   loadProfiles, saveProfile, deleteProfile, setActiveProfile,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme,
@@ -31,10 +31,19 @@ import {
   resetStatusTracker,
   getStatusInfo,
 } from "./status.js";
+import { escapeHtml } from "./escape-html.js";
+
+function clearConfigWithWarning({ showWarning = true } = {}) {
+  const cleared = clearConfig();
+  if (!cleared && showWarning) {
+    showToast("浏览器存储不可用，部分凭据可能仍保留。请清理站点数据后重试", "error");
+  }
+  return cleared;
+}
 
 // Global state
 let refreshInterval = null;
-let isFetching = false;
+let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
 
@@ -177,7 +186,9 @@ function setRibbonConnectState(state) {
  *                                          transient disconnects).
  */
 function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
-  if (shouldClear) clearWriteAccess();
+  if (shouldClear && !clearWriteAccess()) {
+    showToast("无法保存写入权限状态：浏览器存储不可用", "warn");
+  }
   setRibbonConnectState("disconnected");
   // Only repaint the alt row when the persisted flag actually changed;
   // a transient disconnect (network blip) should not reflash the picker.
@@ -196,7 +207,9 @@ function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
  *                                     a connection-level error toast).
  */
 function applyProbeResult(state, showUnknownToast = true) {
-  saveWriteAccess(state === "unrestricted");
+  if (!saveWriteAccess(state === "unrestricted")) {
+    showToast("无法保存 Proxy 权限状态：浏览器存储不可用，刷新后可能需要重新检测", "warn");
+  }
   if (state === "unknown" && showUnknownToast) {
     showToast("无法确认 Proxy 写入权限，配置模式已禁用（请检查网络或 CORS）", "warn");
   }
@@ -551,7 +564,7 @@ async function handleConnect() {
   } catch (err) {
     // Clear invalid config on auth failure
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       showToast("认证失败：Token 无效或已过期", "error");
     } else if (err.message.includes("timed out")) {
@@ -590,7 +603,11 @@ function renderDashboard(data) {
   setRibbonConnectState("connected");
 
   // Hashrate data
-  const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
+  const rawHashrates = data.hashrate?.total;
+  const hashrates = Array.isArray(rawHashrates) && rawHashrates.length
+    ? rawHashrates.map(value => Number.isFinite(value) && value >= 0 ? value : 0)
+    : [0,0,0,0,0,0];
+  // Use a positive floor so an all-zero series never produces NaN coordinates.
   const maxHr = Math.max(...hashrates, 1);
   const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
 
@@ -606,17 +623,17 @@ function renderDashboard(data) {
   ];
 
   // Line chart data points for SVG
-  const chartWidth = 280;
-  const chartHeight = 60;
-  const padding = 20;
+  const chartVPWidth = 1000;
+  const chartVPHeight = 200;
+  const padding = 50;
   const points = hashrates.map((h, i) => {
-    const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
-    const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
+    const x = hashrates.length <= 1 ? chartVPWidth / 2 : padding + (i / (hashrates.length - 1)) * (chartVPWidth - 2 * padding);
+    const y = chartVPHeight - padding - ((h / maxHr) * (chartVPHeight - 2 * padding));
     return { x, y, value: formatHashrate(h), label: timeLabels[i], color: chartColors[i] };
   });
   const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const lineChart = `
-    <svg class="hashrate-line-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="100%" height="100%">
+    <svg class="hashrate-line-chart" viewBox="0 0 ${chartVPWidth} ${chartVPHeight}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
       <defs>
         <linearGradient id="hrGradient" x1="0%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stop-color="var(--accent-copper-deep)" stop-opacity="0.3"/>
@@ -631,12 +648,12 @@ function renderDashboard(data) {
       </defs>
       <!-- Grid lines -->
       <g class="chart-grid" stroke="var(--border-light)" stroke-width="0.5">
-        <line x1="${padding}" y1="${padding}" x2="${chartWidth - padding}" y2="${padding}"/>
-        <line x1="${padding}" y1="${chartHeight / 2}" x2="${chartWidth - padding}" y2="${chartHeight / 2}"/>
-        <line x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}"/>
+        <line x1="${padding}" y1="${padding}" x2="${chartVPWidth - padding}" y2="${padding}"/>
+        <line x1="${padding}" y1="${chartVPHeight / 2}" x2="${chartVPWidth - padding}" y2="${chartVPHeight / 2}"/>
+        <line x1="${padding}" y1="${chartVPHeight - padding}" x2="${chartVPWidth - padding}" y2="${chartVPHeight - padding}"/>
       </g>
       <!-- Area under curve -->
-      <path d="${pathData} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z"
+      <path d="${pathData} L ${chartVPWidth - padding} ${chartVPHeight - padding} L ${padding} ${chartVPHeight - padding} Z"
             fill="url(#hrGradient)" stroke="none"/>
       <!-- Line segments with different colors -->
       ${points.slice(1).map((p, i) => `
@@ -644,14 +661,14 @@ function renderDashboard(data) {
       `).join('')}
       <!-- Data points with individual colors -->
       ${points.map((p, i) => `
-        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
+        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="6"
                 fill="${p.color}" stroke="var(--bg-card)" stroke-width="2"
                 data-label="${escapeHtml(p.label)}" data-value="${escapeHtml(p.value)}" />
       `).join('')}
       <!-- X-axis labels -->
       ${points.map(p => `
-        <text x="${p.x}" y="${chartHeight - 4}" text-anchor="middle"
-              font-size="0.55rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
+        <text x="${p.x}" y="${chartVPHeight - 4}" text-anchor="middle"
+              font-size="0.7rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
       `).join('')}
     </svg>
   `;
@@ -900,6 +917,9 @@ function openSettingsModal(selectedProfileId = null) {
   requestAnimationFrame(() => overlay.classList.add("open"));
 
   const reconnectProfile = async profile => {
+    // Stop the previous profile's polling/request before issuing requests with
+    // the newly selected profile, so a late response cannot overwrite it.
+    stopAutoRefresh();
     closeModal(overlay);
     showToast("正在连接 " + profile.name + "...", "info");
     renderSkeleton(els.dashboard, 6);
@@ -919,7 +939,7 @@ function openSettingsModal(selectedProfileId = null) {
         // The previous profile's timer may still be active while switching.
         // Stop it before clearing credentials to avoid repeated config errors.
         stopAutoRefresh();
-        clearConfig();
+        clearConfigWithWarning();
         markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
@@ -962,10 +982,16 @@ function openSettingsModal(selectedProfileId = null) {
       }
       if (!confirm("确定删除「" + profile.name + "」？")) return;
       const wasActive = id === loadActiveProfileId();
-      deleteProfile(id);
+      if (!deleteProfile(id)) {
+        showToast("删除配置失败：浏览器存储不可用或空间不足，可能有部分更改未能回滚", "error");
+        return;
+      }
       if (wasActive) {
         const next = getActiveProfile();
-        if (next) setActiveProfile(next.id);
+        if (next && !setActiveProfile(next.id)) {
+          showToast("配置已删除，但无法切换当前配置：浏览器存储不可用", "error");
+          return;
+        }
       }
       closeModal(overlay);
       openSettingsModal();
@@ -974,12 +1000,17 @@ function openSettingsModal(selectedProfileId = null) {
   });
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
-    clearConfig();
+    const cleared = clearConfigWithWarning({ showWarning: false });
     resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
-    showToast("已登出，已保存的 Proxy 配置仍保留", "info");
+    showToast(
+      cleared
+        ? "已登出当前连接；不会删除你保存的 Proxy 配置"
+        : "已退出当前视图，但仍有部分连接凭据无法清除。请清理此站点的浏览数据",
+      cleared ? "info" : "error",
+    );
     renderConnectForm();
     stopAutoRefresh();
   });
@@ -1059,14 +1090,21 @@ function closeModal(overlay) {
    Auto-refresh Management
    ========================================================================== */
 async function fetchAndRender() {
-  if (isFetching) return;
-  isFetching = true;
+  // Abort older requests so slow responses cannot overwrite newer dashboard data.
+  if (fetchAbortController) fetchAbortController.abort();
+  const controller = new AbortController();
+  fetchAbortController = controller;
+
   try {
-    const data = await request("/1/summary");
+    const data = await request("/1/summary", { signal: controller.signal });
+    if (controller.signal.aborted) return;
     renderDashboard(data);
   } catch (err) {
+    if (controller.signal.aborted || err.name === "AbortError" || err.name === "CancellationError") {
+      return;
+    }
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       // Auth failure invalidates the persisted write flag (the token no
       // longer matches), but a transient network/5xx does not — see
@@ -1079,7 +1117,7 @@ async function fetchAndRender() {
       showToast(`刷新失败: ${err.message}`, "error");
     }
   } finally {
-    isFetching = false;
+    if (fetchAbortController === controller) fetchAbortController = null;
   }
 }
 
@@ -1095,12 +1133,16 @@ function stopAutoRefresh() {
     clearInterval(refreshInterval);
     refreshInterval = null;
   }
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
 }
 
 /* ==========================================================================
    Initialization
    ========================================================================== */
-function init() {
+async function init() {
   // Initialize theme
   initTheme();
 
@@ -1145,48 +1187,22 @@ function init() {
 
   // Load saved config
   const cfg = loadConfig();
+  if (consumeConfigCleanupWarning()) {
+    showToast("发现损坏的连接配置，但浏览器阻止清理；请清理此站点的浏览数据后重试", "warn");
+  }
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
-    fetchAndRender().then(() => {
-      // fetchAndRender handles errors internally. On an authentication
-      // failure it clears the saved connection, so don't restart polling
-      // after the user has been returned to the connect form.
-      if (getConfig()) startAutoRefresh();
-    }).catch(() => {
-      // If initialization itself fails unexpectedly, show the connect form.
-      renderConnectForm(cfg);
-    });
+    await fetchAndRender();
+    // fetchAndRender handles errors internally. On an authentication
+    // failure it clears the saved connection, so don't restart polling
+    // after the user has been returned to the connect form.
+    if (getConfig()) startAutoRefresh();
   } else {
     renderConnectForm();
   }
 }
 
-/* ==========================================================================
-   Utility: HTML Escape (XSS prevention)
-   ========================================================================== */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return "";
-  // Build entity strings by concatenation so the leading '&' and
-  // trailing ';' cannot be silently stripped (see PR code-review fix,
-  // project memory xss-escape-html-gotcha — writing the entities
-  // literally here once shipped to main as bare characters and made
-  // the dashboard an XSS sink because the inputs came from innerHTML
-  // writes of apiUrl/apiToken).
-  // '&' must be replaced first to avoid double-encoding the entities
-  // produced by the remaining rules.
-  const ENT_AMP  = "&" + "amp;";
-  const ENT_LT   = "&" + "lt;";
-  const ENT_GT   = "&" + "gt;";
-  const ENT_QUOT = "&" + "quot;";
-  const ENT_APOS = "&" + "#039;";
-  return String(str)
-    .replace(/&/g, ENT_AMP)
-    .replace(/</g, ENT_LT)
-    .replace(/>/g, ENT_GT)
-    .replace(/\"/g, ENT_QUOT)
-    .replace(/'/g, ENT_APOS);
-}
 
 /* ==========================================================================
    Bootstrap
