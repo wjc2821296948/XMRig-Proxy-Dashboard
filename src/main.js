@@ -990,7 +990,7 @@ function openSettingsModal(selectedProfileId = null) {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
       showToast("配置已导出。请妥善保管可能包含访问 Token 的文件", "success");
     } catch (error) {
       showToast(error?.message || "导出配置失败，请检查浏览器存储", "error");
