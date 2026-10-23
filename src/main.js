@@ -30,6 +30,8 @@ import {
   resetStatusTracker,
   getStatusInfo,
 } from "./status.js";
+import { escapeHtml } from "./escape-html.js";
+export { escapeHtml };
 
 // Global state
 let refreshInterval = null;
@@ -1161,38 +1163,6 @@ async function init() {
   } else {
     renderConnectForm();
   }
-}
-
-/* ==========================================================================
-   Utility: HTML Escape (XSS prevention)
-   ========================================================================== */
-/**
- * Escape HTML special characters to prevent XSS.
- * Exported for testing.
- * @param {string|null|undefined} str
- * @returns {string}
- */
-export function escapeHtml(str) {
-  if (str === null || str === undefined) return "";
-  // Build entity strings by concatenation so the leading '&' and
-  // trailing ';' cannot be silently stripped (see PR code-review fix,
-  // project memory xss-escape-html-gotcha — writing the entities
-  // literally here once shipped to main as bare characters and made
-  // the dashboard an XSS sink because the inputs came from innerHTML
-  // writes of apiUrl/apiToken).
-  // '&' must be replaced first to avoid double-encoding the entities
-  // produced by the remaining rules.
-  const ENT_AMP   = "&" + "amp;";
-  const ENT_LT    = "&" + "lt;";
-  const ENT_GT    = "&" + "gt;";
-  const ENT_QUOT  = "&" + "quot;";
-  const ENT_APOS  = "&" + "#039;";
-  return String(str)
-    .replace(/&/g, ENT_AMP)
-    .replace(/</g, ENT_LT)
-    .replace(/>/g, ENT_GT)
-    .replace(/\"/g, ENT_QUOT)
-    .replace(/'/g, ENT_APOS)
 }
 
 /* ==========================================================================
