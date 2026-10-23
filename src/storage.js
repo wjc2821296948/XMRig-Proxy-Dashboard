@@ -61,7 +61,8 @@ function normalizeProfile(profile) {
     // remember flag is supplied, so a string like "false" cannot opt into
     // persistent token storage by being truthy.
     apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
-    remember: profile.remember == null ? true : profile.remember === true,
+    // A missing flag is a legacy record; a present non-boolean value is malformed.
+    remember: Object.hasOwn(profile, "remember") ? profile.remember === true : true,
     refreshInterval,
   };
 }
