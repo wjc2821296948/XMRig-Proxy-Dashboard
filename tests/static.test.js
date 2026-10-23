@@ -281,3 +281,12 @@ test("hashrate chart preserves its aspect ratio on narrow and wide containers", 
   assert.match(main, /preserveAspectRatio="xMidYMid meet"/);
   assert.doesNotMatch(main, /preserveAspectRatio="none"/);
 });
+
+
+test("profile reconnect stops old polling before requesting the new profile", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf("const reconnectProfile = async profile =>");
+  const requestAt = source.indexOf('const summaryPromise = request("/1/summary")', start);
+  const stopAt = source.indexOf("stopAutoRefresh();", start);
+  assert.ok(start >= 0 && stopAt > start && stopAt < requestAt);
+});
