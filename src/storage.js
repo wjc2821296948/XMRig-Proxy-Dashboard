@@ -510,7 +510,9 @@ export function createProfilesExport() {
     exportedAt: new Date().toISOString(),
     profiles: exportable,
   };
-  if (JSON.stringify(bundle).length > MAX_PROFILE_BUNDLE_CHARS) {
+  // The UI writes pretty-printed JSON; measure that representation so every
+  // generated file also fits the parser's limit when re-imported.
+  if (JSON.stringify(bundle, null, 2).length > MAX_PROFILE_BUNDLE_CHARS) {
     throw new Error("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试");
   }
   return bundle;
