@@ -419,3 +419,12 @@ export function getConfig() {
   const active = getActiveProfile();
   return active || loadConfig();
 }
+
+let configCleanupWarningPending = false;
+
+/** Consume the warning raised when a corrupt config cannot be cleared. */
+export function consumeConfigCleanupWarning() {
+  const pending = configCleanupWarningPending;
+  configCleanupWarningPending = false;
+  return pending;
+}
