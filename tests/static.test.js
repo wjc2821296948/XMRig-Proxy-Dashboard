@@ -216,7 +216,7 @@ test("startup does not restart polling after authentication clears the config", 
 
   assert.match(
     source,
-    /fetchAndRender\(\)\.then\(\(\) => \{[\s\S]*?if \(getConfig\(\)\) startAutoRefresh\(\);/,
+    /await fetchAndRender\(\);[\s\S]*?if \(getConfig\(\)\) startAutoRefresh\(\);/,
     "startup should only start auto-refresh when a saved connection still exists",
   );
   assert.doesNotMatch(
