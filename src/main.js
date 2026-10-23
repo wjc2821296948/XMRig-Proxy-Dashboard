@@ -12,7 +12,7 @@
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
-  loadConfig, saveConfig, clearConfig, getConfig,
+  loadConfig, saveConfig, clearConfig, getConfig, consumeConfigCleanupWarning,
   loadProfiles, saveProfile, deleteProfile, setActiveProfile,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme,
@@ -37,6 +37,14 @@ let refreshInterval = null;
 let isFetching = false;
 let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
+
+function clearConfigWithWarning() {
+  const cleared = clearConfig();
+  if (!cleared) {
+    showToast("浏览器存储不可用，部分凭据可能仍保留。请清理站点数据后重试", "error");
+  }
+  return cleared;
+}
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
 function getApiUrlValidationError(value) {
@@ -114,7 +122,9 @@ function syncSystemThemeListener(preference) {
 
 function applyThemePreference(preference, { persist = false } = {}) {
   const themePreference = ["dark", "light", "system"].includes(preference) ? preference : "dark";
-  if (persist) saveTheme(themePreference);
+  if (persist && !saveTheme(themePreference)) {
+    showToast("主题已切换，但浏览器存储不可用，刷新后不会保留该设置", "warning");
+  }
   applyResolvedTheme(resolveThemePreference(themePreference));
   syncSystemThemeListener(themePreference);
   return themePreference;
@@ -177,7 +187,9 @@ function setRibbonConnectState(state) {
  *                                          transient disconnects).
  */
 function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
-  if (shouldClear) clearWriteAccess();
+  if (shouldClear && !clearWriteAccess()) {
+    showToast("无法保存写入权限状态：浏览器存储不可用", "warn");
+  }
   setRibbonConnectState("disconnected");
   // Only repaint the alt row when the persisted flag actually changed;
   // a transient disconnect (network blip) should not reflash the picker.
@@ -196,7 +208,9 @@ function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
  *                                     a connection-level error toast).
  */
 function applyProbeResult(state, showUnknownToast = true) {
-  saveWriteAccess(state === "unrestricted");
+  if (!saveWriteAccess(state === "unrestricted")) {
+    showToast("无法保存 Proxy 权限状态：浏览器存储不可用，刷新后可能需要重新检测", "warn");
+  }
   if (state === "unknown" && showUnknownToast) {
     showToast("无法确认 Proxy 写入权限，配置模式已禁用（请检查网络或 CORS）", "warn");
   }
@@ -515,7 +529,7 @@ async function handleConnect() {
   // automatically participates in the multi-Proxy profile list.
   const existingProfile = getActiveProfile() || loadProfiles()[0] || null;
   const profileName = existingProfile?.name || "Proxy 1";
-  saveProfile({
+  const savedProfile = saveProfile({
     ...(existingProfile || {}),
     name: profileName,
     apiUrl: url,
@@ -523,6 +537,10 @@ async function handleConnect() {
     remember,
     refreshInterval: existingProfile?.refreshInterval ?? 10,
   });
+  if (!savedProfile) {
+    showToast("浏览器存储不可用或空间不足，连接配置未保存。请检查存储设置后重试", "error");
+    return;
+  }
 
   // Show loading skeleton
   renderSkeleton(els.dashboard, 6);
@@ -551,7 +569,7 @@ async function handleConnect() {
   } catch (err) {
     // Clear invalid config on auth failure
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       showToast("认证失败：Token 无效或已过期", "error");
     } else if (err.message.includes("timed out")) {
@@ -919,7 +937,7 @@ function openSettingsModal(selectedProfileId = null) {
         // The previous profile's timer may still be active while switching.
         // Stop it before clearing credentials to avoid repeated config errors.
         stopAutoRefresh();
-        clearConfig();
+        clearConfigWithWarning();
         markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
@@ -944,7 +962,7 @@ function openSettingsModal(selectedProfileId = null) {
     button.addEventListener("click", async () => {
       const profile = setActiveProfile(button.dataset.profileId);
       if (!profile) {
-        showToast("找不到该 Proxy 配置", "error");
+        showToast("无法切换配置：浏览器存储不可用或该配置已不存在", "error");
         return;
       }
       await reconnectProfile(profile);
@@ -962,10 +980,16 @@ function openSettingsModal(selectedProfileId = null) {
       }
       if (!confirm("确定删除「" + profile.name + "」？")) return;
       const wasActive = id === loadActiveProfileId();
-      deleteProfile(id);
+      if (!deleteProfile(id)) {
+        showToast("删除配置失败：浏览器存储不可用或空间不足", "error");
+        return;
+      }
       if (wasActive) {
         const next = getActiveProfile();
-        if (next) setActiveProfile(next.id);
+        if (next && !setActiveProfile(next.id)) {
+          showToast("配置已删除，但无法切换当前配置：浏览器存储不可用", "error");
+          return;
+        }
       }
       closeModal(overlay);
       openSettingsModal();
@@ -974,12 +998,17 @@ function openSettingsModal(selectedProfileId = null) {
   });
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
-    clearConfig();
+    const cleared = clearConfigWithWarning();
     resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
-    showToast("已登出，已保存的 Proxy 配置仍保留", "info");
+    showToast(
+      cleared
+        ? "已登出，已保存的 Proxy 配置仍保留"
+        : "已退出当前视图，但部分凭据可能仍保留在浏览器存储中",
+      cleared ? "info" : "error",
+    );
     renderConnectForm();
     stopAutoRefresh();
   });
@@ -1066,7 +1095,7 @@ async function fetchAndRender() {
     renderDashboard(data);
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       // Auth failure invalidates the persisted write flag (the token no
       // longer matches), but a transient network/5xx does not — see
@@ -1145,6 +1174,9 @@ function init() {
 
   // Load saved config
   const cfg = loadConfig();
+  if (consumeConfigCleanupWarning()) {
+    showToast("发现损坏的连接配置，但浏览器阻止清理；请清理此站点的浏览数据后重试", "warn");
+  }
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
