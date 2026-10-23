@@ -302,3 +302,10 @@ test("logout shows one clear status message without duplicate cleanup toasts", (
   assert.match(logout, /已登出当前连接；不会删除你保存的 Proxy 配置/);
   assert.doesNotMatch(logout, /clearConfigWithWarning\(\);/);
 });
+
+
+test("hashrate chart normalizes malformed samples and uses a nonzero scale floor", () => {
+  const source = read("src/main.js");
+  assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
+  assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
+});
