@@ -284,10 +284,15 @@ export function loadConfig() {
 
 /** Clear connection config from both storages (logout). Does NOT touch theme. */
 export function clearConfig() {
-  localStorage.removeItem(CONFIG_KEY);
-  sessionStorage.removeItem(CONFIG_KEY);
-  sessionStorage.removeItem(PROFILE_TOKENS_KEY);
-  localStorage.removeItem(ACTIVE_PROFILE_KEY);
+  try {
+    localStorage.removeItem(CONFIG_KEY);
+    sessionStorage.removeItem(CONFIG_KEY);
+    sessionStorage.removeItem(PROFILE_TOKENS_KEY);
+    localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -364,10 +369,15 @@ export function loadWriteAccess(apiUrl) {
  */
 export function saveWriteAccess(enabled, apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
-  if (!target) return;
-  const map = readWriteAccessMap();
-  map[target] = Boolean(enabled);
-  writeWriteAccessMap(map);
+  if (!target) return false;
+  try {
+    const map = readWriteAccessMap();
+    map[target] = Boolean(enabled);
+    writeWriteAccessMap(map);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -380,15 +390,20 @@ export function saveWriteAccess(enabled, apiUrl) {
  */
 export function clearWriteAccess(apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
-  if (!target) {
-    // No URL provided and no config saved — clear everything for safety.
-    localStorage.removeItem(WRITE_KEY);
-    return;
-  }
-  const map = readWriteAccessMap();
-  if (target in map) {
-    delete map[target];
-    writeWriteAccessMap(map);
+  try {
+    if (!target) {
+      // No URL provided and no config saved — clear everything for safety.
+      localStorage.removeItem(WRITE_KEY);
+      return true;
+    }
+    const map = readWriteAccessMap();
+    if (target in map) {
+      delete map[target];
+      writeWriteAccessMap(map);
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 

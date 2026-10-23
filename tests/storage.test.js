@@ -127,7 +127,7 @@ test("logout removes connection config but preserves the theme preference", () =
   });
   saveTheme("light");
 
-  clearConfig();
+  assert.equal(clearConfig(), true);
 
   assert.equal(loadConfig(), null);
   assert.equal(loadTheme(), "light");
@@ -151,14 +151,14 @@ test("write-access decisions are isolated by proxy URL", () => {
   const first = "https://proxy-a.example";
   const second = "https://proxy-b.example";
 
-  saveWriteAccess(true, first);
-  saveWriteAccess(false, second);
+  assert.equal(saveWriteAccess(true, first), true);
+  assert.equal(saveWriteAccess(false, second), true);
 
   assert.equal(loadWriteAccess(first), true);
   assert.equal(loadWriteAccess(second), false);
   assert.equal(loadWriteAccess("https://proxy-c.example"), false);
 
-  clearWriteAccess(first);
+  assert.equal(clearWriteAccess(first), true);
 
   assert.equal(loadWriteAccess(first), false);
   assert.equal(loadWriteAccess(second), false);
@@ -420,4 +420,28 @@ test("malformed remember flags never opt profile tokens into persistent storage"
   });
   assert.equal(legacy.remember, true, "omitted legacy remember flag preserves backward compatibility");
   assert.ok(globalThis.localStorage.getItem("xmrig_proxy_profiles").includes("persistent-secret"));
+});
+
+
+test("storage mutations report failure instead of throwing when browser storage is blocked", () => {
+  const originalLocalStorage = globalThis.localStorage;
+  const originalSessionStorage = globalThis.sessionStorage;
+  const blockedStorage = {
+    getItem() { throw new DOMException("storage blocked", "SecurityError"); },
+    setItem() { throw new DOMException("storage blocked", "SecurityError"); },
+    removeItem() { throw new DOMException("storage blocked", "SecurityError"); },
+    clear() {},
+  };
+
+  try {
+    globalThis.localStorage = blockedStorage;
+    globalThis.sessionStorage = blockedStorage;
+
+    assert.equal(saveWriteAccess(true, "https://proxy.example"), false);
+    assert.equal(clearWriteAccess("https://proxy.example"), false);
+    assert.equal(clearConfig(), false);
+  } finally {
+    globalThis.localStorage = originalLocalStorage;
+    globalThis.sessionStorage = originalSessionStorage;
+  }
 });
