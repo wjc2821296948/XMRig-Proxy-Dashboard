@@ -611,7 +611,7 @@ function renderDashboard(data) {
   const chartVPHeight = 200;
   const padding = 50;
   const points = hashrates.map((h, i) => {
-    const x = padding + (i / (hashrates.length - 1)) * (chartVPWidth - 2 * padding);
+    const x = hashrates.length <= 1 ? chartVPWidth / 2 : padding + (i / (hashrates.length - 1)) * (chartVPWidth - 2 * padding);
     const y = chartVPHeight - padding - ((h / maxHr) * (chartVPHeight - 2 * padding));
     return { x, y, value: formatHashrate(h), label: timeLabels[i], color: chartColors[i] };
   });
@@ -1170,7 +1170,6 @@ async function init() {
   }
 }
 
-export { escapeHtml };
 
 /* ==========================================================================
    Bootstrap
