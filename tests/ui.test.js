@@ -7,8 +7,8 @@ import {
   formatNumber,
   formatUptime,
   getStatusInfo,
-  escapeHtml,
-} from "../src/main.js";
+} from "../src/ui.js";
+import { escapeHtml } from "../src/escape-html.js";
 
 test("hashrate formatting handles zero, kilo, and mega ranges", () => {
   assert.equal(formatHashrate(0), "0 H/s");
