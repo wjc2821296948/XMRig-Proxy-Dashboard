@@ -31,10 +31,11 @@ import {
   resetStatusTracker,
   getStatusInfo,
 } from "./status.js";
+import { escapeHtml } from "./escape-html.js";
 
 // Global state
 let refreshInterval = null;
-let isFetching = false;
+let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
 
@@ -606,17 +607,17 @@ function renderDashboard(data) {
   ];
 
   // Line chart data points for SVG
-  const chartWidth = 280;
-  const chartHeight = 60;
-  const padding = 20;
+  const chartVPWidth = 1000;
+  const chartVPHeight = 200;
+  const padding = 50;
   const points = hashrates.map((h, i) => {
-    const x = padding + (i / (hashrates.length - 1)) * (chartWidth - 2 * padding);
-    const y = chartHeight - padding - ((h / maxHr) * (chartHeight - 2 * padding));
+    const x = padding + (i / (hashrates.length - 1)) * (chartVPWidth - 2 * padding);
+    const y = chartVPHeight - padding - ((h / maxHr) * (chartVPHeight - 2 * padding));
     return { x, y, value: formatHashrate(h), label: timeLabels[i], color: chartColors[i] };
   });
   const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const lineChart = `
-    <svg class="hashrate-line-chart" viewBox="0 0 ${chartWidth} ${chartHeight}" width="100%" height="100%">
+    <svg class="hashrate-line-chart" viewBox="0 0 ${chartVPWidth} ${chartVPHeight}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
       <defs>
         <linearGradient id="hrGradient" x1="0%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stop-color="var(--accent-copper-deep)" stop-opacity="0.3"/>
@@ -631,12 +632,12 @@ function renderDashboard(data) {
       </defs>
       <!-- Grid lines -->
       <g class="chart-grid" stroke="var(--border-light)" stroke-width="0.5">
-        <line x1="${padding}" y1="${padding}" x2="${chartWidth - padding}" y2="${padding}"/>
-        <line x1="${padding}" y1="${chartHeight / 2}" x2="${chartWidth - padding}" y2="${chartHeight / 2}"/>
-        <line x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}"/>
+        <line x1="${padding}" y1="${padding}" x2="${chartVPWidth - padding}" y2="${padding}"/>
+        <line x1="${padding}" y1="${chartVPHeight / 2}" x2="${chartVPWidth - padding}" y2="${chartVPHeight / 2}"/>
+        <line x1="${padding}" y1="${chartVPHeight - padding}" x2="${chartVPWidth - padding}" y2="${chartVPHeight - padding}"/>
       </g>
       <!-- Area under curve -->
-      <path d="${pathData} L ${chartWidth - padding} ${chartHeight - padding} L ${padding} ${chartHeight - padding} Z"
+      <path d="${pathData} L ${chartVPWidth - padding} ${chartVPHeight - padding} L ${padding} ${chartVPHeight - padding} Z"
             fill="url(#hrGradient)" stroke="none"/>
       <!-- Line segments with different colors -->
       ${points.slice(1).map((p, i) => `
@@ -644,14 +645,14 @@ function renderDashboard(data) {
       `).join('')}
       <!-- Data points with individual colors -->
       ${points.map((p, i) => `
-        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="4"
+        <circle class="chart-point" cx="${p.x}" cy="${p.y}" r="6"
                 fill="${p.color}" stroke="var(--bg-card)" stroke-width="2"
                 data-label="${escapeHtml(p.label)}" data-value="${escapeHtml(p.value)}" />
       `).join('')}
       <!-- X-axis labels -->
       ${points.map(p => `
-        <text x="${p.x}" y="${chartHeight - 4}" text-anchor="middle"
-              font-size="0.55rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
+        <text x="${p.x}" y="${chartVPHeight - 4}" text-anchor="middle"
+              font-size="0.7rem" fill="var(--text-muted)" class="chart-label">${escapeHtml(p.label)}</text>
       `).join('')}
     </svg>
   `;
@@ -1059,12 +1060,19 @@ function closeModal(overlay) {
    Auto-refresh Management
    ========================================================================== */
 async function fetchAndRender() {
-  if (isFetching) return;
-  isFetching = true;
+  // Abort older requests so slow responses cannot overwrite newer dashboard data.
+  if (fetchAbortController) fetchAbortController.abort();
+  const controller = new AbortController();
+  fetchAbortController = controller;
+
   try {
-    const data = await request("/1/summary");
+    const data = await request("/1/summary", { signal: controller.signal });
+    if (controller.signal.aborted) return;
     renderDashboard(data);
   } catch (err) {
+    if (controller.signal.aborted || err.name === "AbortError" || err.name === "CancellationError") {
+      return;
+    }
     if (err.status === 401 || err.status === 403) {
       clearConfig();
       resetStatusTracker(statusTracker);
@@ -1079,7 +1087,7 @@ async function fetchAndRender() {
       showToast(`刷新失败: ${err.message}`, "error");
     }
   } finally {
-    isFetching = false;
+    if (fetchAbortController === controller) fetchAbortController = null;
   }
 }
 
@@ -1095,12 +1103,16 @@ function stopAutoRefresh() {
     clearInterval(refreshInterval);
     refreshInterval = null;
   }
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
 }
 
 /* ==========================================================================
    Initialization
    ========================================================================== */
-function init() {
+async function init() {
   // Initialize theme
   initTheme();
 
@@ -1148,45 +1160,17 @@ function init() {
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
-    fetchAndRender().then(() => {
-      // fetchAndRender handles errors internally. On an authentication
-      // failure it clears the saved connection, so don't restart polling
-      // after the user has been returned to the connect form.
-      if (getConfig()) startAutoRefresh();
-    }).catch(() => {
-      // If initialization itself fails unexpectedly, show the connect form.
-      renderConnectForm(cfg);
-    });
+    await fetchAndRender();
+    // fetchAndRender handles errors internally. On an authentication
+    // failure it clears the saved connection, so don't restart polling
+    // after the user has been returned to the connect form.
+    if (getConfig()) startAutoRefresh();
   } else {
     renderConnectForm();
   }
 }
 
-/* ==========================================================================
-   Utility: HTML Escape (XSS prevention)
-   ========================================================================== */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return "";
-  // Build entity strings by concatenation so the leading '&' and
-  // trailing ';' cannot be silently stripped (see PR code-review fix,
-  // project memory xss-escape-html-gotcha — writing the entities
-  // literally here once shipped to main as bare characters and made
-  // the dashboard an XSS sink because the inputs came from innerHTML
-  // writes of apiUrl/apiToken).
-  // '&' must be replaced first to avoid double-encoding the entities
-  // produced by the remaining rules.
-  const ENT_AMP  = "&" + "amp;";
-  const ENT_LT   = "&" + "lt;";
-  const ENT_GT   = "&" + "gt;";
-  const ENT_QUOT = "&" + "quot;";
-  const ENT_APOS = "&" + "#039;";
-  return String(str)
-    .replace(/&/g, ENT_AMP)
-    .replace(/</g, ENT_LT)
-    .replace(/>/g, ENT_GT)
-    .replace(/\"/g, ENT_QUOT)
-    .replace(/'/g, ENT_APOS);
-}
+export { escapeHtml };
 
 /* ==========================================================================
    Bootstrap
