@@ -29,6 +29,7 @@ const MAX_CONFIG_SIZE = 100 * 1024;
 const MAX_TOKEN_LENGTH = 4096;
 const MAX_URL_LENGTH = 2048;
 const MAX_PROFILE_NAME_LENGTH = 128;
+let configCleanupWarningPending = false;
 
 /** Storage access can throw in privacy-restricted contexts or at quota. */
 function storageFor(kind) {
@@ -68,7 +69,17 @@ function safeRemove(kind, key) {
  */
 function discardStoredConfig(kind) {
   if (safeRemove(kind, CONFIG_KEY)) return true;
-  return safeSet(kind, CONFIG_KEY, "");
+  if (safeSet(kind, CONFIG_KEY, "")) return true;
+  // Neither removal nor overwrite is possible. Keep the fallback path usable,
+  // but let the UI tell the operator to clear the site's stored data manually.
+  configCleanupWarningPending = true;
+  return false;
+}
+
+export function consumeConfigCleanupWarning() {
+  const pending = configCleanupWarningPending;
+  configCleanupWarningPending = false;
+  return pending;
 }
 
 
