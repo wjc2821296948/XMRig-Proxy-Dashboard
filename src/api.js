@@ -13,6 +13,20 @@ import { getConfig } from "./storage.js";
 
 const REQUEST_TIMEOUT_MS = 8000;
 
+function createTimeoutSignal(timeoutMs) {
+  if (typeof AbortSignal.timeout === "function") {
+    return { signal: AbortSignal.timeout(timeoutMs), cleanup() {} };
+  }
+
+  // Older browsers may implement AbortController but not AbortSignal.timeout.
+  // Keep requests bounded there too, and release the timer as soon as fetch settles.
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException("The operation timed out", "TimeoutError"));
+  }, timeoutMs);
+  return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
+}
+
 function combineRequestSignals(timeoutSignal, callerSignal) {
   if (!callerSignal) return { signal: timeoutSignal, cleanup() {} };
   if (typeof AbortSignal.any === "function") {
@@ -111,8 +125,8 @@ export async function request(path, options = {}) {
 
   // 8-second timeout via the platform-native AbortSignal so the underlying
   // fetch is actually cancelled (Promise.race used to leave it draining).
-  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const requestSignals = combineRequestSignals(timeoutSignal, options.signal);
+  const timeout = createTimeoutSignal(REQUEST_TIMEOUT_MS);
+  const requestSignals = combineRequestSignals(timeout.signal, options.signal);
 
   try {
     const response = await fetch(url, {
@@ -127,7 +141,16 @@ export async function request(path, options = {}) {
       err.status = response.status;
       throw err;
     }
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (error) {
+      // Do not surface raw response bodies or parser details: upstream proxies,
+      // captive portals, and reverse proxies may return sensitive HTML/text.
+      if (error instanceof SyntaxError) {
+        throw new Error("Invalid JSON response from Proxy API", { cause: error });
+      }
+      throw error;
+    }
   } catch (e) {
     // AbortSignal.timeout() throws a DOMException whose `name` is "TimeoutError"
     // (distinct from "AbortError" raised by AbortController.abort()). Browsers
@@ -146,6 +169,7 @@ export async function request(path, options = {}) {
     throw e;
   } finally {
     requestSignals.cleanup();
+    timeout.cleanup();
   }
 }
 
