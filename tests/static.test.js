@@ -43,7 +43,7 @@ test("index keeps the dashboard CSP security boundaries intact", () => {
     "script-src 'self'",
     "font-src 'self' data:",
     "img-src 'self' data:",
-    "connect-src *",
+    "connect-src http: https:",
     "base-uri 'self'",
     "form-action 'self'",
   ]) {
@@ -68,7 +68,7 @@ test("anti-framing policy is delivered through HTTP response headers", () => {
 
   assert.match(staticHeaders, /Content-Security-Policy:\s*frame-ancestors 'none'/);
   assert.match(staticHeaders, /X-Frame-Options:\s*DENY/i);
-  assert.match(server, /"Content-Security-Policy":\s*"frame-ancestors 'none'"/);
+  assert.match(server, /"Content-Security-Policy":\s*"frame-ancestors 'none';/);
   assert.match(server, /"X-Frame-Options":\s*"DENY"/);
 });
 
@@ -200,6 +200,15 @@ test("path allowlist comparison follows platform-specific casing rules", () => {
   assert.equal(matchesAllowlistedPath("Src/main.js", "src/main.js", "win32"), true);
   assert.equal(matchesAllowlistedPath("src/main.js", "src/main.js", "linux"), true);
   assert.equal(matchesAllowlistedPath("Src/main.js", "src/main.js", "linux"), false);
+});
+
+test("dashboard delegates visibility refresh to the tested helper", () => {
+  const source = read("src/main.js");
+  assert.ok(source.includes('import { registerVisibilityRefresh } from "./visibility-refresh.js";'));
+  assert.ok(source.includes("cleanupVisibilityRefresh?.();"));
+  assert.ok(source.includes("cleanupVisibilityRefresh = registerVisibilityRefresh({"));
+  assert.ok(source.includes('shouldRefresh: () => activeDashboardMode === "readonly"'));
+  assert.ok(source.includes("refresh: fetchAndRender"));
 });
 
 test("startup does not restart polling after authentication clears the config", () => {
