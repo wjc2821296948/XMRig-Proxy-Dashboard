@@ -33,6 +33,14 @@ import {
 } from "./status.js";
 import { escapeHtml } from "./escape-html.js";
 
+function clearConfigWithWarning() {
+  const cleared = clearConfig();
+  if (!cleared) {
+    showToast("浏览器存储不可用，部分凭据可能仍保留。请清理站点数据后重试", "error");
+  }
+  return cleared;
+}
+
 // Global state
 let refreshInterval = null;
 let fetchAbortController = null;
@@ -556,7 +564,7 @@ async function handleConnect() {
   } catch (err) {
     // Clear invalid config on auth failure
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       showToast("认证失败：Token 无效或已过期", "error");
     } else if (err.message.includes("timed out")) {
@@ -924,7 +932,7 @@ function openSettingsModal(selectedProfileId = null) {
         // The previous profile's timer may still be active while switching.
         // Stop it before clearing credentials to avoid repeated config errors.
         stopAutoRefresh();
-        clearConfig();
+        clearConfigWithWarning();
         markDisconnected({ clearWriteAccess: true });
         showToast("认证失败，请检查 Token", "error");
         renderConnectForm({ apiUrl: profile.apiUrl, apiToken: profile.apiToken, remember: profile.remember });
@@ -967,10 +975,16 @@ function openSettingsModal(selectedProfileId = null) {
       }
       if (!confirm("确定删除「" + profile.name + "」？")) return;
       const wasActive = id === loadActiveProfileId();
-      deleteProfile(id);
+      if (!deleteProfile(id)) {
+        showToast("删除配置失败：浏览器存储不可用或空间不足，可能有部分更改未能回滚", "error");
+        return;
+      }
       if (wasActive) {
         const next = getActiveProfile();
-        if (next) setActiveProfile(next.id);
+        if (next && !setActiveProfile(next.id)) {
+          showToast("配置已删除，但无法切换当前配置：浏览器存储不可用", "error");
+          return;
+        }
       }
       closeModal(overlay);
       openSettingsModal();
@@ -979,12 +993,17 @@ function openSettingsModal(selectedProfileId = null) {
   });
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
-    clearConfig();
+    const cleared = clearConfigWithWarning();
     resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
-    showToast("已登出；设置中保存的 Proxy 配置仍保留", "info");
+    showToast(
+      cleared
+        ? "已登出；设置中保存的 Proxy 配置仍保留"
+        : "已退出当前视图，但仍有部分连接凭据无法清除。请清理此站点的浏览数据",
+      cleared ? "info" : "error",
+    );
     renderConnectForm();
     stopAutoRefresh();
   });
@@ -1078,7 +1097,7 @@ async function fetchAndRender() {
       return;
     }
     if (err.status === 401 || err.status === 403) {
-      clearConfig();
+      clearConfigWithWarning();
       resetStatusTracker(statusTracker);
       // Auth failure invalidates the persisted write flag (the token no
       // longer matches), but a transient network/5xx does not — see
