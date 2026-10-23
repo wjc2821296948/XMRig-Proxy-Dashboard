@@ -785,3 +785,71 @@ test("local configs with malformed or false remember flags migrate to session st
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
   assert.equal(JSON.parse(globalThis.sessionStorage.getItem("xmrig_proxy_config")).remember, false);
 });
+
+
+test("remembered config save rolls back when stale session config cannot be cleared", () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const previous = {
+    apiUrl: "https://previous.example:8080",
+    apiToken: "previous-token",
+    remember: true,
+    refreshInterval: 10,
+  };
+  assert.equal(saveConfig(previous), true);
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://stale.example:8080",
+    apiToken: "stale-token",
+    remember: false,
+    refreshInterval: 10,
+  }));
+
+  const workingSession = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => workingSession.getItem(key),
+    removeItem() { throw new DOMException("remove denied", "SecurityError"); },
+    setItem() { throw new DOMException("write denied", "SecurityError"); },
+    clear: () => workingSession.clear(),
+  };
+
+  assert.equal(saveConfig({
+    apiUrl: "https://new.example:8080",
+    apiToken: "new-token",
+    remember: true,
+    refreshInterval: 10,
+  }), false);
+  assert.equal(JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_config")).apiUrl, "https://previous.example:8080");
+  assert.equal(JSON.parse(workingSession.getItem("xmrig_proxy_config")).apiToken, "stale-token");
+});
+
+test("profile save rolls back all keys when active ID persistence fails", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, loadProfiles, loadActiveProfileId, getConfig } = await import("../src/storage.js");
+
+  assert.ok(saveProfile({
+    id: "profile-stable", name: "Stable", apiUrl: "https://stable.example:8080",
+    apiToken: "stable-token", remember: true, refreshInterval: 10,
+  }));
+  const workingLocal = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => workingLocal.getItem(key),
+    removeItem: key => workingLocal.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_active_profile" && value === "profile-new") {
+        throw new DOMException("quota exceeded", "QuotaExceededError");
+      }
+      workingLocal.setItem(key, value);
+    },
+    clear: () => workingLocal.clear(),
+  };
+
+  assert.equal(saveProfile({
+    id: "profile-new", name: "New", apiUrl: "https://new.example:8080",
+    apiToken: "new-token", remember: false, refreshInterval: 10,
+  }), null);
+  assert.deepEqual(loadProfiles().map(p => p.id), ["profile-stable"]);
+  assert.equal(loadActiveProfileId(), "profile-stable");
+  assert.equal(getConfig().apiUrl, "https://stable.example:8080");
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
+});
