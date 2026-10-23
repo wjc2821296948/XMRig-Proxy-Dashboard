@@ -1017,11 +1017,7 @@ function openSettingsModal(selectedProfileId = null) {
 
       const result = importProfiles(bundle.profiles);
       showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。请检查配置列表", "success");
-      closeModal(overlay);
-      window.setTimeout(() => {
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        openSettingsModal();
-      }, 300);
+      closeModalAndReopenSettings(overlay);
     } catch (error) {
       showToast(error?.message || "导入失败：文件无效或浏览器存储不可用", "error");
     } finally {
@@ -1126,6 +1122,26 @@ function openSettingsModal(selectedProfileId = null) {
   const escHandler = e => { if (e.key === "Escape" && overlay.parentNode) closeModal(overlay); };
   document.addEventListener("keydown", escHandler);
   overlay._escHandler = escHandler;
+}
+
+function closeModalAndReopenSettings(overlay) {
+  let reopened = false;
+  let timer = null;
+  const reopen = () => {
+    if (reopened) return;
+    reopened = true;
+    if (timer !== null) window.clearTimeout(timer);
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    openSettingsModal();
+  };
+
+  // Reopen on the fade-out completion, with a bounded fallback for reduced
+  // motion settings or browsers that do not dispatch transitionend.
+  overlay.addEventListener("transitionend", event => {
+    if (event.target === overlay && event.propertyName === "opacity") reopen();
+  }, { once: true });
+  timer = window.setTimeout(reopen, 350);
+  closeModal(overlay);
 }
 
 function closeModal(overlay) {
