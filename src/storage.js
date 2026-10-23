@@ -437,16 +437,23 @@ const MAX_PROFILE_BUNDLE_CHARS = 1024 * 1024;
 const MAX_IMPORTED_PROFILES = 100;
 const IMPORT_FORBIDDEN_IDS = new Set(Object.getOwnPropertyNames(Object.prototype));
 
+class ProfileBundleValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ProfileBundleValidationError";
+  }
+}
+
 function validateImportedProfiles(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_IMPORTED_PROFILES) {
-    throw new Error("导入文件必须包含 1 到 100 个 Proxy 配置");
+    throw new ProfileBundleValidationError("导入文件必须包含 1 到 100 个 Proxy 配置");
   }
 
   const seen = new Set();
   return value.map((profile, index) => {
     const number = index + 1;
     if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
-      throw new Error("第 " + number + " 个配置格式无效");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置格式无效");
     }
 
     const id = profile.id;
@@ -459,31 +466,31 @@ function validateImportedProfiles(value) {
     if (typeof id !== "string" || id !== id.trim()
         || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)
         || IMPORT_FORBIDDEN_IDS.has(id)) {
-      throw new Error("第 " + number + " 个配置的 ID 无效");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的 ID 无效");
     }
-    if (seen.has(id)) throw new Error("导入文件包含重复的配置 ID");
+    if (seen.has(id)) throw new ProfileBundleValidationError("导入文件包含重复的配置 ID");
     seen.add(id);
 
     if (typeof name !== "string" || !name.trim() || name.trim().length > 128
         || /[\u0000-\u001F\u007F]/.test(name)) {
-      throw new Error("第 " + number + " 个配置的名称无效");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的名称无效");
     }
     if (typeof apiUrl !== "string" || apiUrl.length > 2048 || !isValidApiUrl(apiUrl)) {
-      throw new Error("第 " + number + " 个配置的 API URL 无效");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的 API URL 无效");
     }
     if (typeof apiToken !== "string" || apiToken.length > 4096
         || /[\u0000-\u001F\u007F]/.test(apiToken)) {
-      throw new Error("第 " + number + " 个配置的 Token 无效或过长");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的 Token 无效或过长");
     }
     if (typeof remember !== "boolean") {
-      throw new Error("第 " + number + " 个配置的“记住我”选项无效");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的“记住我”选项无效");
     }
     if (!Number.isInteger(refreshInterval) || refreshInterval < 1 || refreshInterval > 120) {
-      throw new Error("第 " + number + " 个配置的刷新间隔必须是 1 到 120 秒的整数");
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的刷新间隔必须是 1 到 120 秒的整数");
     }
 
     const normalized = normalizeProfile({ id, name: name.trim(), apiUrl, apiToken, remember, refreshInterval });
-    if (!normalized) throw new Error("第 " + number + " 个配置无法验证");
+    if (!normalized) throw new ProfileBundleValidationError("第 " + number + " 个配置无法验证");
     return normalized;
   });
 }
@@ -521,20 +528,20 @@ export function createProfilesExport() {
 /** Parse and validate a bundle fully before any persistent state is changed. */
 export function parseProfilesImportJson(raw) {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_PROFILE_BUNDLE_CHARS) {
-    throw new Error("导入文件为空或超过 1 MB 限制");
+    throw new ProfileBundleValidationError("导入文件为空或超过 1 MB 限制");
   }
 
   let payload;
   try {
     payload = JSON.parse(raw);
   } catch {
-    throw new Error("导入文件不是有效的 JSON");
+    throw new ProfileBundleValidationError("导入文件不是有效的 JSON");
   }
 
   if (!payload || typeof payload !== "object" || Array.isArray(payload)
       || payload.format !== PROFILE_BUNDLE_FORMAT
       || payload.version !== PROFILE_BUNDLE_VERSION) {
-    throw new Error("导入文件格式或版本不受支持");
+    throw new ProfileBundleValidationError("导入文件格式或版本不受支持");
   }
 
   return {
@@ -577,6 +584,8 @@ function restoreImportSnapshot(snapshot) {
  * A failed multi-key write rolls back the raw pre-import values where possible.
  */
 export function importProfiles(importedProfiles) {
+  // Revalidate at the write boundary as this exported API may be called by
+  // code paths other than parseProfilesImportJson(); never trust raw callers.
   const incoming = validateImportedProfiles(importedProfiles);
   let local;
   let session;
@@ -632,7 +641,7 @@ export function importProfiles(importedProfiles) {
     if (!restored) {
       throw new Error("导入失败，且浏览器存储未能完整恢复原状态。请清理此站点的浏览数据后检查配置");
     }
-    if (error instanceof Error && /^(导入后配置总数|导入文件)/.test(error.message)) throw error;
+    if (error instanceof ProfileBundleValidationError) throw error;
     throw new Error("导入失败，现有配置已尽力恢复。请检查浏览器存储空间后重试");
   }
 }
