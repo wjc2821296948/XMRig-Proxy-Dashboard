@@ -913,6 +913,9 @@ function openSettingsModal(selectedProfileId = null) {
   requestAnimationFrame(() => overlay.classList.add("open"));
 
   const reconnectProfile = async profile => {
+    // Stop the previous profile's polling/request before issuing requests with
+    // the newly selected profile, so a late response cannot overwrite it.
+    stopAutoRefresh();
     closeModal(overlay);
     showToast("正在连接 " + profile.name + "...", "info");
     renderSkeleton(els.dashboard, 6);
