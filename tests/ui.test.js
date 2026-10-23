@@ -59,6 +59,9 @@ test("metric formatters safely handle invalid API values", () => {
   }
   assert.equal(formatNumber(NaN), "—");
   assert.equal(formatNumber(Infinity), "—");
+  assert.equal(formatNumber(-1), "—");
+  assert.equal(formatNumber(null), "—");
+  assert.equal(formatNumber(undefined), "—");
 });
 
 test("zero metrics remain distinct from unavailable metrics", () => {
