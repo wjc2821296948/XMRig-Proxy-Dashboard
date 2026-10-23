@@ -981,7 +981,7 @@ function openSettingsModal(selectedProfileId = null) {
       if (!confirm("确定删除「" + profile.name + "」？")) return;
       const wasActive = id === loadActiveProfileId();
       if (!deleteProfile(id)) {
-        showToast("删除配置失败：浏览器存储不可用或空间不足", "error");
+         showToast("删除配置失败：浏览器存储不可用或空间不足，可能有部分更改未能回滚", "error");
         return;
       }
       if (wasActive) {
