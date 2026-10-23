@@ -272,3 +272,12 @@ test("write-access storage failures are surfaced to the dashboard user", () => {
   assert.match(source, /if \(!saveWriteAccess\(state === "unrestricted"\)\)[\s\S]*?无法保存 Proxy 权限状态/);
   assert.match(source, /shouldClear && !clearWriteAccess\(\)[\s\S]*?无法保存写入权限状态/);
 });
+
+
+test("hashrate chart preserves its aspect ratio on narrow and wide containers", () => {
+  const css = read("styles.css");
+  const main = read("src/main.js");
+  assert.match(css, /\.hashrate-chart\s*\{[^}]*aspect-ratio:\s*5\s*\/\s*1/s);
+  assert.match(main, /preserveAspectRatio="xMidYMid meet"/);
+  assert.doesNotMatch(main, /preserveAspectRatio="none"/);
+});
