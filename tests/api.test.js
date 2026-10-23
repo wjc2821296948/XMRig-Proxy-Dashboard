@@ -388,3 +388,19 @@ test("fallback request signal propagates timeout aborts and cleans up listeners"
     else delete AbortSignal.timeout;
   }
 });
+
+
+test("request preserves network errors as actionable TypeErrors", async () => {
+  globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+  await assert.rejects(request("/1/summary"), err => err instanceof TypeError && err.message === "Failed to fetch");
+});
+
+test("request propagates AbortError without disguising cancellation", async () => {
+  globalThis.fetch = async () => { throw new DOMException("The operation was aborted", "AbortError"); };
+  await assert.rejects(request("/1/summary"), err => err.name === "AbortError");
+});
+
+test("probeWriteAccess reports unknown on network failures", async () => {
+  globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+  assert.equal(await probeWriteAccess(), "unknown");
+});
