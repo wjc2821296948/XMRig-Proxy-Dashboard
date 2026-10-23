@@ -984,7 +984,7 @@ function openSettingsModal(selectedProfileId = null) {
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
-    showToast("已登出，已保存的 Proxy 配置仍保留", "info");
+    showToast("已登出；设置中保存的 Proxy 配置仍保留", "info");
     renderConnectForm();
     stopAutoRefresh();
   });
