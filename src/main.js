@@ -38,9 +38,9 @@ let isFetching = false;
 let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
 
-function clearConfigWithWarning() {
+function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
-  if (!cleared) {
+  if (!cleared && showWarning) {
     showToast("浏览器存储不可用，部分凭据可能仍保留。请清理站点数据后重试", "error");
   }
   return cleared;
@@ -998,14 +998,14 @@ function openSettingsModal(selectedProfileId = null) {
   });
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
-    const cleared = clearConfigWithWarning();
+    const cleared = clearConfigWithWarning({ showWarning: false });
     resetStatusTracker(statusTracker);
     markDisconnected({ clearWriteAccess: true });
     closeModePicker();
     closeModal(overlay);
     showToast(
       cleared
-        ? "已登出；设置中保存的 Proxy 配置仍保留"
+        ? "已登出当前连接；不会删除你保存的 Proxy 配置"
         : "已退出当前视图，但仍有部分连接凭据无法清除。请清理此站点的浏览数据",
       cleared ? "info" : "error",
     );
