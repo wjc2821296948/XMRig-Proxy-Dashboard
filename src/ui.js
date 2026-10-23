@@ -76,7 +76,7 @@ function createSkeletonCard(lines = 3) {
  * @param {number} count Number of skeleton cards.
  */
 export function renderSkeleton(container, count = 6) {
-  container.innerHTML = "";
+  container.textContent = "";
   const grid = document.createElement("div");
   grid.className = "grid";
   for (let i = 0; i < count; i++) {
