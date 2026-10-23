@@ -251,22 +251,58 @@ export function deleteProfile(id) {
   if (profiles.length <= 1) return false;
   const removed = profiles.find(profile => profile.id === id);
   if (!removed) return false;
-  const next = profiles.filter(profile => profile.id !== id);
-  const tokens = readProfileTokens();
-  const hadSessionToken = Object.hasOwn(tokens, id);
-  delete tokens[id];
 
-  // Only require a token-map write when there was a token to remove. This
-  // avoids making deletion of unrelated remembered profiles depend on
-  // sessionStorage, while still reporting failed cleanup of an actual token.
-  if (hadSessionToken && !writeProfileTokens(tokens)) return false;
-  if (!writeProfiles(next)) return false;
-  if (safeGet("local", ACTIVE_PROFILE_KEY) === id) {
-    if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id) || !saveConfig(next[0])) return false;
+  const next = profiles.filter(profile => profile.id !== id);
+  const originalTokens = readProfileTokens();
+  const nextTokens = Object.assign(Object.create(null), originalTokens);
+  const hadSessionToken = Object.hasOwn(originalTokens, id);
+  delete nextTokens[id];
+
+  const previousActiveId = safeGet("local", ACTIVE_PROFILE_KEY);
+  const wasActive = previousActiveId === id;
+  const previousConfig = wasActive ? loadConfig() : null;
+
+  // There is no cross-storage transaction in the browser. If any persistence
+  // step fails, restore every key already touched so a failed deletion does
+  // not leave an active ID pointing at a missing profile.
+  const rollback = () => {
+    if (wasActive) {
+      if (previousActiveId) safeSet("local", ACTIVE_PROFILE_KEY, previousActiveId);
+      else safeRemoveOrReplace("local", ACTIVE_PROFILE_KEY, "");
+      if (previousConfig) saveConfig(previousConfig);
+      else {
+        safeRemoveOrReplace("local", CONFIG_KEY, "");
+        safeRemoveOrReplace("session", CONFIG_KEY, "");
+      }
+    }
+    writeProfiles(profiles);
+    if (hadSessionToken) writeProfileTokens(originalTokens);
+  };
+
+  if (wasActive) {
+    if (!saveConfig(next[0])) {
+      if (previousConfig) saveConfig(previousConfig);
+      return false;
+    }
+    // Restore previous ID/config if the active-ID write is rejected.
+    if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id)) {
+      rollback();
+      return false;
+    }
   }
+
+  if (!writeProfiles(next)) {
+    rollback();
+    return false;
+  }
+
+  if (hadSessionToken && !writeProfileTokens(nextTokens)) {
+    rollback();
+    return false;
+  }
+
   return true;
 }
-
 /** Select a saved Proxy profile and make its connection config active. */
 export function setActiveProfile(id) {
   const profile = loadProfiles().find(item => item.id === id);
