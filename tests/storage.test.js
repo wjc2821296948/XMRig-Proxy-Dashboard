@@ -493,3 +493,29 @@ test("clearConfig reports partial cleanup while still clearing accessible storag
   assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
   assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
 });
+
+
+test("profile remember flags distinguish absent legacy values from malformed values", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  const malformed = saveProfile({
+    id: "bad-remember",
+    name: "Bad remember",
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "session-secret",
+    remember: null,
+    refreshInterval: 10,
+  });
+  assert.equal(malformed.remember, false);
+  assert.equal(JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_profiles")).find(p => p.id === "bad-remember").apiToken, undefined);
+  assert.equal(loadProfiles().find(p => p.id === "bad-remember").apiToken, "session-secret");
+
+  const legacy = saveProfile({
+    id: "legacy-no-remember",
+    name: "Legacy",
+    apiUrl: "https://legacy.example:8080",
+    apiToken: "persistent-secret",
+    refreshInterval: 10,
+  });
+  assert.equal(legacy.remember, true);
+});
