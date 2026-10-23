@@ -734,3 +734,39 @@ test("failed active profile deletion restores the profile list, ID, and connecti
   assert.equal(loadConfig().apiUrl, "https://remove.example");
   assert.equal(JSON.parse(workingSession.getItem("xmrig_proxy_session_tokens"))["remove-profile"], "remove-token");
 });
+
+
+test("saveConfig fails closed on malformed remember flags", () => {
+  const config = {
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "temporary-secret",
+    remember: null,
+    refreshInterval: 10,
+  };
+  assert.equal(saveConfig(config), true);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+  const raw = JSON.parse(globalThis.sessionStorage.getItem("xmrig_proxy_config"));
+  assert.equal(raw.remember, false);
+  assert.equal(raw.apiToken, "temporary-secret");
+  assert.equal(loadConfig().remember, false);
+});
+
+test("loadConfig never returns malformed or oversized credentials as a usable token", () => {
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://proxy.example:8080",
+    apiToken: { secret: "must-not-be-sent" },
+    remember: null,
+    refreshInterval: 10,
+  }));
+  const config = loadConfig();
+  assert.equal(config.apiToken, "");
+  assert.equal(config.remember, false);
+
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "x".repeat(5000),
+    remember: true,
+    refreshInterval: 10,
+  }));
+  assert.equal(loadConfig().apiToken, "");
+});
