@@ -492,20 +492,28 @@ function validateImportedProfiles(value) {
 export function createProfilesExport() {
   const profiles = loadProfiles();
   if (!profiles.length) throw new Error("没有可导出的 Proxy 配置");
+  if (profiles.length > MAX_IMPORTED_PROFILES) {
+    throw new Error("配置数量超过 100 个，无法生成兼容的导出文件");
+  }
 
-  return {
+  const exportable = validateImportedProfiles(profiles.map(profile => ({
+    id: profile.id,
+    name: profile.name,
+    apiUrl: profile.apiUrl,
+    apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
+    remember: profile.remember === true,
+    refreshInterval: profile.refreshInterval,
+  })));
+  const bundle = {
     format: PROFILE_BUNDLE_FORMAT,
     version: PROFILE_BUNDLE_VERSION,
     exportedAt: new Date().toISOString(),
-    profiles: profiles.map(profile => ({
-      id: profile.id,
-      name: profile.name,
-      apiUrl: profile.apiUrl,
-      apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
-      remember: profile.remember === true,
-      refreshInterval: profile.refreshInterval,
-    })),
+    profiles: exportable,
   };
+  if (JSON.stringify(bundle).length > MAX_PROFILE_BUNDLE_CHARS) {
+    throw new Error("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试");
+  }
+  return bundle;
 }
 
 /** Parse and validate a bundle fully before any persistent state is changed. */
