@@ -382,15 +382,22 @@ export function loadConfig() {
   return null;
 }
 
+function safeRemoveOrReplace(kind, key, replacement) {
+  if (safeRemove(kind, key)) return true;
+  // Some stores allow writes but reject removeItem. Replace credentials with
+  // an inert value in that case; a blocked store still reports failure.
+  return safeSet(kind, key, replacement);
+}
+
 /** Clear connection config from both storages (logout). Does NOT touch theme. */
 export function clearConfig() {
-  // Attempt every removal even if one store is blocked. Report partial cleanup
-  // so callers never claim credentials were definitely cleared when they were not.
+  // Attempt every cleanup even if one store is blocked. When removal is denied
+  // but writes work, overwrite credential-bearing values with inert values.
   const results = [
-    safeRemove("local", CONFIG_KEY),
-    safeRemove("session", CONFIG_KEY),
-    safeRemove("session", PROFILE_TOKENS_KEY),
-    safeRemove("local", ACTIVE_PROFILE_KEY),
+    safeRemoveOrReplace("local", CONFIG_KEY, ""),
+    safeRemoveOrReplace("session", CONFIG_KEY, ""),
+    safeRemoveOrReplace("session", PROFILE_TOKENS_KEY, "{}"),
+    safeRemoveOrReplace("local", ACTIVE_PROFILE_KEY, ""),
   ];
   return results.every(Boolean);
 }
