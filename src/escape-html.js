@@ -17,6 +17,6 @@ export function escapeHtml(str) {
     .replace(/&/g, ENT_AMP)
     .replace(/</g, ENT_LT)
     .replace(/>/g, ENT_GT)
-    .replace(/\\"/g, ENT_QUOT)
+    .replace(/"/g, ENT_QUOT)
     .replace(/'/g, ENT_APOS);
 }
