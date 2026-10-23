@@ -8,6 +8,7 @@ import {
   formatUptime,
   getStatusInfo,
 } from "../src/ui.js";
+import { escapeHtml } from "../src/escape-html.js";
 
 test("hashrate formatting handles zero, kilo, and mega ranges", () => {
   assert.equal(formatHashrate(0), "0 H/s");
@@ -102,4 +103,17 @@ test("toast notifications announce status and have a removal fallback", async ()
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   }
+});
+
+
+test("escapeHtml escapes HTML metacharacters while preserving ordinary URL slashes", () => {
+  assert.equal(
+    escapeHtml('<script>alert("xss")</script>&"\'/path'),
+    "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;&amp;&quot;&#039;/path",
+  );
+});
+
+test("escapeHtml handles null and undefined", () => {
+  assert.equal(escapeHtml(null), "");
+  assert.equal(escapeHtml(undefined), "");
 });
