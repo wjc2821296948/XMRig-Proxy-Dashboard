@@ -299,7 +299,10 @@ test("logout shows one clear status message without duplicate cleanup toasts", (
   const logout = source.slice(start, end);
   assert.match(source, /function clearConfigWithWarning\(\{ showWarning = true \} = \{\}\)/);
   assert.match(logout, /clearConfigWithWarning\(\{ showWarning: false \}\)/);
-  assert.match(logout, /已登出当前连接；不会删除你保存的 Proxy 配置/);
+  assert.match(logout, /已登出当前连接；已保存的 Proxy 配置及其记住的凭据仍保留/);
+  assert.match(source, /function storageFailureMessage\(defaultMessage, rollbackFailureMessage\)/);
+  assert.match(source, /配置或凭据可能不一致/);
+  assert.match(source, /该 Proxy 配置已不存在/);
   assert.doesNotMatch(logout, /clearConfigWithWarning\(\);/);
 });
 

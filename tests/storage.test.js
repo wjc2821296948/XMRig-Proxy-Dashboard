@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   clearConfig,
   clearTheme,
+  consumeStorageRecoveryWarning,
   clearWriteAccess,
   loadConfig,
   loadTheme,
@@ -37,8 +38,11 @@ globalThis.localStorage = new MemoryStorage();
 globalThis.sessionStorage = new MemoryStorage();
 
 beforeEach(() => {
-  globalThis.localStorage.clear();
-  globalThis.sessionStorage.clear();
+  // Replace, rather than merely clear, storage shims so a failure-mode fixture
+  // cannot leak a blocked/quota-exceeded implementation into later tests.
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  consumeStorageRecoveryWarning();
 });
 
 test("remembered config is stored in localStorage only", () => {
@@ -392,32 +396,641 @@ test("malformed and non-object session token payloads safely fall back to empty 
 });
 
 
-test("malformed remember flags never opt profile tokens into persistent storage", async () => {
+test("session token map rejects non-string and oversized credentials", async () => {
   const { saveProfile, loadProfiles } = await import("../src/storage.js");
+  saveProfile({
+    id: "session-profile-token-validation",
+    name: "Session token validation",
+    apiUrl: "https://session.example:8080",
+    apiToken: "valid-token",
+    remember: false,
+    refreshInterval: 10,
+  });
 
-  for (const [id, remember] of [["null-remember", null], ["string-remember", "false"]]) {
-    const saved = saveProfile({
-      id,
-      name: id,
-      apiUrl: "https://proxy.example:8080",
-      apiToken: "session-secret",
-      remember,
-      refreshInterval: 10,
-    });
-
-    assert.equal(saved.remember, false, `remember=${String(remember)} should fail closed`);
-    const persisted = JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_profiles"));
-    assert.equal(persisted.find(profile => profile.id === id).apiToken, undefined);
-    assert.equal(loadProfiles().find(profile => profile.id === id).apiToken, "session-secret");
+  const malformedValues = [
+    { apiToken: "object-value" },
+    ["array-token"],
+    123,
+    null,
+    "x".repeat(4097),
+  ];
+  for (const malformed of malformedValues) {
+    globalThis.sessionStorage.setItem(
+      "xmrig_proxy_session_tokens",
+      JSON.stringify({ "session-profile-token-validation": malformed }),
+    );
+    assert.equal(
+      loadProfiles()[0].apiToken,
+      "",
+      `malformed token value ${typeof malformed} must never be returned as a credential`,
+    );
   }
 
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", JSON.stringify({
+    "session-profile-token-validation": "valid-token",
+  }));
+  assert.equal(loadProfiles()[0].apiToken, "valid-token");
+});
+
+
+test("storage reads that throw degrade to empty config and default theme", () => {
+  class BlockedStorage extends MemoryStorage {
+    getItem() { throw new DOMException("blocked", "SecurityError"); }
+    setItem() { throw new DOMException("blocked", "SecurityError"); }
+    removeItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new BlockedStorage();
+  globalThis.sessionStorage = new BlockedStorage();
+
+  assert.equal(loadConfig(), null);
+  assert.equal(loadTheme(), "dark");
+  assert.equal(saveConfig({ apiUrl: "https://proxy.example", apiToken: "", remember: true, refreshInterval: 10 }), false);
+  clearConfig();
+  clearTheme();
+});
+
+test("quota errors do not report profile or config saves as successful", async () => {
+  class QuotaStorage extends MemoryStorage {
+    setItem() { throw new DOMException("quota exceeded", "QuotaExceededError"); }
+  }
+  globalThis.localStorage = new QuotaStorage();
+  globalThis.sessionStorage = new QuotaStorage();
+  const { saveProfile } = await import("../src/storage.js");
+
+  assert.equal(saveConfig({ apiUrl: "https://proxy.example", apiToken: "", remember: true, refreshInterval: 10 }), false);
+  assert.equal(saveProfile({ id: "quota-profile", name: "Quota", apiUrl: "https://proxy.example", apiToken: "secret", remember: true, refreshInterval: 10 }), null);
+});
+
+
+test("remembered profiles still save when sessionStorage writes are blocked", async () => {
+  class BlockedSessionStorage extends MemoryStorage {
+    setItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new BlockedSessionStorage();
+  const { saveProfile } = await import("../src/storage.js");
+
+  const profile = saveProfile({
+    id: "persistent-only",
+    name: "Persistent",
+    apiUrl: "https://proxy.example",
+    apiToken: "secret",
+    remember: true,
+    refreshInterval: 10,
+  });
+  assert.equal(profile?.id, "persistent-only");
+});
+
+
+test("session-only config remains usable when localStorage is inaccessible", () => {
+  class BlockedLocalStorage extends MemoryStorage {
+    getItem() { throw new DOMException("blocked", "SecurityError"); }
+    removeItem() { throw new DOMException("blocked", "SecurityError"); }
+    setItem() { throw new DOMException("blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new BlockedLocalStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const cfg = { apiUrl: "https://session.example", apiToken: "", remember: false, refreshInterval: 10 };
+
+  assert.equal(saveConfig(cfg), true);
+  assert.deepEqual(loadConfig(), cfg);
+});
+
+test("session-only config does not shadow a readable persistent config when cleanup fails", () => {
+  class CannotRemoveLocalStorage extends MemoryStorage {
+    removeItem() { throw new DOMException("locked", "SecurityError"); }
+  }
+  globalThis.localStorage = new CannotRemoveLocalStorage();
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://old.example", apiToken: "old", remember: true, refreshInterval: 10,
+  }));
+
+  assert.equal(saveConfig({ apiUrl: "https://new.example", apiToken: "", remember: false, refreshInterval: 10 }), false);
+  assert.equal(loadConfig().apiUrl, "https://old.example");
+});
+
+test("write-access persistence reports quota failures", async () => {
+  class QuotaStorage extends MemoryStorage {
+    setItem() { throw new DOMException("quota exceeded", "QuotaExceededError"); }
+  }
+  globalThis.localStorage = new QuotaStorage();
+  const { saveWriteAccess } = await import("../src/storage.js");
+  assert.equal(saveWriteAccess(true, "https://proxy.example"), false);
+});
+
+
+test("clearConfig overwrites credentials when removeItem fails but writes work", () => {
+  class CannotRemoveLocalStorage extends MemoryStorage {
+    removeItem() { throw new DOMException("remove blocked", "SecurityError"); }
+  }
+  globalThis.localStorage = new CannotRemoveLocalStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://local.example", apiToken: "local-secret", remember: true, refreshInterval: 10,
+  }));
+  globalThis.localStorage.setItem("xmrig_proxy_active_profile", "profile-id");
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://session.example", apiToken: "session-secret", remember: false, refreshInterval: 10,
+  }));
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", JSON.stringify({ profile: "session-secret" }));
+
+  assert.equal(clearConfig(), true);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), "");
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "");
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
+});
+
+test("clearConfig reports partial cleanup when credential storage is fully blocked", () => {
+  class PartiallyBlockedLocalStorage extends MemoryStorage {
+    constructor() {
+      super();
+      this.locked = false;
+    }
+    setItem(key, value) {
+      if (this.locked) throw new DOMException("storage blocked", "SecurityError");
+      super.setItem(key, value);
+    }
+    removeItem() { throw new DOMException("remove blocked", "SecurityError"); }
+  }
+  const local = new PartiallyBlockedLocalStorage();
+  local.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://local.example", apiToken: "local-secret", remember: true, refreshInterval: 10,
+  }));
+  local.locked = true;
+  globalThis.localStorage = local;
+  globalThis.sessionStorage = new MemoryStorage();
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://session.example", apiToken: "session-secret", remember: false, refreshInterval: 10,
+  }));
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", JSON.stringify({ profile: "session-secret" }));
+
+  assert.equal(clearConfig(), false);
+  assert.ok(globalThis.localStorage.getItem("xmrig_proxy_config").includes("local-secret"));
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
+});
+
+
+test("profile remember flags distinguish absent legacy values from malformed values", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  const malformed = saveProfile({
+    id: "bad-remember",
+    name: "Bad remember",
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "session-secret",
+    remember: null,
+    refreshInterval: 10,
+  });
+  assert.equal(malformed.remember, false);
+  assert.equal(JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_profiles")).find(p => p.id === "bad-remember").apiToken, undefined);
+  assert.equal(loadProfiles().find(p => p.id === "bad-remember").apiToken, "session-secret");
+
   const legacy = saveProfile({
-    id: "legacy-missing-remember",
+    id: "legacy-no-remember",
     name: "Legacy",
     apiUrl: "https://legacy.example:8080",
     apiToken: "persistent-secret",
     refreshInterval: 10,
   });
-  assert.equal(legacy.remember, true, "omitted legacy remember flag preserves backward compatibility");
-  assert.ok(globalThis.localStorage.getItem("xmrig_proxy_profiles").includes("persistent-secret"));
+  assert.equal(legacy.remember, true);
+});
+
+
+test("corrupt local config cannot block a valid session config when removal is denied", () => {
+  class CannotRemoveStorage extends MemoryStorage {
+    removeItem() { throw new DOMException("remove denied", "SecurityError"); }
+  }
+  globalThis.localStorage = new CannotRemoveStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  globalThis.localStorage.setItem("xmrig_proxy_config", "{bad json");
+  const fallback = {
+    apiUrl: "https://session.example",
+    apiToken: "session-token",
+    remember: false,
+    refreshInterval: 10,
+  };
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify(fallback));
+
+  assert.deepEqual(loadConfig(), fallback);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), "");
+});
+
+
+test("storage limits reject oversized config, tokens, URLs, and profile names", async () => {
+  const { saveProfile } = await import("../src/storage.js");
+  const base = { apiUrl: "https://proxy.example:8080", apiToken: "token", remember: true, refreshInterval: 10 };
+
+  assert.equal(saveConfig({ ...base, apiToken: "x".repeat(5000) }), false);
+  assert.equal(saveConfig({ ...base, apiUrl: "https://proxy.example/" + "x".repeat(3000) }), false);
+  assert.equal(saveConfig({ ...base, padding: "x".repeat(110 * 1024) }), false);
+
+  assert.equal(saveProfile({
+    id: "oversized-token", name: "Token", apiUrl: base.apiUrl,
+    apiToken: "x".repeat(5000), remember: true, refreshInterval: 10,
+  }), null);
+  assert.equal(saveProfile({
+    id: "oversized-url", name: "URL", apiUrl: "https://proxy.example/" + "x".repeat(3000),
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }), null);
+  assert.equal(saveProfile({
+    id: "oversized-name", name: "x".repeat(129), apiUrl: base.apiUrl,
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }), null);
+});
+
+test("non-string saved profile tokens are never persisted as credentials", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+  const saved = saveProfile({
+    id: "object-token", name: "Object token", apiUrl: "https://proxy.example:8080",
+    apiToken: { secret: "unexpected" }, remember: true, refreshInterval: 10,
+  });
+  assert.equal(saved.apiToken, "");
+  assert.equal(loadProfiles().find(p => p.id === "object-token").apiToken, "");
+});
+
+
+
+test("unremovable corrupt config still falls back and surfaces a cleanup warning", async () => {
+  const blocked = {
+    data: new Map([["xmrig_proxy_config", "{bad json"]]),
+    getItem(key) { return this.data.has(key) ? this.data.get(key) : null; },
+    setItem() { throw new DOMException("storage locked", "SecurityError"); },
+    removeItem() { throw new DOMException("storage locked", "SecurityError"); },
+    clear() { this.data.clear(); },
+  };
+  globalThis.localStorage = blocked;
+  globalThis.sessionStorage = new MemoryStorage();
+  const fallback = {
+    apiUrl: "https://session.example",
+    apiToken: "session-token",
+    remember: false,
+    refreshInterval: 10,
+  };
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify(fallback));
+
+  const { consumeConfigCleanupWarning } = await import("../src/storage.js");
+  assert.deepEqual(loadConfig(), fallback);
+  assert.equal(consumeConfigCleanupWarning(), true);
+  assert.equal(consumeConfigCleanupWarning(), false);
+});
+
+test("failed session-only profile switches restore the previous active connection", async () => {
+  // Previous tests intentionally replace storage with throwing shims; start from usable stores.
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, setActiveProfile, loadActiveProfileId, loadConfig } = await import("../src/storage.js");
+  saveProfile({
+    id: "remembered-before-switch", name: "Remembered", apiUrl: "https://remembered.example",
+    apiToken: "persistent", remember: true, refreshInterval: 10,
+  });
+  saveProfile({
+    id: "session-target", name: "Session", apiUrl: "https://session.example",
+    apiToken: "temporary", remember: false, refreshInterval: 10,
+  });
+  setActiveProfile("remembered-before-switch");
+
+  const workingSessionStorage = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => workingSessionStorage.getItem(key),
+    removeItem: key => workingSessionStorage.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_config") throw new DOMException("write denied", "QuotaExceededError");
+      workingSessionStorage.setItem(key, value);
+    },
+    clear: () => workingSessionStorage.clear(),
+  };
+
+  assert.equal(setActiveProfile("session-target"), null);
+  assert.equal(loadActiveProfileId(), "remembered-before-switch");
+  assert.equal(loadConfig().apiUrl, "https://remembered.example");
+});
+
+
+test("active profile ID and connection config remain consistent if active ID persistence fails", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, setActiveProfile, loadActiveProfileId, loadConfig } = await import("../src/storage.js");
+  saveProfile({
+    id: "config-before-id", name: "Remembered", apiUrl: "https://remembered.example",
+    apiToken: "persistent", remember: true, refreshInterval: 10,
+  });
+  saveProfile({
+    id: "session-target-id-fails", name: "Session", apiUrl: "https://session.example",
+    apiToken: "temporary", remember: false, refreshInterval: 10,
+  });
+  assert.ok(setActiveProfile("config-before-id"));
+
+  const workingLocal = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => workingLocal.getItem(key),
+    removeItem: key => workingLocal.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_active_profile") throw new DOMException("active ID write denied", "QuotaExceededError");
+      workingLocal.setItem(key, value);
+    },
+    clear: () => workingLocal.clear(),
+  };
+
+  assert.equal(setActiveProfile("session-target-id-fails"), null);
+  assert.equal(loadActiveProfileId(), "config-before-id");
+  assert.equal(loadConfig().apiUrl, "https://remembered.example");
+});
+
+
+test("failed active profile deletion restores the profile list, ID, and connection", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, setActiveProfile, deleteProfile, loadProfiles, loadActiveProfileId, loadConfig } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "keep-profile", name: "Keep", apiUrl: "https://keep.example",
+    apiToken: "keep-token", remember: true, refreshInterval: 10,
+  });
+  saveProfile({
+    id: "remove-profile", name: "Remove", apiUrl: "https://remove.example",
+    apiToken: "remove-token", remember: false, refreshInterval: 10,
+  });
+  assert.ok(setActiveProfile("remove-profile"));
+
+  const workingSession = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => workingSession.getItem(key),
+    removeItem: key => workingSession.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_session_tokens") {
+        throw new DOMException("token map write denied", "QuotaExceededError");
+      }
+      workingSession.setItem(key, value);
+    },
+    clear: () => workingSession.clear(),
+  };
+
+  assert.equal(deleteProfile("remove-profile"), false);
+  assert.deepEqual(loadProfiles().map(p => p.id).sort(), ["keep-profile", "remove-profile"]);
+  assert.equal(loadActiveProfileId(), "remove-profile");
+  assert.equal(loadConfig().apiUrl, "https://remove.example");
+  assert.equal(JSON.parse(workingSession.getItem("xmrig_proxy_session_tokens"))["remove-profile"], "remove-token");
+});
+
+
+test("saveConfig fails closed on malformed remember flags", () => {
+  const config = {
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "temporary-secret",
+    remember: null,
+    refreshInterval: 10,
+  };
+  assert.equal(saveConfig(config), true);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+  const raw = JSON.parse(globalThis.sessionStorage.getItem("xmrig_proxy_config"));
+  assert.equal(raw.remember, false);
+  assert.equal(raw.apiToken, "temporary-secret");
+  assert.equal(loadConfig().remember, false);
+});
+
+test("loadConfig never returns malformed or oversized credentials as a usable token", () => {
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://proxy.example:8080",
+    apiToken: { secret: "must-not-be-sent" },
+    remember: null,
+    refreshInterval: 10,
+  }));
+  assert.equal(loadConfig(), null);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "x".repeat(5000),
+    remember: true,
+    refreshInterval: 10,
+  }));
+  assert.equal(loadConfig(), null);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+});
+
+
+test("local configs with malformed or false remember flags migrate to session storage", () => {
+  const config = {
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "temporary-secret",
+    remember: null,
+    refreshInterval: 10,
+  };
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify(config));
+
+  assert.deepEqual(loadConfig(), { ...config, remember: false });
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(JSON.parse(globalThis.sessionStorage.getItem("xmrig_proxy_config")).remember, false);
+});
+
+
+test("remembered config save rolls back when stale session config cannot be cleared", () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const previous = {
+    apiUrl: "https://previous.example:8080",
+    apiToken: "previous-token",
+    remember: true,
+    refreshInterval: 10,
+  };
+  assert.equal(saveConfig(previous), true);
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://stale.example:8080",
+    apiToken: "stale-token",
+    remember: false,
+    refreshInterval: 10,
+  }));
+
+  const workingSession = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => workingSession.getItem(key),
+    removeItem() { throw new DOMException("remove denied", "SecurityError"); },
+    setItem() { throw new DOMException("write denied", "SecurityError"); },
+    clear: () => workingSession.clear(),
+  };
+
+  assert.equal(saveConfig({
+    apiUrl: "https://new.example:8080",
+    apiToken: "new-token",
+    remember: true,
+    refreshInterval: 10,
+  }), false);
+  assert.equal(JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_config")).apiUrl, "https://previous.example:8080");
+  assert.equal(JSON.parse(workingSession.getItem("xmrig_proxy_config")).apiToken, "stale-token");
+});
+
+test("profile save rolls back all keys when active ID persistence fails", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, loadProfiles, loadActiveProfileId, getConfig } = await import("../src/storage.js");
+
+  assert.ok(saveProfile({
+    id: "profile-stable", name: "Stable", apiUrl: "https://stable.example:8080",
+    apiToken: "stable-token", remember: true, refreshInterval: 10,
+  }));
+  const workingLocal = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => workingLocal.getItem(key),
+    removeItem: key => workingLocal.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_active_profile" && value === "profile-new") {
+        throw new DOMException("quota exceeded", "QuotaExceededError");
+      }
+      workingLocal.setItem(key, value);
+    },
+    clear: () => workingLocal.clear(),
+  };
+
+  assert.equal(saveProfile({
+    id: "profile-new", name: "New", apiUrl: "https://new.example:8080",
+    apiToken: "new-token", remember: false, refreshInterval: 10,
+  }), null);
+  assert.deepEqual(loadProfiles().map(p => p.id), ["profile-stable"]);
+  assert.equal(loadActiveProfileId(), "profile-stable");
+  assert.equal(getConfig().apiUrl, "https://stable.example:8080");
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
+});
+
+
+test("remembered config refuses to overwrite credentials when existing storage cannot be read", () => {
+  const backing = new MemoryStorage();
+  const previous = JSON.stringify({
+    apiUrl: "https://previous.example",
+    apiToken: "previous-token",
+    remember: true,
+    refreshInterval: 10,
+  });
+  backing.setItem("xmrig_proxy_config", previous);
+  let writes = 0;
+  globalThis.localStorage = {
+    getItem() { throw new DOMException("read blocked", "SecurityError"); },
+    setItem(key, value) { writes += 1; backing.setItem(key, value); },
+    removeItem(key) { backing.removeItem(key); },
+    clear() { backing.clear(); },
+  };
+  globalThis.sessionStorage = new MemoryStorage();
+
+  assert.equal(saveConfig({
+    apiUrl: "https://new.example",
+    apiToken: "new-token",
+    remember: true,
+    refreshInterval: 10,
+  }), false);
+  assert.equal(writes, 0, "do not overwrite unreadable prior credentials");
+  assert.equal(backing.getItem("xmrig_proxy_config"), previous);
+});
+
+
+test("profile save reports a partial rollback when prior profile list cannot be restored", async () => {
+  const { saveProfile, loadProfiles, loadActiveProfileId } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "stable-profile", name: "Stable", apiUrl: "https://stable.example",
+    apiToken: "stable-token", remember: true, refreshInterval: 10,
+  }));
+
+  const backing = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => backing.getItem(key),
+    removeItem: key => backing.removeItem(key),
+    clear: () => backing.clear(),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_active_profile" && value === "new-profile") {
+        throw new DOMException("active ID write denied", "QuotaExceededError");
+      }
+      if (key === "xmrig_proxy_profiles") {
+        const ids = JSON.parse(value).map(profile => profile.id);
+        if (!ids.includes("new-profile")) {
+          throw new DOMException("rollback blocked", "QuotaExceededError");
+        }
+      }
+      backing.setItem(key, value);
+    },
+  };
+
+  assert.equal(saveProfile({
+    id: "new-profile", name: "New", apiUrl: "https://new.example",
+    apiToken: "new-token", remember: true, refreshInterval: 10,
+  }), null);
+  assert.deepEqual(loadProfiles().map(profile => profile.id).sort(), ["new-profile", "stable-profile"]);
+  assert.equal(loadActiveProfileId(), "stable-profile");
+  assert.equal(consumeStorageRecoveryWarning(), true);
+  assert.equal(consumeStorageRecoveryWarning(), false, "warning is one-shot");
+});
+
+
+test("profile deletion reports when rollback cannot restore the active profile ID", async () => {
+  const { saveProfile, deleteProfile, loadProfiles, loadActiveProfileId } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "keep-profile", name: "Keep", apiUrl: "https://keep.example",
+    apiToken: "keep-token", remember: true, refreshInterval: 10,
+  }));
+  assert.ok(saveProfile({
+    id: "delete-profile", name: "Delete", apiUrl: "https://delete.example",
+    apiToken: "delete-token", remember: true, refreshInterval: 10,
+  }));
+
+  const backing = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => backing.getItem(key),
+    removeItem: key => backing.removeItem(key),
+    clear: () => backing.clear(),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_profiles" && !JSON.parse(value).some(profile => profile.id === "delete-profile")) {
+        throw new DOMException("profile deletion write denied", "QuotaExceededError");
+      }
+      if (key === "xmrig_proxy_active_profile" && value === "delete-profile") {
+        throw new DOMException("active ID rollback denied", "QuotaExceededError");
+      }
+      backing.setItem(key, value);
+    },
+  };
+
+  assert.equal(deleteProfile("delete-profile"), false);
+  assert.deepEqual(loadProfiles().map(profile => profile.id).sort(), ["delete-profile", "keep-profile"]);
+  assert.equal(loadActiveProfileId(), "keep-profile", "active ID rollback failed and must be reported");
+  assert.equal(loadConfig().apiUrl, "https://delete.example", "connection config may no longer match the active profile ID");
+  assert.equal(consumeStorageRecoveryWarning(), true);
+});
+
+
+test("failed remembered-config rollback never reactivates malformed prior config", () => {
+  globalThis.localStorage.setItem("xmrig_proxy_config", "{malformed prior config");
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://stale.example", apiToken: "stale-token", remember: false, refreshInterval: 10,
+  }));
+  const backing = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => backing.getItem(key),
+    removeItem() { throw new DOMException("remove blocked", "SecurityError"); },
+    setItem() { throw new DOMException("write blocked", "SecurityError"); },
+    clear: () => backing.clear(),
+  };
+
+  assert.equal(saveConfig({
+    apiUrl: "https://new.example", apiToken: "new-token", remember: true, refreshInterval: 10,
+  }), false);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(consumeStorageRecoveryWarning(), true, "stale session credentials could not be invalidated");
+});
+
+
+test("profile lookup distinguishes a missing profile from unavailable storage", async () => {
+  const { saveProfile, getProfileById } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "known-profile", name: "Known", apiUrl: "https://known.example",
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }));
+  assert.equal(getProfileById("missing-profile").status, "not-found");
+  assert.equal(getProfileById("known-profile").status, "found");
+
+  const backing = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem() { throw new DOMException("storage unavailable", "SecurityError"); },
+    setItem: (key, value) => backing.setItem(key, value),
+    removeItem: key => backing.removeItem(key),
+    clear: () => backing.clear(),
+  };
+  assert.equal(getProfileById("known-profile").status, "storage-unavailable");
 });

@@ -12,8 +12,8 @@
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
-  loadConfig, saveConfig, clearConfig, getConfig, consumeConfigCleanupWarning,
-  loadProfiles, saveProfile, deleteProfile, setActiveProfile,
+  loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
+  loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
@@ -36,9 +36,13 @@ import { escapeHtml } from "./escape-html.js";
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
   if (!cleared && showWarning) {
-    showToast("浏览器存储不可用，部分凭据可能仍保留。请清理站点数据后重试", "error");
+    showToast("浏览器拒绝清理部分连接状态；请清理此站点的浏览数据后重试", "error");
   }
   return cleared;
+}
+
+function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
+  return consumeStorageRecoveryWarning() ? rollbackFailureMessage : defaultMessage;
 }
 
 // Global state
@@ -46,6 +50,7 @@ let refreshInterval = null;
 let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
+
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
 function getApiUrlValidationError(value) {
@@ -123,7 +128,9 @@ function syncSystemThemeListener(preference) {
 
 function applyThemePreference(preference, { persist = false } = {}) {
   const themePreference = ["dark", "light", "system"].includes(preference) ? preference : "dark";
-  if (persist) saveTheme(themePreference);
+  if (persist && !saveTheme(themePreference)) {
+    showToast("主题已切换，但浏览器存储不可用，刷新后不会保留该设置", "warning");
+  }
   applyResolvedTheme(resolveThemePreference(themePreference));
   syncSystemThemeListener(themePreference);
   return themePreference;
@@ -528,7 +535,7 @@ async function handleConnect() {
   // automatically participates in the multi-Proxy profile list.
   const existingProfile = getActiveProfile() || loadProfiles()[0] || null;
   const profileName = existingProfile?.name || "Proxy 1";
-  saveProfile({
+  const savedProfile = saveProfile({
     ...(existingProfile || {}),
     name: profileName,
     apiUrl: url,
@@ -536,6 +543,13 @@ async function handleConnect() {
     remember,
     refreshInterval: existingProfile?.refreshInterval ?? 10,
   });
+  if (!savedProfile) {
+    showToast(storageFailureMessage(
+      "浏览器存储不可用或空间不足，连接配置未保存。请检查存储设置后重试",
+      "连接配置保存失败，而且浏览器存储未能完整恢复之前的状态。部分配置可能不一致，请清理此站点的浏览数据后重新配置",
+    ), "error");
+    return;
+  }
 
   // Show loading skeleton
   renderSkeleton(els.dashboard, 6);
@@ -962,9 +976,22 @@ function openSettingsModal(selectedProfileId = null) {
 
   overlay.querySelectorAll('[data-action="select-profile"]').forEach(button => {
     button.addEventListener("click", async () => {
-      const profile = setActiveProfile(button.dataset.profileId);
+      const requestedId = button.dataset.profileId;
+      const lookup = getProfileById(requestedId);
+      if (lookup.status === "storage-unavailable") {
+        showToast("无法读取 Proxy 配置：浏览器存储不可用，请检查存储设置后重试", "error");
+        return;
+      }
+      if (lookup.status === "not-found") {
+        showToast("该 Proxy 配置已不存在，请刷新配置列表后重试", "warn");
+        return;
+      }
+      const profile = setActiveProfile(requestedId);
       if (!profile) {
-        showToast("找不到该 Proxy 配置", "error");
+        showToast(storageFailureMessage(
+          "无法切换配置：浏览器存储不可用或空间不足，原连接状态已尽力保留",
+          "切换失败，而且浏览器存储未能完整恢复原连接状态。请清理此站点的浏览数据后重新配置",
+        ), "error");
         return;
       }
       await reconnectProfile(profile);
@@ -983,7 +1010,10 @@ function openSettingsModal(selectedProfileId = null) {
       if (!confirm("确定删除「" + profile.name + "」？")) return;
       const wasActive = id === loadActiveProfileId();
       if (!deleteProfile(id)) {
-        showToast("删除配置失败：浏览器存储不可用或空间不足，可能有部分更改未能回滚", "error");
+        showToast(storageFailureMessage(
+          "删除配置失败：浏览器存储不可用或空间不足，未能完成删除。请检查存储设置后重试",
+          "删除失败，而且浏览器存储未能完整恢复之前的状态。配置或凭据可能不一致，请清理此站点的浏览数据后重新配置",
+        ), "error");
         return;
       }
       if (wasActive) {
@@ -1007,8 +1037,8 @@ function openSettingsModal(selectedProfileId = null) {
     closeModal(overlay);
     showToast(
       cleared
-        ? "已登出当前连接；不会删除你保存的 Proxy 配置"
-        : "已退出当前视图，但仍有部分连接凭据无法清除。请清理此站点的浏览数据",
+        ? "已登出当前连接；已保存的 Proxy 配置及其记住的凭据仍保留"
+        : "浏览器拒绝清理部分连接状态；请清理此站点的浏览数据后重试",
       cleared ? "info" : "error",
     );
     renderConnectForm();
@@ -1045,7 +1075,10 @@ function openSettingsModal(selectedProfileId = null) {
       refreshInterval,
     });
     if (!profile) {
-      showToast("配置保存失败", "error");
+      showToast(storageFailureMessage(
+        "配置保存失败：浏览器存储不可用或空间不足，请检查存储设置后重试",
+        "配置保存失败，而且浏览器存储未能完整恢复之前的状态。配置或凭据可能不一致，请清理此站点的浏览数据后重新配置",
+      ), "error");
       return;
     }
 
