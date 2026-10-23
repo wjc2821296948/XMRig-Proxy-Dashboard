@@ -178,7 +178,9 @@ function setRibbonConnectState(state) {
  *                                          transient disconnects).
  */
 function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
-  if (shouldClear) clearWriteAccess();
+  if (shouldClear && !clearWriteAccess()) {
+    showToast("无法保存写入权限状态：浏览器存储不可用", "warn");
+  }
   setRibbonConnectState("disconnected");
   // Only repaint the alt row when the persisted flag actually changed;
   // a transient disconnect (network blip) should not reflash the picker.
@@ -197,7 +199,9 @@ function markDisconnected({ clearWriteAccess: shouldClear = false } = {}) {
  *                                     a connection-level error toast).
  */
 function applyProbeResult(state, showUnknownToast = true) {
-  saveWriteAccess(state === "unrestricted");
+  if (!saveWriteAccess(state === "unrestricted")) {
+    showToast("无法保存 Proxy 权限状态：浏览器存储不可用，刷新后可能需要重新检测", "warn");
+  }
   if (state === "unknown" && showUnknownToast) {
     showToast("无法确认 Proxy 写入权限，配置模式已禁用（请检查网络或 CORS）", "warn");
   }
