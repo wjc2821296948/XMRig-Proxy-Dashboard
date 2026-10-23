@@ -89,7 +89,8 @@ export function renderSkeleton(container, count = 6) {
  * Format hashrate from KH/s to human readable.
  */
 export function formatHashrate(kh) {
-  if (!kh || kh === 0) return "0 H/s";
+  if (!Number.isFinite(kh) || kh < 0) return "—";
+  if (kh === 0) return "0 H/s";
   if (kh >= 1000) return `${(kh / 1000).toFixed(2)} MH/s`;
   return `${kh.toFixed(2)} KH/s`;
 }
@@ -98,6 +99,7 @@ export function formatHashrate(kh) {
  * Format bytes to human readable.
  */
 export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`;
   if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(2)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(2)} KB`;
@@ -108,6 +110,7 @@ export function formatBytes(bytes) {
  * Format uptime seconds to "Xd Yh Zm".
  */
 export function formatUptime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -118,6 +121,7 @@ export function formatUptime(seconds) {
  * Format number with thousand separators.
  */
 export function formatNumber(num) {
+  if (!Number.isFinite(num) || num < 0) return "—";
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
