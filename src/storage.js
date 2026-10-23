@@ -124,10 +124,20 @@ export function saveConfig(cfg) {
   if (serialized.length > MAX_CONFIG_SIZE) return false;
 
   if (normalized.remember) {
-    // localStorage is authoritative in remember mode. A blocked session store
-    // must not prevent a persistent save; any stale session entry is ignored.
+    // localStorage is authoritative in remember mode, but do not leave a
+    // readable session copy of the previous connection behind.
+    const previousLocal = safeGet("local", CONFIG_KEY);
+    const previousSession = safeGet("session", CONFIG_KEY);
     if (!safeSet("local", CONFIG_KEY, serialized)) return false;
-    safeRemove("session", CONFIG_KEY);
+
+    if (!safeRemoveOrReplace("session", CONFIG_KEY, "")) {
+      // A blocked session store may be ignored only when no stale value is
+      // readable. If one exists, restore the prior local config and fail.
+      if (previousSession !== null) {
+        restoreStorageEntry("local", CONFIG_KEY, previousLocal);
+        return false;
+      }
+    }
     return true;
   }
 
@@ -228,6 +238,7 @@ export function loadProfiles() {
 
 /** Save or update one Proxy profile and make it active. */
 export function saveProfile(profile) {
+  if (!profile || typeof profile !== "object") return null;
   const normalized = normalizeProfile({
     ...profile,
     id: profile.id || `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -238,6 +249,27 @@ export function saveProfile(profile) {
   const index = profiles.findIndex(item => item.id === normalized.id);
   if (index >= 0) profiles[index] = normalized;
   else profiles.push(normalized);
+
+  // Capture raw values before touching multiple storage keys. Browser storage
+  // has no transaction API, so restore the previous entries on any later
+  // failure instead of leaving a half-created or half-switched profile.
+  const previous = {
+    profiles: safeGet("local", PROFILES_KEY),
+    activeId: safeGet("local", ACTIVE_PROFILE_KEY),
+    localConfig: safeGet("local", CONFIG_KEY),
+    sessionConfig: safeGet("session", CONFIG_KEY),
+    tokens: safeGet("session", PROFILE_TOKENS_KEY),
+  };
+  const restore = () => {
+    const results = [
+      restoreStorageEntry("local", PROFILES_KEY, previous.profiles),
+      restoreStorageEntry("local", ACTIVE_PROFILE_KEY, previous.activeId),
+      restoreStorageEntry("local", CONFIG_KEY, previous.localConfig),
+      restoreStorageEntry("session", CONFIG_KEY, previous.sessionConfig),
+      restoreStorageEntry("session", PROFILE_TOKENS_KEY, previous.tokens),
+    ];
+    return results.every(Boolean);
+  };
 
   const tokens = readProfileTokens();
   if (normalized.remember) {
@@ -251,12 +283,21 @@ export function saveProfile(profile) {
     tokens[normalized.id] = normalized.apiToken;
     if (!writeProfileTokens(tokens)) return null;
   }
-  if (!writeProfiles(profiles)
-      || !safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)
-      || !saveConfig(normalized)) return null;
+
+  if (!writeProfiles(profiles)) {
+    restore();
+    return null;
+  }
+  if (!saveConfig(normalized)) {
+    restore();
+    return null;
+  }
+  if (!safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)) {
+    restore();
+    return null;
+  }
   return normalized;
 }
-
 /** Remove a saved Proxy profile. The last profile cannot be removed. */
 export function deleteProfile(id) {
   const profiles = loadProfiles();
@@ -454,6 +495,11 @@ function safeRemoveOrReplace(kind, key, replacement) {
   // Some stores allow writes but reject removeItem. Replace credentials with
   // an inert value in that case; a blocked store still reports failure.
   return safeSet(kind, key, replacement);
+}
+
+function restoreStorageEntry(kind, key, previousValue) {
+  if (previousValue !== null) return safeSet(kind, key, previousValue);
+  return safeRemoveOrReplace(kind, key, "");
 }
 
 /** Clear connection config from both storages (logout). Does NOT touch theme. */
