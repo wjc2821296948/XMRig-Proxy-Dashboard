@@ -29,7 +29,6 @@ const MAX_CONFIG_SIZE = 100 * 1024;
 const MAX_TOKEN_LENGTH = 4096;
 const MAX_URL_LENGTH = 2048;
 const MAX_PROFILE_NAME_LENGTH = 128;
-let configCleanupWarningPending = false;
 
 /** Storage access can throw in privacy-restricted contexts or at quota. */
 function storageFor(kind) {
@@ -76,11 +75,6 @@ function discardStoredConfig(kind) {
   return false;
 }
 
-export function consumeConfigCleanupWarning() {
-  const pending = configCleanupWarningPending;
-  configCleanupWarningPending = false;
-  return pending;
-}
 
 
 /* --------------------------------------------------------------------------
@@ -575,4 +569,13 @@ function writeWriteAccessMap(map) {
 export function getConfig() {
   const active = getActiveProfile();
   return active || loadConfig();
+}
+
+let configCleanupWarningPending = false;
+
+/** Consume the warning raised when a corrupt config cannot be cleared. */
+export function consumeConfigCleanupWarning() {
+  const pending = configCleanupWarningPending;
+  configCleanupWarningPending = false;
+  return pending;
 }
