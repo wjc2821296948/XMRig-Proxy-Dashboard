@@ -758,9 +758,8 @@ test("loadConfig never returns malformed or oversized credentials as a usable to
     remember: null,
     refreshInterval: 10,
   }));
-  const config = loadConfig();
-  assert.equal(config.apiToken, "");
-  assert.equal(config.remember, false);
+  assert.equal(loadConfig(), null);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
 
   globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify({
     apiUrl: "https://proxy.example:8080",
@@ -768,5 +767,21 @@ test("loadConfig never returns malformed or oversized credentials as a usable to
     remember: true,
     refreshInterval: 10,
   }));
-  assert.equal(loadConfig().apiToken, "");
+  assert.equal(loadConfig(), null);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+});
+
+
+test("local configs with malformed or false remember flags migrate to session storage", () => {
+  const config = {
+    apiUrl: "https://proxy.example:8080",
+    apiToken: "temporary-secret",
+    remember: null,
+    refreshInterval: 10,
+  };
+  globalThis.localStorage.setItem("xmrig_proxy_config", JSON.stringify(config));
+
+  assert.deepEqual(loadConfig(), { ...config, remember: false });
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(JSON.parse(globalThis.sessionStorage.getItem("xmrig_proxy_config")).remember, false);
 });
