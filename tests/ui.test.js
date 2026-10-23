@@ -103,3 +103,22 @@ test("toast notifications announce status and have a removal fallback", async ()
     globalThis.clearTimeout = originalClearTimeout;
   }
 });
+
+
+test("metric formatters safely handle invalid API values", () => {
+  for (const value of [NaN, Infinity, -Infinity, -1]) {
+    assert.equal(formatHashrate(value), "—");
+    assert.equal(formatBytes(value), "—");
+    assert.equal(formatUptime(value), "—");
+  }
+  for (const value of [NaN, Infinity, -Infinity, -1, null, undefined]) {
+    assert.equal(formatNumber(value), "—");
+  }
+});
+
+test("zero metrics remain distinct from unavailable metrics", () => {
+  assert.equal(formatHashrate(0), "0 H/s");
+  assert.equal(formatBytes(0), "0 B");
+  assert.equal(formatUptime(0), "0d 0h 0m");
+  assert.equal(formatNumber(0), "0");
+});
