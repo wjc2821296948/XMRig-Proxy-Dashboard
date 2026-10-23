@@ -572,3 +572,57 @@ test("non-string saved profile tokens are never persisted as credentials", async
   assert.equal(saved.apiToken, "");
   assert.equal(loadProfiles().find(p => p.id === "object-token").apiToken, "");
 });
+
+
+
+test("unremovable corrupt config still falls back and surfaces a cleanup warning", async () => {
+  const blocked = {
+    data: new Map([["xmrig_proxy_config", "{bad json"]]),
+    getItem(key) { return this.data.has(key) ? this.data.get(key) : null; },
+    setItem() { throw new DOMException("storage locked", "SecurityError"); },
+    removeItem() { throw new DOMException("storage locked", "SecurityError"); },
+    clear() { this.data.clear(); },
+  };
+  globalThis.localStorage = blocked;
+  globalThis.sessionStorage = new MemoryStorage();
+  const fallback = {
+    apiUrl: "https://session.example",
+    apiToken: "session-token",
+    remember: false,
+    refreshInterval: 10,
+  };
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify(fallback));
+
+  const { consumeConfigCleanupWarning } = await import("../src/storage.js");
+  assert.deepEqual(loadConfig(), fallback);
+  assert.equal(consumeConfigCleanupWarning(), true);
+  assert.equal(consumeConfigCleanupWarning(), false);
+});
+
+test("failed session-only profile switches restore the previous active connection", async () => {
+  const { saveProfile, setActiveProfile, loadActiveProfileId, loadConfig } = await import("../src/storage.js");
+  saveProfile({
+    id: "remembered-before-switch", name: "Remembered", apiUrl: "https://remembered.example",
+    apiToken: "persistent", remember: true, refreshInterval: 10,
+  });
+  saveProfile({
+    id: "session-target", name: "Session", apiUrl: "https://session.example",
+    apiToken: "temporary", remember: false, refreshInterval: 10,
+  });
+  setActiveProfile("remembered-before-switch");
+
+  const workingSessionStorage = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => workingSessionStorage.getItem(key),
+    removeItem: key => workingSessionStorage.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_config") throw new DOMException("write denied", "QuotaExceededError");
+      workingSessionStorage.setItem(key, value);
+    },
+    clear: () => workingSessionStorage.clear(),
+  };
+
+  assert.equal(setActiveProfile("session-target"), null);
+  assert.equal(loadActiveProfileId(), "remembered-before-switch");
+  assert.equal(loadConfig().apiUrl, "https://remembered.example");
+});
