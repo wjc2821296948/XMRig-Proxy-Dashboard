@@ -519,3 +519,23 @@ test("profile remember flags distinguish absent legacy values from malformed val
   });
   assert.equal(legacy.remember, true);
 });
+
+
+test("corrupt local config cannot block a valid session config when removal is denied", () => {
+  class CannotRemoveStorage extends MemoryStorage {
+    removeItem() { throw new DOMException("remove denied", "SecurityError"); }
+  }
+  globalThis.localStorage = new CannotRemoveStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  globalThis.localStorage.setItem("xmrig_proxy_config", "{bad json");
+  const fallback = {
+    apiUrl: "https://session.example",
+    apiToken: "session-token",
+    remember: false,
+    refreshInterval: 10,
+  };
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify(fallback));
+
+  assert.deepEqual(loadConfig(), fallback);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), "");
+});
