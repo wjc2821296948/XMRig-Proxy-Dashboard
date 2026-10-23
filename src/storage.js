@@ -394,12 +394,14 @@ function hydrateConnection(raw) {
   const config = JSON.parse(raw);
   if (typeof config.apiUrl !== "string" || config.apiUrl.length > MAX_URL_LENGTH
       || !isValidApiUrl(config.apiUrl)) return null;
+  if (config.apiToken != null
+      && (typeof config.apiToken !== "string" || config.apiToken.length > MAX_TOKEN_LENGTH)) {
+    return null;
+  }
   const refreshInterval = config.refreshInterval ?? 10;
   return {
     apiUrl:          config.apiUrl,
-    apiToken:        typeof config.apiToken === "string" && config.apiToken.length <= MAX_TOKEN_LENGTH
-      ? config.apiToken
-      : "",
+    apiToken:        typeof config.apiToken === "string" ? config.apiToken : "",
     remember:        Object.hasOwn(config, "remember") ? config.remember === true : true,
     refreshInterval: Math.min(120, Math.max(1, Number(refreshInterval) || 10)),
   };
@@ -414,7 +416,21 @@ export function loadConfig() {
   if (raw) {
     try {
       const hydrated = hydrateConnection(raw);
-      if (hydrated) return hydrated;
+      if (hydrated) {
+        if (hydrated.remember) return hydrated;
+
+        // A session-only config must not remain in localStorage. Persist its
+        // temporary form first, then invalidate the persistent copy.
+        let savedToSession = false;
+        try {
+          savedToSession = safeSet("session", CONFIG_KEY, JSON.stringify(hydrated));
+        } catch {
+          savedToSession = false;
+        }
+        const clearedLocal = discardStoredConfig("local");
+        if (savedToSession && clearedLocal) return hydrated;
+        return null;
+      }
     } catch {
       // JSON parse failure — fall through to sessionStorage.
     }
