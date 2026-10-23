@@ -92,19 +92,29 @@ function discardStoredConfig(kind) {
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
-  if (!cfg || typeof cfg !== "object"
-      || typeof cfg.apiUrl !== "string" || cfg.apiUrl.length > MAX_URL_LENGTH
-      || typeof cfg.apiToken !== "string" || cfg.apiToken.length > MAX_TOKEN_LENGTH) {
-    return false;
-  }
+  if (!cfg || typeof cfg !== "object") return false;
+
+  let normalized;
   let serialized;
   try {
-    serialized = JSON.stringify(cfg);
+    const apiUrl = cfg.apiUrl;
+    const apiToken = cfg.apiToken;
+    if (typeof apiUrl !== "string" || apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(apiUrl)
+        || typeof apiToken !== "string" || apiToken.length > MAX_TOKEN_LENGTH) {
+      return false;
+    }
+    normalized = {
+      ...cfg,
+      // Missing is the old-schema default; explicit malformed values fail closed.
+      remember: Object.hasOwn(cfg, "remember") ? cfg.remember === true : true,
+    };
+    serialized = JSON.stringify(normalized);
   } catch {
     return false;
   }
   if (serialized.length > MAX_CONFIG_SIZE) return false;
-  if (cfg.remember) {
+
+  if (normalized.remember) {
     // localStorage is authoritative in remember mode. A blocked session store
     // must not prevent a persistent save; any stale session entry is ignored.
     if (!safeSet("local", CONFIG_KEY, serialized)) return false;
@@ -120,7 +130,6 @@ export function saveConfig(cfg) {
   }
   return safeSet("session", CONFIG_KEY, serialized);
 }
-
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
   if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
@@ -374,12 +383,15 @@ function isValidApiUrl(url) {
  */
 function hydrateConnection(raw) {
   const config = JSON.parse(raw);
-  if (!isValidApiUrl(config.apiUrl)) return null;
+  if (typeof config.apiUrl !== "string" || config.apiUrl.length > MAX_URL_LENGTH
+      || !isValidApiUrl(config.apiUrl)) return null;
   const refreshInterval = config.refreshInterval ?? 10;
   return {
     apiUrl:          config.apiUrl,
-    apiToken:        config.apiToken        ?? "",
-    remember:        config.remember        ?? true,
+    apiToken:        typeof config.apiToken === "string" && config.apiToken.length <= MAX_TOKEN_LENGTH
+      ? config.apiToken
+      : "",
+    remember:        Object.hasOwn(config, "remember") ? config.remember === true : true,
     refreshInterval: Math.min(120, Math.max(1, Number(refreshInterval) || 10)),
   };
 }
