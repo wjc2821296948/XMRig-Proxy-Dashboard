@@ -290,3 +290,15 @@ test("profile reconnect stops old polling before requesting the new profile", ()
   const stopAt = source.indexOf("stopAutoRefresh();", start);
   assert.ok(start >= 0 && stopAt > start && stopAt < requestAt);
 });
+
+
+test("logout shows one clear status message without duplicate cleanup toasts", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf('document.getElementById("logoutBtn")');
+  const end = source.indexOf('document.getElementById("saveSettings")', start);
+  const logout = source.slice(start, end);
+  assert.match(source, /function clearConfigWithWarning\(\{ showWarning = true \} = \{\}\)/);
+  assert.match(logout, /clearConfigWithWarning\(\{ showWarning: false \}\)/);
+  assert.match(logout, /已登出当前连接；不会删除你保存的 Proxy 配置/);
+  assert.doesNotMatch(logout, /clearConfigWithWarning\(\);/);
+});
