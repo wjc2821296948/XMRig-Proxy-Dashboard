@@ -230,7 +230,7 @@ test("startup does not restart polling after authentication clears the config", 
   const reconnectProfile = source.slice(reconnectStart, reconnectEnd);
   assert.match(
     reconnectProfile,
-    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfig\(\);/,
+    /if \(err\.status === 401 \|\| err\.status === 403\) \{[\s\S]*?stopAutoRefresh\(\);[\s\S]*?clearConfigWithWarning\(\);/,
     "profile-switch authentication failures must stop the previous profile's timer",
   );
   assert.match(
@@ -246,4 +246,11 @@ test("dashboard theme transitions respect reduced-motion preferences", () => {
   assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
   assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
   assert.doesNotMatch(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]{0,400}?transition:\s*none/);
+});
+
+
+test("write-access storage failures are surfaced to the dashboard user", () => {
+  const source = read("src/main.js");
+  assert.match(source, /if \(!saveWriteAccess\(state === "unrestricted"\)\)[\s\S]*?无法保存 Proxy 权限状态/);
+  assert.match(source, /shouldClear && !clearWriteAccess\(\)[\s\S]*?无法保存写入权限状态/);
 });
