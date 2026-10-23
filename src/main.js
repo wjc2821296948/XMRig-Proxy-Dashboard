@@ -12,7 +12,7 @@
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
-  loadConfig, saveConfig, clearConfig, getConfig,
+  loadConfig, saveConfig, clearConfig, getConfig, consumeConfigCleanupWarning,
   loadProfiles, saveProfile, deleteProfile, setActiveProfile,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme,
@@ -1174,6 +1174,9 @@ function init() {
 
   // Load saved config
   const cfg = loadConfig();
+  if (consumeConfigCleanupWarning()) {
+    showToast("发现损坏的连接配置，但浏览器阻止清理；请清理此站点的浏览数据后重试", "warn");
+  }
   if (cfg) {
     // Show skeleton while fetching
     renderSkeleton(els.dashboard, 6);
