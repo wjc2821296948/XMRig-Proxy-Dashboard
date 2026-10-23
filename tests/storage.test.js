@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   clearConfig,
   clearTheme,
+  consumeStorageRecoveryWarning,
   clearWriteAccess,
   loadConfig,
   loadTheme,
@@ -41,6 +42,7 @@ beforeEach(() => {
   // cannot leak a blocked/quota-exceeded implementation into later tests.
   globalThis.localStorage = new MemoryStorage();
   globalThis.sessionStorage = new MemoryStorage();
+  consumeStorageRecoveryWarning();
 });
 
 test("remembered config is stored in localStorage only", () => {
@@ -852,4 +854,146 @@ test("profile save rolls back all keys when active ID persistence fails", async 
   assert.equal(loadActiveProfileId(), "profile-stable");
   assert.equal(getConfig().apiUrl, "https://stable.example:8080");
   assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), null);
+});
+
+
+test("remembered config refuses to overwrite credentials when existing storage cannot be read", () => {
+  const backing = new MemoryStorage();
+  const previous = JSON.stringify({
+    apiUrl: "https://previous.example",
+    apiToken: "previous-token",
+    remember: true,
+    refreshInterval: 10,
+  });
+  backing.setItem("xmrig_proxy_config", previous);
+  let writes = 0;
+  globalThis.localStorage = {
+    getItem() { throw new DOMException("read blocked", "SecurityError"); },
+    setItem(key, value) { writes += 1; backing.setItem(key, value); },
+    removeItem(key) { backing.removeItem(key); },
+    clear() { backing.clear(); },
+  };
+  globalThis.sessionStorage = new MemoryStorage();
+
+  assert.equal(saveConfig({
+    apiUrl: "https://new.example",
+    apiToken: "new-token",
+    remember: true,
+    refreshInterval: 10,
+  }), false);
+  assert.equal(writes, 0, "do not overwrite unreadable prior credentials");
+  assert.equal(backing.getItem("xmrig_proxy_config"), previous);
+});
+
+
+test("profile save reports a partial rollback when prior profile list cannot be restored", async () => {
+  const { saveProfile, loadProfiles, loadActiveProfileId } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "stable-profile", name: "Stable", apiUrl: "https://stable.example",
+    apiToken: "stable-token", remember: true, refreshInterval: 10,
+  }));
+
+  const backing = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => backing.getItem(key),
+    removeItem: key => backing.removeItem(key),
+    clear: () => backing.clear(),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_active_profile" && value === "new-profile") {
+        throw new DOMException("active ID write denied", "QuotaExceededError");
+      }
+      if (key === "xmrig_proxy_profiles") {
+        const ids = JSON.parse(value).map(profile => profile.id);
+        if (!ids.includes("new-profile")) {
+          throw new DOMException("rollback blocked", "QuotaExceededError");
+        }
+      }
+      backing.setItem(key, value);
+    },
+  };
+
+  assert.equal(saveProfile({
+    id: "new-profile", name: "New", apiUrl: "https://new.example",
+    apiToken: "new-token", remember: true, refreshInterval: 10,
+  }), null);
+  assert.deepEqual(loadProfiles().map(profile => profile.id).sort(), ["new-profile", "stable-profile"]);
+  assert.equal(loadActiveProfileId(), "stable-profile");
+  assert.equal(consumeStorageRecoveryWarning(), true);
+  assert.equal(consumeStorageRecoveryWarning(), false, "warning is one-shot");
+});
+
+
+test("profile deletion reports when rollback cannot restore the active profile ID", async () => {
+  const { saveProfile, deleteProfile, loadProfiles, loadActiveProfileId } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "keep-profile", name: "Keep", apiUrl: "https://keep.example",
+    apiToken: "keep-token", remember: true, refreshInterval: 10,
+  }));
+  assert.ok(saveProfile({
+    id: "delete-profile", name: "Delete", apiUrl: "https://delete.example",
+    apiToken: "delete-token", remember: true, refreshInterval: 10,
+  }));
+
+  const backing = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => backing.getItem(key),
+    removeItem: key => backing.removeItem(key),
+    clear: () => backing.clear(),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_profiles" && !JSON.parse(value).some(profile => profile.id === "delete-profile")) {
+        throw new DOMException("profile deletion write denied", "QuotaExceededError");
+      }
+      if (key === "xmrig_proxy_active_profile" && value === "delete-profile") {
+        throw new DOMException("active ID rollback denied", "QuotaExceededError");
+      }
+      backing.setItem(key, value);
+    },
+  };
+
+  assert.equal(deleteProfile("delete-profile"), false);
+  assert.deepEqual(loadProfiles().map(profile => profile.id).sort(), ["delete-profile", "keep-profile"]);
+  assert.equal(loadActiveProfileId(), "keep-profile", "active ID rollback failed and must be reported");
+  assert.equal(loadConfig().apiUrl, "https://delete.example", "connection config may no longer match the active profile ID");
+  assert.equal(consumeStorageRecoveryWarning(), true);
+});
+
+
+test("failed remembered-config rollback never reactivates malformed prior config", () => {
+  globalThis.localStorage.setItem("xmrig_proxy_config", "{malformed prior config");
+  globalThis.sessionStorage.setItem("xmrig_proxy_config", JSON.stringify({
+    apiUrl: "https://stale.example", apiToken: "stale-token", remember: false, refreshInterval: 10,
+  }));
+  const backing = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => backing.getItem(key),
+    removeItem() { throw new DOMException("remove blocked", "SecurityError"); },
+    setItem() { throw new DOMException("write blocked", "SecurityError"); },
+    clear: () => backing.clear(),
+  };
+
+  assert.equal(saveConfig({
+    apiUrl: "https://new.example", apiToken: "new-token", remember: true, refreshInterval: 10,
+  }), false);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), null);
+  assert.equal(consumeStorageRecoveryWarning(), true, "stale session credentials could not be invalidated");
+});
+
+
+test("profile lookup distinguishes a missing profile from unavailable storage", async () => {
+  const { saveProfile, getProfileById } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "known-profile", name: "Known", apiUrl: "https://known.example",
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }));
+  assert.equal(getProfileById("missing-profile").status, "not-found");
+  assert.equal(getProfileById("known-profile").status, "found");
+
+  const backing = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem() { throw new DOMException("storage unavailable", "SecurityError"); },
+    setItem: (key, value) => backing.setItem(key, value),
+    removeItem: key => backing.removeItem(key),
+    clear: () => backing.clear(),
+  };
+  assert.equal(getProfileById("known-profile").status, "storage-unavailable");
 });

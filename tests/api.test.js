@@ -378,6 +378,8 @@ test("fallback request signal propagates timeout aborts and cleans up listeners"
       assert.equal(err.name, "TimeoutError");
       assert.equal(err.message, "Request timed out");
       assert.ok(err.cause instanceof DOMException);
+      assert.match(err.stack, /Caused by original timeout:/);
+      assert.match(err.stack, /The operation timed out/);
       return true;
     });
     assert.equal(listeners.size, 0);
@@ -404,4 +406,20 @@ test("non-string profile tokens are discarded during normalization", () => {
   const profile = saveProfile({ id: "profile-b", apiUrl: "https://proxy.example:8080/", apiToken: { token: "must-not-be-used" }, remember: true, refreshInterval: 10 });
   assert.equal(profile.apiToken, "");
   assert.equal(loadProfiles().find(item => item.id === "profile-b").apiToken, "");
+});
+
+
+test("request preserves network errors as actionable TypeErrors", async () => {
+  globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+  await assert.rejects(request("/1/summary"), err => err instanceof TypeError && err.message === "Failed to fetch");
+});
+
+test("request propagates AbortError without disguising cancellation", async () => {
+  globalThis.fetch = async () => { throw new DOMException("The operation was aborted", "AbortError"); };
+  await assert.rejects(request("/1/summary"), err => err.name === "AbortError");
+});
+
+test("probeWriteAccess reports unknown on network failures", async () => {
+  globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+  assert.equal(await probeWriteAccess(), "unknown");
 });

@@ -26,6 +26,14 @@ const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
 
 let configCleanupWarningPending = false;
+let storageRecoveryWarningPending = false;
+
+/** Consume a warning raised when a failed storage transaction could not fully roll back. */
+export function consumeStorageRecoveryWarning() {
+  const pending = storageRecoveryWarningPending;
+  storageRecoveryWarningPending = false;
+  return pending;
+}
 
 /** Consume the warning raised when a corrupt config cannot be cleared. */
 export function consumeConfigCleanupWarning() {
@@ -68,6 +76,17 @@ function safeRemove(kind, key) {
     storage.removeItem(key);
     return true;
   } catch { return false; }
+}
+
+/** Read a storage entry without confusing an inaccessible store with a missing key. */
+function readStorageEntry(kind, key) {
+  try {
+    const storage = storageFor(kind);
+    if (!storage) return { ok: false, value: null };
+    return { ok: true, value: storage.getItem(key) };
+  } catch {
+    return { ok: false, value: null };
+  }
 }
 
 /**
@@ -124,17 +143,24 @@ export function saveConfig(cfg) {
   if (serialized.length > MAX_CONFIG_SIZE) return false;
 
   if (normalized.remember) {
-    // localStorage is authoritative in remember mode, but do not leave a
-    // readable session copy of the previous connection behind.
-    const previousLocal = safeGet("local", CONFIG_KEY);
-    const previousSession = safeGet("session", CONFIG_KEY);
+    // A rollback must know the exact previous values. Do not overwrite an
+    // existing credential when a restricted storage context makes snapshots unreadable.
+    const previousLocal = readStorageEntry("local", CONFIG_KEY);
+    const previousSession = readStorageEntry("session", CONFIG_KEY);
+    if (!previousLocal.ok || !previousSession.ok) return false;
     if (!safeSet("local", CONFIG_KEY, serialized)) return false;
 
     if (!safeRemoveOrReplace("session", CONFIG_KEY, "")) {
-      // A blocked session store may be ignored only when no stale value is
-      // readable. If one exists, restore the prior local config and fail.
-      if (previousSession !== null) {
-        restoreStorageEntry("local", CONFIG_KEY, previousLocal);
+      // A blocked session store may be ignored only when we could verify that
+      // no stale session config exists. If one exists, restore the old local
+      // value, but never reactivate malformed credentials during that rollback.
+      if (previousSession.value !== null) {
+        if (!restoreStoredConfigEntry("local", previousLocal.value)) {
+          storageRecoveryWarningPending = true;
+        }
+        // The stale session entry could not be removed or blanked, so the
+        // failed save may leave an older credential available after refresh.
+        storageRecoveryWarningPending = true;
         return false;
       }
     }
@@ -149,6 +175,7 @@ export function saveConfig(cfg) {
   }
   return safeSet("session", CONFIG_KEY, serialized);
 }
+
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
   if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
@@ -236,6 +263,16 @@ export function loadProfiles() {
   return migrated;
 }
 
+/** Distinguish a missing profile from an inaccessible profile store. */
+export function getProfileById(id) {
+  const storedProfiles = readStorageEntry("local", PROFILES_KEY);
+  if (!storedProfiles.ok) return { status: "storage-unavailable", profile: null };
+  const profile = loadProfiles().find(item => item.id === id) || null;
+  return profile
+    ? { status: "found", profile }
+    : { status: "not-found", profile: null };
+}
+
 /** Save or update one Proxy profile and make it active. */
 export function saveProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
@@ -251,24 +288,22 @@ export function saveProfile(profile) {
   else profiles.push(normalized);
 
   // Capture raw values before touching multiple storage keys. Browser storage
-  // has no transaction API, so restore the previous entries on any later
-  // failure instead of leaving a half-created or half-switched profile.
-  const previous = {
-    profiles: safeGet("local", PROFILES_KEY),
-    activeId: safeGet("local", ACTIVE_PROFILE_KEY),
-    localConfig: safeGet("local", CONFIG_KEY),
-    sessionConfig: safeGet("session", CONFIG_KEY),
-    tokens: safeGet("session", PROFILE_TOKENS_KEY),
-  };
+  // has no transaction API, so a complete readable snapshot is required before
+  // changing a profile. Otherwise we cannot safely promise rollback.
+  const entries = [
+    ["profiles", "local", PROFILES_KEY],
+    ["activeId", "local", ACTIVE_PROFILE_KEY],
+    ["localConfig", "local", CONFIG_KEY],
+    ["sessionConfig", "session", CONFIG_KEY],
+    ["tokens", "session", PROFILE_TOKENS_KEY],
+  ];
+  const previous = captureStorageEntries(entries);
+  if (!previous) return null;
+  const warningBeforeMutation = storageRecoveryWarningPending;
   const restore = () => {
-    const results = [
-      restoreStorageEntry("local", PROFILES_KEY, previous.profiles),
-      restoreStorageEntry("local", ACTIVE_PROFILE_KEY, previous.activeId),
-      restoreStorageEntry("local", CONFIG_KEY, previous.localConfig),
-      restoreStorageEntry("session", CONFIG_KEY, previous.sessionConfig),
-      restoreStorageEntry("session", PROFILE_TOKENS_KEY, previous.tokens),
-    ];
-    return results.every(Boolean);
+    const restored = restoreStorageEntries(previous, entries);
+    if (restored) storageRecoveryWarningPending = warningBeforeMutation;
+    return restored;
   };
 
   const tokens = readProfileTokens();
@@ -285,15 +320,15 @@ export function saveProfile(profile) {
   }
 
   if (!writeProfiles(profiles)) {
-    restore();
+    if (!restore()) storageRecoveryWarningPending = true;
     return null;
   }
   if (!saveConfig(normalized)) {
-    restore();
+    if (!restore()) storageRecoveryWarningPending = true;
     return null;
   }
   if (!safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)) {
-    restore();
+    if (!restore()) storageRecoveryWarningPending = true;
     return null;
   }
   return normalized;
@@ -311,48 +346,40 @@ export function deleteProfile(id) {
   const hadSessionToken = Object.hasOwn(originalTokens, id);
   delete nextTokens[id];
 
-  const previousActiveId = safeGet("local", ACTIVE_PROFILE_KEY);
+  const entries = [
+    ["profiles", "local", PROFILES_KEY],
+    ["activeId", "local", ACTIVE_PROFILE_KEY],
+    ["localConfig", "local", CONFIG_KEY],
+    ["sessionConfig", "session", CONFIG_KEY],
+    ["tokens", "session", PROFILE_TOKENS_KEY],
+  ];
+  const previous = captureStorageEntries(entries);
+  if (!previous) return false;
+  const warningBeforeMutation = storageRecoveryWarningPending;
+  const previousActiveId = previous.activeId;
   const wasActive = previousActiveId === id;
-  const previousConfig = wasActive ? loadConfig() : null;
 
-  // There is no cross-storage transaction in the browser. If any persistence
-  // step fails, restore every key already touched so a failed deletion does
-  // not leave an active ID pointing at a missing profile.
+  // No Storage API offers a transaction across localStorage/sessionStorage.
+  // Attempt every restoration, inspect the aggregate result, and surface a
+  // warning if even one key cannot be restored; callers must not imply the
+  // previous state was recovered in that case.
   const rollback = () => {
-    if (wasActive) {
-      if (previousActiveId) safeSet("local", ACTIVE_PROFILE_KEY, previousActiveId);
-      else safeRemoveOrReplace("local", ACTIVE_PROFILE_KEY, "");
-      if (previousConfig) saveConfig(previousConfig);
-      else {
-        safeRemoveOrReplace("local", CONFIG_KEY, "");
-        safeRemoveOrReplace("session", CONFIG_KEY, "");
-      }
-    }
-    writeProfiles(profiles);
-    if (hadSessionToken) writeProfileTokens(originalTokens);
+    const restored = restoreStorageEntries(previous, entries);
+    if (restored) storageRecoveryWarningPending = warningBeforeMutation;
+    return restored;
+  };
+  const failAndRollback = () => {
+    if (!rollback()) storageRecoveryWarningPending = true;
+    return false;
   };
 
   if (wasActive) {
-    if (!saveConfig(next[0])) {
-      if (previousConfig) saveConfig(previousConfig);
-      return false;
-    }
-    // Restore previous ID/config if the active-ID write is rejected.
-    if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id)) {
-      rollback();
-      return false;
-    }
+    if (!saveConfig(next[0])) return failAndRollback();
+    if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id)) return failAndRollback();
   }
 
-  if (!writeProfiles(next)) {
-    rollback();
-    return false;
-  }
-
-  if (hadSessionToken && !writeProfileTokens(nextTokens)) {
-    rollback();
-    return false;
-  }
+  if (!writeProfiles(next)) return failAndRollback();
+  if (hadSessionToken && !writeProfileTokens(nextTokens)) return failAndRollback();
 
   return true;
 }
@@ -361,24 +388,29 @@ export function setActiveProfile(id) {
   const profile = loadProfiles().find(item => item.id === id);
   if (!profile) return null;
 
+  const entries = [
+    ["activeId", "local", ACTIVE_PROFILE_KEY],
+    ["localConfig", "local", CONFIG_KEY],
+    ["sessionConfig", "session", CONFIG_KEY],
+  ];
+  const previous = captureStorageEntries(entries);
+  if (!previous) return null;
+  const warningBeforeMutation = storageRecoveryWarningPending;
+  const restore = () => {
+    const restored = restoreStorageEntries(previous, entries);
+    if (restored) storageRecoveryWarningPending = warningBeforeMutation;
+    return restored;
+  };
+
   // Save the connection before switching the active ID. If either storage
-  // operation fails, restore the previously active connection as best effort
-  // rather than leave an ID/config pair that points at different profiles.
-  const previousConfig = loadConfig();
+  // operation fails, restore the raw prior entries; do not reserialize an
+  // old config that might be malformed or have a different remember mode.
   if (!saveConfig(profile)) {
-    if (previousConfig) saveConfig(previousConfig);
-    else {
-      safeRemove("local", CONFIG_KEY);
-      safeRemove("session", CONFIG_KEY);
-    }
+    if (!restore()) storageRecoveryWarningPending = true;
     return null;
   }
   if (!safeSet("local", ACTIVE_PROFILE_KEY, profile.id)) {
-    if (previousConfig) saveConfig(previousConfig);
-    else {
-      safeRemove("local", CONFIG_KEY);
-      safeRemove("session", CONFIG_KEY);
-    }
+    if (!restore()) storageRecoveryWarningPending = true;
     return null;
   }
   return profile;
@@ -500,6 +532,47 @@ function safeRemoveOrReplace(kind, key, replacement) {
 function restoreStorageEntry(kind, key, previousValue) {
   if (previousValue !== null) return safeSet(kind, key, previousValue);
   return safeRemoveOrReplace(kind, key, "");
+}
+
+/** Restore a previous config only if it is still safe to reactivate. */
+function restoreStoredConfigEntry(kind, previousValue) {
+  if (previousValue === null) return restoreStorageEntry(kind, CONFIG_KEY, null);
+  let hydrated;
+  try { hydrated = hydrateConnection(previousValue); } catch { hydrated = null; }
+  if (!hydrated || (kind === "local" && !hydrated.remember)) {
+    return safeRemoveOrReplace(kind, CONFIG_KEY, "");
+  }
+  return safeSet(kind, CONFIG_KEY, previousValue);
+}
+
+/** Snapshot named storage entries and fail before mutation if any cannot be read. */
+function captureStorageEntries(entries) {
+  const snapshot = Object.create(null);
+  for (const [name, kind, key] of entries) {
+    const current = readStorageEntry(kind, key);
+    if (!current.ok) return null;
+    snapshot[name] = current.value;
+  }
+  return snapshot;
+}
+
+/** Attempt every restore, returning false and recording a warning on partial rollback. */
+function restoreStorageEntries(snapshot, entries) {
+  if (!snapshot) return false;
+  const results = entries.map(([name, kind, key]) => {
+    const previousValue = snapshot[name];
+    const current = readStorageEntry(kind, key);
+    // Storage writes are atomic: a set/remove that throws leaves its key
+    // unchanged. Skip untouched entries so a blocked store does not create a
+    // false partial-rollback warning when no restoration was actually needed.
+    if (current.ok && current.value === previousValue) return true;
+    return key === CONFIG_KEY
+      ? restoreStoredConfigEntry(kind, previousValue)
+      : restoreStorageEntry(kind, key, previousValue);
+  });
+  const restored = results.every(Boolean);
+  if (!restored) storageRecoveryWarningPending = true;
+  return restored;
 }
 
 /** Clear connection config from both storages (logout). Does NOT touch theme. */

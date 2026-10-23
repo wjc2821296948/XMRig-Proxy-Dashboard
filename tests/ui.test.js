@@ -8,6 +8,7 @@ import {
   formatUptime,
   getStatusInfo,
 } from "../src/ui.js";
+import { escapeHtml } from "../src/escape-html.js";
 
 test("hashrate formatting handles zero, kilo, and mega ranges", () => {
   assert.equal(formatHashrate(0), "0 H/s");
@@ -121,4 +122,17 @@ test("zero metrics remain distinct from unavailable metrics", () => {
   assert.equal(formatBytes(0), "0 B");
   assert.equal(formatUptime(0), "0d 0h 0m");
   assert.equal(formatNumber(0), "0");
+});
+
+
+test("escapeHtml escapes HTML metacharacters while preserving ordinary URL slashes", () => {
+  assert.equal(
+    escapeHtml('<script>alert("xss")</script>&"\'/path'),
+    "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;&amp;&quot;&#039;/path",
+  );
+});
+
+test("escapeHtml handles null and undefined", () => {
+  assert.equal(escapeHtml(null), "");
+  assert.equal(escapeHtml(undefined), "");
 });
