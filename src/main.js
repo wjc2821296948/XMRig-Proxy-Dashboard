@@ -603,7 +603,11 @@ function renderDashboard(data) {
   setRibbonConnectState("connected");
 
   // Hashrate data
-  const hashrates = data.hashrate?.total || [0,0,0,0,0,0];
+  const rawHashrates = data.hashrate?.total;
+  const hashrates = Array.isArray(rawHashrates) && rawHashrates.length
+    ? rawHashrates.map(value => Number.isFinite(value) && value >= 0 ? value : 0)
+    : [0,0,0,0,0,0];
+  // Use a positive floor so an all-zero series never produces NaN coordinates.
   const maxHr = Math.max(...hashrates, 1);
   const timeLabels = ["10秒", "1分钟", "15分钟", "1小时", "12小时", "24小时"];
 
