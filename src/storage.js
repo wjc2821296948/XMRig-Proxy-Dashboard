@@ -24,6 +24,12 @@ const WRITE_KEY     = "dashboard_write_access";
 const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
+
+const MAX_CONFIG_SIZE = 100 * 1024;
+const MAX_TOKEN_LENGTH = 4096;
+const MAX_URL_LENGTH = 2048;
+const MAX_PROFILE_NAME_LENGTH = 128;
+
 /** Storage access can throw in privacy-restricted contexts or at quota. */
 function storageFor(kind) {
   try {
@@ -81,7 +87,18 @@ function discardStoredConfig(kind) {
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
-  const serialized = JSON.stringify(cfg);
+  if (!cfg || typeof cfg !== "object"
+      || typeof cfg.apiUrl !== "string" || cfg.apiUrl.length > MAX_URL_LENGTH
+      || typeof cfg.apiToken !== "string" || cfg.apiToken.length > MAX_TOKEN_LENGTH) {
+    return false;
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(cfg);
+  } catch {
+    return false;
+  }
+  if (serialized.length > MAX_CONFIG_SIZE) return false;
   if (cfg.remember) {
     // localStorage is authoritative in remember mode. A blocked session store
     // must not prevent a persistent save; any stale session entry is ignored.
@@ -101,7 +118,9 @@ export function saveConfig(cfg) {
 
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
-  if (!isValidApiUrl(profile.apiUrl)) return null;
+  if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
+  if (typeof profile.apiToken === "string" && profile.apiToken.length > MAX_TOKEN_LENGTH) return null;
+  if (typeof profile.name === "string" && profile.name.length > MAX_PROFILE_NAME_LENGTH) return null;
   const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
@@ -110,7 +129,7 @@ function normalizeProfile(profile) {
     id,
     name,
     apiUrl: profile.apiUrl,
-    apiToken: profile.apiToken ?? "",
+    apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
     // Preserve legacy default only when the field is absent; malformed flags fail closed.
     remember: Object.hasOwn(profile, "remember") ? profile.remember === true : true,
     refreshInterval,
