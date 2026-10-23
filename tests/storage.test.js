@@ -426,7 +426,7 @@ test("malformed remember flags never opt profile tokens into persistent storage"
 test("profile export includes session-only tokens and uses a versioned local bundle", async () => {
   globalThis.localStorage = new MemoryStorage();
   globalThis.sessionStorage = new MemoryStorage();
-  const { saveProfile, createProfilesExport } = await import("../src/storage.js");
+  const { saveProfile, createProfilesExport, parseProfilesImportJson } = await import("../src/storage.js");
   saveProfile({
     id: "export-session", name: "Session Proxy", apiUrl: "https://session.example:8080",
     apiToken: "session-secret", remember: false, refreshInterval: 15,
@@ -438,6 +438,8 @@ test("profile export includes session-only tokens and uses a versioned local bun
   assert.equal(bundle.profiles[0].apiToken, "session-secret");
   assert.equal(bundle.profiles[0].remember, false);
   assert.equal(typeof bundle.exportedAt, "string");
+  const roundTrip = parseProfilesImportJson(JSON.stringify(bundle));
+  assert.deepEqual(roundTrip.profiles, bundle.profiles);
 });
 
 test("profile import rejects malformed bundles before changing existing storage", async () => {
