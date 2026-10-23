@@ -101,7 +101,8 @@ function normalizeProfile(profile) {
     name,
     apiUrl: profile.apiUrl,
     apiToken: profile.apiToken ?? "",
-    remember: profile.remember ?? true,
+    // Preserve legacy default only when the field is absent; malformed flags fail closed.
+    remember: Object.hasOwn(profile, "remember") ? profile.remember === true : true,
     refreshInterval,
   };
 }
