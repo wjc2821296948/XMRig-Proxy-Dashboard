@@ -55,6 +55,16 @@ function safeRemove(kind, key) {
   } catch { return false; }
 }
 
+/**
+ * Best-effort removal for a malformed saved connection. Some storage
+ * implementations reject removeItem while still permitting setItem; blank
+ * the key in that case so it no longer shadows a usable session config.
+ */
+function discardStoredConfig(kind) {
+  if (safeRemove(kind, CONFIG_KEY)) return true;
+  return safeSet(kind, CONFIG_KEY, "");
+}
+
 
 /* --------------------------------------------------------------------------
    Connection config
@@ -231,7 +241,27 @@ export function deleteProfile(id) {
 export function setActiveProfile(id) {
   const profile = loadProfiles().find(item => item.id === id);
   if (!profile) return null;
-  if (!safeSet("local", ACTIVE_PROFILE_KEY, profile.id) || !saveConfig(profile)) return null;
+
+  // Save the connection before switching the active ID. If either storage
+  // operation fails, restore the previously active connection as best effort
+  // rather than leave an ID/config pair that points at different profiles.
+  const previousConfig = loadConfig();
+  if (!saveConfig(profile)) {
+    if (previousConfig) saveConfig(previousConfig);
+    else {
+      safeRemove("local", CONFIG_KEY);
+      safeRemove("session", CONFIG_KEY);
+    }
+    return null;
+  }
+  if (!safeSet("local", ACTIVE_PROFILE_KEY, profile.id)) {
+    if (previousConfig) saveConfig(previousConfig);
+    else {
+      safeRemove("local", CONFIG_KEY);
+      safeRemove("session", CONFIG_KEY);
+    }
+    return null;
+  }
   return profile;
 }
 
@@ -307,7 +337,7 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — fall through to sessionStorage.
     }
-    safeRemove("local", CONFIG_KEY);
+    discardStoredConfig("local");
   }
   raw = safeGet("session", CONFIG_KEY);
   if (raw) {
@@ -317,7 +347,7 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — return null below.
     }
-    safeRemove("session", CONFIG_KEY);
+    discardStoredConfig("session");
   }
   return null;
 }
