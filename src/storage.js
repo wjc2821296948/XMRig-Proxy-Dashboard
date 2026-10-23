@@ -25,6 +25,64 @@ const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
 const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
 
+const MAX_CONFIG_SIZE = 100 * 1024;
+const MAX_TOKEN_LENGTH = 4096;
+const MAX_URL_LENGTH = 2048;
+const MAX_PROFILE_NAME_LENGTH = 128;
+let configCleanupWarningPending = false;
+
+/** Storage access can throw in privacy-restricted contexts or at quota. */
+function storageFor(kind) {
+  try {
+    return kind === "session" ? globalThis.sessionStorage : globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function safeGet(kind, key) {
+  try { return storageFor(kind)?.getItem(key) ?? null; } catch { return null; }
+}
+
+function safeSet(kind, key, value) {
+  try {
+    const storage = storageFor(kind);
+    if (!storage) return false;
+    storage.setItem(key, value);
+    return true;
+  } catch { return false; }
+}
+
+function safeRemove(kind, key) {
+  try {
+    const storage = storageFor(kind);
+    if (!storage) return false;
+    storage.removeItem(key);
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Best-effort removal for a malformed saved connection. Some storage
+ * implementations reject removeItem while still permitting setItem; blank
+ * the key in that case so it no longer shadows a usable session config.
+ */
+function discardStoredConfig(kind) {
+  if (safeRemove(kind, CONFIG_KEY)) return true;
+  if (safeSet(kind, CONFIG_KEY, "")) return true;
+  // Neither removal nor overwrite is possible. Keep the fallback path usable,
+  // but let the UI tell the operator to clear the site's stored data manually.
+  configCleanupWarningPending = true;
+  return false;
+}
+
+export function consumeConfigCleanupWarning() {
+  const pending = configCleanupWarningPending;
+  configCleanupWarningPending = false;
+  return pending;
+}
+
+
 /* --------------------------------------------------------------------------
    Connection config
    -------------------------------------------------------------------------- */
@@ -40,15 +98,40 @@ const PROFILE_TOKENS_KEY = "xmrig_proxy_session_tokens";
  * @param {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}} cfg
  */
 export function saveConfig(cfg) {
-  const target  = cfg.remember ? localStorage : sessionStorage;
-  const sibling = cfg.remember ? sessionStorage : localStorage;
-  sibling.removeItem(CONFIG_KEY);
-  target.setItem(CONFIG_KEY, JSON.stringify(cfg));
+  if (!cfg || typeof cfg !== "object"
+      || typeof cfg.apiUrl !== "string" || cfg.apiUrl.length > MAX_URL_LENGTH
+      || typeof cfg.apiToken !== "string" || cfg.apiToken.length > MAX_TOKEN_LENGTH) {
+    return false;
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(cfg);
+  } catch {
+    return false;
+  }
+  if (serialized.length > MAX_CONFIG_SIZE) return false;
+  if (cfg.remember) {
+    // localStorage is authoritative in remember mode. A blocked session store
+    // must not prevent a persistent save; any stale session entry is ignored.
+    if (!safeSet("local", CONFIG_KEY, serialized)) return false;
+    safeRemove("session", CONFIG_KEY);
+    return true;
+  }
+
+  // Prefer removing any persistent value before saving a session-only config.
+  // If localStorage is blocked entirely, sessionStorage can still be usable;
+  // only fail when a persistent value is readable but cannot be removed.
+  if (!safeRemove("local", CONFIG_KEY) && safeGet("local", CONFIG_KEY) !== null) {
+    return false;
+  }
+  return safeSet("session", CONFIG_KEY, serialized);
 }
 
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
-  if (!isValidApiUrl(profile.apiUrl)) return null;
+  if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
+  if (typeof profile.apiToken === "string" && profile.apiToken.length > MAX_TOKEN_LENGTH) return null;
+  if (typeof profile.name === "string" && profile.name.length > MAX_PROFILE_NAME_LENGTH) return null;
   const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
@@ -57,18 +140,15 @@ function normalizeProfile(profile) {
     id,
     name,
     apiUrl: profile.apiUrl,
-    // Persist only well-typed credentials and fail closed when a malformed
-    // remember flag is supplied, so a string like "false" cannot opt into
-    // persistent token storage by being truthy.
     apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
-    // A missing flag is a legacy record; a present non-boolean value is malformed.
+    // Preserve legacy default only when the field is absent; malformed flags fail closed.
     remember: Object.hasOwn(profile, "remember") ? profile.remember === true : true,
     refreshInterval,
   };
 }
 
 function readProfileTokens() {
-  const raw = sessionStorage.getItem(PROFILE_TOKENS_KEY);
+  const raw = safeGet("session", PROFILE_TOKENS_KEY);
   if (!raw) return Object.create(null);
   try {
     const parsed = JSON.parse(raw);
@@ -83,11 +163,11 @@ function readProfileTokens() {
 }
 
 function writeProfileTokens(tokens) {
-  sessionStorage.setItem(PROFILE_TOKENS_KEY, JSON.stringify(tokens));
+  return safeSet("session", PROFILE_TOKENS_KEY, JSON.stringify(tokens));
 }
 
 function readProfiles() {
-  const raw = localStorage.getItem(PROFILES_KEY);
+  const raw = safeGet("local", PROFILES_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -110,7 +190,7 @@ function writeProfiles(profiles) {
     const { apiToken, ...metadata } = profile;
     return metadata;
   });
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(persistent));
+  return safeSet("local", PROFILES_KEY, JSON.stringify(persistent));
 }
 
 /**
@@ -130,7 +210,7 @@ export function loadProfiles() {
     tokens[migrated[0].id] = legacy.apiToken;
     writeProfileTokens(tokens);
   }
-  localStorage.setItem(ACTIVE_PROFILE_KEY, migrated[0].id);
+  safeSet("local", ACTIVE_PROFILE_KEY, migrated[0].id);
   return migrated;
 }
 
@@ -149,14 +229,19 @@ export function saveProfile(profile) {
 
   const tokens = readProfileTokens();
   if (normalized.remember) {
-    delete tokens[normalized.id];
+    // Do not depend on sessionStorage unless there is actually a stale token
+    // to remove for this profile ID.
+    if (Object.hasOwn(tokens, normalized.id)) {
+      delete tokens[normalized.id];
+      if (!writeProfileTokens(tokens)) return null;
+    }
   } else {
     tokens[normalized.id] = normalized.apiToken;
+    if (!writeProfileTokens(tokens)) return null;
   }
-  writeProfileTokens(tokens);
-  writeProfiles(profiles);
-  localStorage.setItem(ACTIVE_PROFILE_KEY, normalized.id);
-  saveConfig(normalized);
+  if (!writeProfiles(profiles)
+      || !safeSet("local", ACTIVE_PROFILE_KEY, normalized.id)
+      || !saveConfig(normalized)) return null;
   return normalized;
 }
 
@@ -164,31 +249,91 @@ export function saveProfile(profile) {
 export function deleteProfile(id) {
   const profiles = loadProfiles();
   if (profiles.length <= 1) return false;
+  const removed = profiles.find(profile => profile.id === id);
+  if (!removed) return false;
+
   const next = profiles.filter(profile => profile.id !== id);
-  if (next.length === profiles.length) return false;
-  const tokens = readProfileTokens();
-  delete tokens[id];
-  writeProfileTokens(tokens);
-  writeProfiles(next);
-  if (localStorage.getItem(ACTIVE_PROFILE_KEY) === id) {
-    localStorage.setItem(ACTIVE_PROFILE_KEY, next[0].id);
-    saveConfig(next[0]);
+  const originalTokens = readProfileTokens();
+  const nextTokens = Object.assign(Object.create(null), originalTokens);
+  const hadSessionToken = Object.hasOwn(originalTokens, id);
+  delete nextTokens[id];
+
+  const previousActiveId = safeGet("local", ACTIVE_PROFILE_KEY);
+  const wasActive = previousActiveId === id;
+  const previousConfig = wasActive ? loadConfig() : null;
+
+  // There is no cross-storage transaction in the browser. If any persistence
+  // step fails, restore every key already touched so a failed deletion does
+  // not leave an active ID pointing at a missing profile.
+  const rollback = () => {
+    if (wasActive) {
+      if (previousActiveId) safeSet("local", ACTIVE_PROFILE_KEY, previousActiveId);
+      else safeRemoveOrReplace("local", ACTIVE_PROFILE_KEY, "");
+      if (previousConfig) saveConfig(previousConfig);
+      else {
+        safeRemoveOrReplace("local", CONFIG_KEY, "");
+        safeRemoveOrReplace("session", CONFIG_KEY, "");
+      }
+    }
+    writeProfiles(profiles);
+    if (hadSessionToken) writeProfileTokens(originalTokens);
+  };
+
+  if (wasActive) {
+    if (!saveConfig(next[0])) {
+      if (previousConfig) saveConfig(previousConfig);
+      return false;
+    }
+    // Restore previous ID/config if the active-ID write is rejected.
+    if (!safeSet("local", ACTIVE_PROFILE_KEY, next[0].id)) {
+      rollback();
+      return false;
+    }
   }
+
+  if (!writeProfiles(next)) {
+    rollback();
+    return false;
+  }
+
+  if (hadSessionToken && !writeProfileTokens(nextTokens)) {
+    rollback();
+    return false;
+  }
+
   return true;
 }
-
 /** Select a saved Proxy profile and make its connection config active. */
 export function setActiveProfile(id) {
   const profile = loadProfiles().find(item => item.id === id);
   if (!profile) return null;
-  localStorage.setItem(ACTIVE_PROFILE_KEY, profile.id);
-  saveConfig(profile);
+
+  // Save the connection before switching the active ID. If either storage
+  // operation fails, restore the previously active connection as best effort
+  // rather than leave an ID/config pair that points at different profiles.
+  const previousConfig = loadConfig();
+  if (!saveConfig(profile)) {
+    if (previousConfig) saveConfig(previousConfig);
+    else {
+      safeRemove("local", CONFIG_KEY);
+      safeRemove("session", CONFIG_KEY);
+    }
+    return null;
+  }
+  if (!safeSet("local", ACTIVE_PROFILE_KEY, profile.id)) {
+    if (previousConfig) saveConfig(previousConfig);
+    else {
+      safeRemove("local", CONFIG_KEY);
+      safeRemove("session", CONFIG_KEY);
+    }
+    return null;
+  }
   return profile;
 }
 
 /** @returns {string|null} */
 export function loadActiveProfileId() {
-  return localStorage.getItem(ACTIVE_PROFILE_KEY);
+  return safeGet("local", ACTIVE_PROFILE_KEY);
 }
 
 /** @returns {object|null} */
@@ -250,7 +395,7 @@ function hydrateConnection(raw) {
  * @returns {{apiUrl:string, apiToken:string, remember:boolean, refreshInterval:number}|null}
  */
 export function loadConfig() {
-  let raw = localStorage.getItem(CONFIG_KEY);
+  let raw = safeGet("local", CONFIG_KEY);
   if (raw) {
     try {
       const hydrated = hydrateConnection(raw);
@@ -258,9 +403,9 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — fall through to sessionStorage.
     }
-    localStorage.removeItem(CONFIG_KEY);
+    discardStoredConfig("local");
   }
-  raw = sessionStorage.getItem(CONFIG_KEY);
+  raw = safeGet("session", CONFIG_KEY);
   if (raw) {
     try {
       const hydrated = hydrateConnection(raw);
@@ -268,17 +413,29 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — return null below.
     }
-    sessionStorage.removeItem(CONFIG_KEY);
+    discardStoredConfig("session");
   }
   return null;
 }
 
+function safeRemoveOrReplace(kind, key, replacement) {
+  if (safeRemove(kind, key)) return true;
+  // Some stores allow writes but reject removeItem. Replace credentials with
+  // an inert value in that case; a blocked store still reports failure.
+  return safeSet(kind, key, replacement);
+}
+
 /** Clear connection config from both storages (logout). Does NOT touch theme. */
 export function clearConfig() {
-  localStorage.removeItem(CONFIG_KEY);
-  sessionStorage.removeItem(CONFIG_KEY);
-  sessionStorage.removeItem(PROFILE_TOKENS_KEY);
-  localStorage.removeItem(ACTIVE_PROFILE_KEY);
+  // Attempt every cleanup even if one store is blocked. When removal is denied
+  // but writes work, overwrite credential-bearing values with inert values.
+  const results = [
+    safeRemoveOrReplace("local", CONFIG_KEY, ""),
+    safeRemoveOrReplace("session", CONFIG_KEY, ""),
+    safeRemoveOrReplace("session", PROFILE_TOKENS_KEY, "{}"),
+    safeRemoveOrReplace("local", ACTIVE_PROFILE_KEY, ""),
+  ];
+  return results.every(Boolean);
 }
 
 /* --------------------------------------------------------------------------
@@ -291,21 +448,21 @@ const VALID_THEMES = new Set(["dark", "light", "system"]);
  * @param {"dark" | "light" | "system"} theme
  */
 export function saveTheme(theme) {
-  if (!VALID_THEMES.has(theme)) return;
-  localStorage.setItem(THEME_KEY, theme);
+  if (!VALID_THEMES.has(theme)) return false;
+  return safeSet("local", THEME_KEY, theme);
 }
 
 /**
  * @returns {"dark" | "light" | "system"}
  */
 export function loadTheme() {
-  const raw = localStorage.getItem(THEME_KEY);
+  const raw = safeGet("local", THEME_KEY);
   return VALID_THEMES.has(raw) ? raw : "dark";
 }
 
 /** Clear the persisted theme preference. */
 export function clearTheme() {
-  localStorage.removeItem(THEME_KEY);
+  safeRemove("local", THEME_KEY);
 }
 
 /* --------------------------------------------------------------------------
@@ -355,10 +512,10 @@ export function loadWriteAccess(apiUrl) {
  */
 export function saveWriteAccess(enabled, apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
-  if (!target) return;
+  if (!target) return false;
   const map = readWriteAccessMap();
   map[target] = Boolean(enabled);
-  writeWriteAccessMap(map);
+  return writeWriteAccessMap(map);
 }
 
 /**
@@ -373,14 +530,14 @@ export function clearWriteAccess(apiUrl) {
   const target = apiUrl ?? getConfig()?.apiUrl;
   if (!target) {
     // No URL provided and no config saved — clear everything for safety.
-    localStorage.removeItem(WRITE_KEY);
-    return;
+    return safeRemove("local", WRITE_KEY);
   }
   const map = readWriteAccessMap();
   if (target in map) {
     delete map[target];
-    writeWriteAccessMap(map);
+    return writeWriteAccessMap(map);
   }
+  return true;
 }
 
 /* Write-access storage format:
@@ -393,7 +550,7 @@ export function clearWriteAccess(apiUrl) {
  */
 
 function readWriteAccessMap() {
-  const raw = localStorage.getItem(WRITE_KEY);
+  const raw = safeGet("local", WRITE_KEY);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -405,7 +562,7 @@ function readWriteAccessMap() {
 }
 
 function writeWriteAccessMap(map) {
-  localStorage.setItem(WRITE_KEY, JSON.stringify(map));
+  return safeSet("local", WRITE_KEY, JSON.stringify(map));
 }
 
 /* --------------------------------------------------------------------------
