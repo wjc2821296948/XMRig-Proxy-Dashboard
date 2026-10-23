@@ -163,6 +163,11 @@ export async function request(path, options = {}) {
       // a TypeError and hide the original timeout from the UI.
       const timeoutError = new Error("Request timed out", { cause: e });
       timeoutError.name = "TimeoutError";
+      // Some consoles do not expand Error.cause by default; retain the
+      // original timeout stack in the visible stack for browser diagnostics.
+      if (e?.stack && timeoutError.stack) {
+        timeoutError.stack += `\\nCaused by original timeout:\\n${e.stack}`;
+      }
       e = timeoutError;
     }
     console.error(`API error (masked): ${e.message}`);
