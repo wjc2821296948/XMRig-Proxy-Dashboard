@@ -421,3 +421,102 @@ test("malformed remember flags never opt profile tokens into persistent storage"
   assert.equal(legacy.remember, true, "omitted legacy remember flag preserves backward compatibility");
   assert.ok(globalThis.localStorage.getItem("xmrig_proxy_profiles").includes("persistent-secret"));
 });
+
+
+test("profile export includes session-only tokens and uses a versioned local bundle", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, createProfilesExport, parseProfilesImportJson } = await import("../src/storage.js");
+  saveProfile({
+    id: "export-session", name: "Session Proxy", apiUrl: "https://session.example:8080",
+    apiToken: "session-secret", remember: false, refreshInterval: 15,
+  });
+
+  const bundle = createProfilesExport();
+  assert.equal(bundle.format, "xmrig-proxy-dashboard-profile-bundle");
+  assert.equal(bundle.version, 1);
+  assert.equal(bundle.profiles[0].apiToken, "session-secret");
+  assert.equal(bundle.profiles[0].remember, false);
+  assert.equal(typeof bundle.exportedAt, "string");
+  const roundTrip = parseProfilesImportJson(JSON.stringify(bundle));
+  assert.deepEqual(roundTrip.profiles, bundle.profiles);
+});
+
+test("profile import rejects malformed bundles before changing existing storage", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, parseProfilesImportJson, importProfiles } = await import("../src/storage.js");
+  saveProfile({
+    id: "keep-existing", name: "Existing", apiUrl: "https://existing.example",
+    apiToken: "existing-token", remember: true, refreshInterval: 10,
+  });
+  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  const beforeTokens = globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens");
+
+  const invalidBundles = [
+    "{not json",
+    JSON.stringify({ format: "wrong", version: 1, profiles: [] }),
+    JSON.stringify({ format: "xmrig-proxy-dashboard-profile-bundle", version: 1, profiles: [
+      { id: "bad-url", name: "Bad URL", apiUrl: "javascript:alert(1)", apiToken: "", remember: true, refreshInterval: 10 },
+    ] }),
+    JSON.stringify({ format: "xmrig-proxy-dashboard-profile-bundle", version: 1, profiles: [
+      { id: "bad-interval", name: "Bad interval", apiUrl: "https://proxy.example", apiToken: "", remember: true, refreshInterval: 999 },
+    ] }),
+    JSON.stringify({ format: "xmrig-proxy-dashboard-profile-bundle", version: 1, profiles: [
+      { id: "duplicate", name: "One", apiUrl: "https://one.example", apiToken: "", remember: true, refreshInterval: 10 },
+      { id: "duplicate", name: "Two", apiUrl: "https://two.example", apiToken: "", remember: true, refreshInterval: 10 },
+    ] }),
+  ];
+  for (const raw of invalidBundles) {
+    assert.throws(() => {
+      const parsed = parseProfilesImportJson(raw);
+      importProfiles(parsed.profiles);
+    });
+    assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles"), beforeProfiles);
+    assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), beforeTokens);
+  }
+});
+
+test("profile import merges by ID and atomically rolls back a failed storage write", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, parseProfilesImportJson, importProfiles, loadProfiles } = await import("../src/storage.js");
+  saveProfile({
+    id: "existing-id", name: "Old name", apiUrl: "https://old.example",
+    apiToken: "old-token", remember: true, refreshInterval: 10,
+  });
+  const bundle = parseProfilesImportJson(JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [
+      { id: "existing-id", name: "Updated name", apiUrl: "https://new.example", apiToken: "new-token", remember: true, refreshInterval: 20 },
+      { id: "import-new", name: "New profile", apiUrl: "https://new-profile.example", apiToken: "session-token", remember: false, refreshInterval: 30 },
+    ],
+  }));
+  const result = importProfiles(bundle.profiles);
+  assert.deepEqual(result, { added: 1, updated: 1, total: 2 });
+  assert.equal(loadProfiles().find(p => p.id === "existing-id").name, "Updated name");
+  assert.equal(loadProfiles().find(p => p.id === "import-new").apiToken, "session-token");
+
+  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  const beforeTokens = globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens");
+  const blockedLocal = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => blockedLocal.getItem(key),
+    removeItem: key => blockedLocal.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_profiles") throw new DOMException("quota exceeded", "QuotaExceededError");
+      blockedLocal.setItem(key, value);
+    },
+    clear: () => blockedLocal.clear(),
+  };
+  assert.throws(() => importProfiles(parseProfilesImportJson(JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [
+      { id: "rollback-new", name: "Rollback", apiUrl: "https://rollback.example", apiToken: "rollback-token", remember: false, refreshInterval: 10 },
+    ],
+  })).profiles), /导入失败/);
+  assert.equal(blockedLocal.getItem("xmrig_proxy_profiles"), beforeProfiles);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), beforeTokens);
+});
