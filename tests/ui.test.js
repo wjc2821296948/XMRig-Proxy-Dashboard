@@ -51,21 +51,13 @@ test("basic UI status helper preserves offline and warning boundaries", () => {
   );
 });
 
-test("escapeHtml escapes all dangerous characters including forward slash", () => {
+test("escapeHtml escapes HTML metacharacters while preserving ordinary URL slashes", () => {
   const input = '<script>alert("xss")</script>&"\'/path';
   const escaped = escapeHtml(input);
-  assert.ok(!escaped.includes("<"));
-  assert.ok(!escaped.includes(">"));
-  assert.ok(!escaped.includes("&"));
-  assert.ok(!escaped.includes('"'));
-  assert.ok(!escaped.includes("'"));
-  assert.ok(!escaped.includes("/"));
-  assert.ok(escaped.includes("<"));
-  assert.ok(escaped.includes(">"));
-  assert.ok(escaped.includes("&"));
-  assert.ok(escaped.includes("""));
-  assert.ok(escaped.includes("&#039;"));
-  assert.ok(escaped.includes("&#x2F;"));
+  assert.equal(
+    escaped,
+    "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;&amp;&quot;&#039;/path",
+  );
 });
 
 test("escapeHtml handles null and undefined", () => {
