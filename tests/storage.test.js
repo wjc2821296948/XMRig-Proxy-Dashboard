@@ -539,3 +539,36 @@ test("corrupt local config cannot block a valid session config when removal is d
   assert.deepEqual(loadConfig(), fallback);
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_config"), "");
 });
+
+
+test("storage limits reject oversized config, tokens, URLs, and profile names", async () => {
+  const { saveProfile } = await import("../src/storage.js");
+  const base = { apiUrl: "https://proxy.example:8080", apiToken: "token", remember: true, refreshInterval: 10 };
+
+  assert.equal(saveConfig({ ...base, apiToken: "x".repeat(5000) }), false);
+  assert.equal(saveConfig({ ...base, apiUrl: "https://proxy.example/" + "x".repeat(3000) }), false);
+  assert.equal(saveConfig({ ...base, padding: "x".repeat(110 * 1024) }), false);
+
+  assert.equal(saveProfile({
+    id: "oversized-token", name: "Token", apiUrl: base.apiUrl,
+    apiToken: "x".repeat(5000), remember: true, refreshInterval: 10,
+  }), null);
+  assert.equal(saveProfile({
+    id: "oversized-url", name: "URL", apiUrl: "https://proxy.example/" + "x".repeat(3000),
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }), null);
+  assert.equal(saveProfile({
+    id: "oversized-name", name: "x".repeat(129), apiUrl: base.apiUrl,
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }), null);
+});
+
+test("non-string saved profile tokens are never persisted as credentials", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+  const saved = saveProfile({
+    id: "object-token", name: "Object token", apiUrl: "https://proxy.example:8080",
+    apiToken: { secret: "unexpected" }, remember: true, refreshInterval: 10,
+  });
+  assert.equal(saved.apiToken, "");
+  assert.equal(loadProfiles().find(p => p.id === "object-token").apiToken, "");
+});
