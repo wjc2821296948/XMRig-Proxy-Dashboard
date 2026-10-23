@@ -698,3 +698,39 @@ test("active profile ID and connection config remain consistent if active ID per
   assert.equal(loadActiveProfileId(), "config-before-id");
   assert.equal(loadConfig().apiUrl, "https://remembered.example");
 });
+
+
+test("failed active profile deletion restores the profile list, ID, and connection", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, setActiveProfile, deleteProfile, loadProfiles, loadActiveProfileId, loadConfig } = await import("../src/storage.js");
+
+  saveProfile({
+    id: "keep-profile", name: "Keep", apiUrl: "https://keep.example",
+    apiToken: "keep-token", remember: true, refreshInterval: 10,
+  });
+  saveProfile({
+    id: "remove-profile", name: "Remove", apiUrl: "https://remove.example",
+    apiToken: "remove-token", remember: false, refreshInterval: 10,
+  });
+  assert.ok(setActiveProfile("remove-profile"));
+
+  const workingSession = globalThis.sessionStorage;
+  globalThis.sessionStorage = {
+    getItem: key => workingSession.getItem(key),
+    removeItem: key => workingSession.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_session_tokens") {
+        throw new DOMException("token map write denied", "QuotaExceededError");
+      }
+      workingSession.setItem(key, value);
+    },
+    clear: () => workingSession.clear(),
+  };
+
+  assert.equal(deleteProfile("remove-profile"), false);
+  assert.deepEqual(loadProfiles().map(p => p.id).sort(), ["keep-profile", "remove-profile"]);
+  assert.equal(loadActiveProfileId(), "remove-profile");
+  assert.equal(loadConfig().apiUrl, "https://remove.example");
+  assert.equal(JSON.parse(workingSession.getItem("xmrig_proxy_session_tokens"))["remove-profile"], "remove-token");
+});
