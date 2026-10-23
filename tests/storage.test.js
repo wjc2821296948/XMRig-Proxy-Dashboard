@@ -390,3 +390,34 @@ test("malformed and non-object session token payloads safely fall back to empty 
     assert.equal(loadProfiles()[0].apiToken, "", `payload ${malformed} should not produce an inherited token`);
   }
 });
+
+
+test("malformed remember flags never opt profile tokens into persistent storage", async () => {
+  const { saveProfile, loadProfiles } = await import("../src/storage.js");
+
+  for (const [id, remember] of [["null-remember", null], ["string-remember", "false"]]) {
+    const saved = saveProfile({
+      id,
+      name: id,
+      apiUrl: "https://proxy.example:8080",
+      apiToken: "session-secret",
+      remember,
+      refreshInterval: 10,
+    });
+
+    assert.equal(saved.remember, false, `remember=${String(remember)} should fail closed`);
+    const persisted = JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_profiles"));
+    assert.equal(persisted.find(profile => profile.id === id).apiToken, undefined);
+    assert.equal(loadProfiles().find(profile => profile.id === id).apiToken, "session-secret");
+  }
+
+  const legacy = saveProfile({
+    id: "legacy-missing-remember",
+    name: "Legacy",
+    apiUrl: "https://legacy.example:8080",
+    apiToken: "persistent-secret",
+    refreshInterval: 10,
+  });
+  assert.equal(legacy.remember, true, "omitted legacy remember flag preserves backward compatibility");
+  assert.ok(globalThis.localStorage.getItem("xmrig_proxy_profiles").includes("persistent-secret"));
+});
