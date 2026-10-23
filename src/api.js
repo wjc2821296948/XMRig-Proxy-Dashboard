@@ -166,7 +166,7 @@ export async function request(path, options = {}) {
       // Some consoles do not expand Error.cause by default; retain the
       // original timeout stack in the visible stack for browser diagnostics.
       if (e?.stack && timeoutError.stack) {
-        timeoutError.stack += `\\nCaused by original timeout:\\n${e.stack}`;
+        timeoutError.stack += `\nCaused by original timeout:\n${e.stack}`;
       }
       e = timeoutError;
     }
