@@ -11,6 +11,7 @@
 
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
+import { registerVisiblePolling } from "./visible-polling.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
@@ -46,7 +47,7 @@ function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
 }
 
 // Global state
-let refreshInterval = null;
+let cleanupAutoRefresh = null;
 let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
 const statusTracker = createStatusTracker();
@@ -1157,14 +1158,20 @@ async function fetchAndRender() {
 function startAutoRefresh() {
   stopAutoRefresh();
   const cfg = getConfig();
-  const interval = (cfg?.refreshInterval ?? 10) * 1000; // seconds → ms
-  refreshInterval = setInterval(fetchAndRender, Math.max(1000, Math.min(120000, interval)));
+  if (!cfg) return;
+  const intervalMs = Math.max(1000, Math.min(120000, (cfg.refreshInterval ?? 10) * 1000));
+  cleanupAutoRefresh = registerVisiblePolling({
+    documentRef: document,
+    intervalMs,
+    shouldRun: () => Boolean(getConfig()) && activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
+  });
 }
 
 function stopAutoRefresh() {
-  if (refreshInterval) {
-    clearInterval(refreshInterval);
-    refreshInterval = null;
+  if (cleanupAutoRefresh) {
+    cleanupAutoRefresh();
+    cleanupAutoRefresh = null;
   }
   if (fetchAbortController) {
     fetchAbortController.abort();
