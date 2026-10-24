@@ -252,6 +252,8 @@ const els = {
 let modePickerEl = null;
 let modePickerEscHandler = null;
 let modePickerOutsideClickHandler = null;
+let modePickerResizeHandler = null;
+let modePickerResizeFrame = null;
 let modePickerTheme = null;
 
 // The dashboard currently renders in only one mode; tracking the active
@@ -302,6 +304,17 @@ function openModePicker() {
     };
     document.addEventListener("click", modePickerOutsideClickHandler);
   }
+  if (!modePickerResizeHandler) {
+    // Coalesce rapid resize events into one layout update per animation frame.
+    modePickerResizeHandler = () => {
+      if (modePickerResizeFrame !== null) return;
+      modePickerResizeFrame = window.requestAnimationFrame(() => {
+        modePickerResizeFrame = null;
+        if (modePickerEl?.classList.contains("open")) positionModePicker();
+      });
+    };
+    window.addEventListener("resize", modePickerResizeHandler);
+  }
 }
 
 /** Close the picker and tear down its document-level listeners. */
@@ -319,6 +332,14 @@ function closeModePicker() {
   if (modePickerOutsideClickHandler) {
     document.removeEventListener("click", modePickerOutsideClickHandler);
     modePickerOutsideClickHandler = null;
+  }
+  if (modePickerResizeHandler) {
+    window.removeEventListener("resize", modePickerResizeHandler);
+    modePickerResizeHandler = null;
+  }
+  if (modePickerResizeFrame !== null) {
+    window.cancelAnimationFrame(modePickerResizeFrame);
+    modePickerResizeFrame = null;
   }
 }
 
@@ -368,8 +389,12 @@ function buildModePicker() {
 function positionModePicker() {
   if (!modePickerEl || !els.viewModeBadge) return;
   const r = els.viewModeBadge.getBoundingClientRect();
+  const margin = 8;
+  const desiredLeft = window.scrollX + r.right - modePickerEl.offsetWidth;
+  const minLeft = window.scrollX + margin;
+  const maxLeft = Math.max(minLeft, window.scrollX + window.innerWidth - modePickerEl.offsetWidth - margin);
   modePickerEl.style.top  = `${window.scrollY + r.bottom + 6}px`;
-  modePickerEl.style.left = `${window.scrollX + r.right - modePickerEl.offsetWidth}px`;
+  modePickerEl.style.left = `${Math.max(minLeft, Math.min(desiredLeft, maxLeft))}px`;
 }
 
 /**
