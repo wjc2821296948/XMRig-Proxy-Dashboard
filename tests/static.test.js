@@ -312,3 +312,13 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
+
+
+test("dashboard wires an accessible manual refresh control", () => {
+  const source = read("src/main.js");
+  const helper = read("src/manual-refresh.js");
+  assert.match(source, /registerManualRefresh\(/);
+  assert.match(helper, /refreshDashboardButton/);
+  assert.match(helper, /aria-label/);
+  assert.match(helper, /button\.disabled = true/);
+});
