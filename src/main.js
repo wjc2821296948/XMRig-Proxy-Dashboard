@@ -154,10 +154,10 @@ function toggleTheme() {
  *
  * @param {"dark"|"light"} theme
  */
-function syncViewModeBadgeText(theme) {
+function syncViewModeBadgeText(_theme) {
   const label = document.getElementById("viewModeBadgeText");
   if (!label) return;
-  label.textContent = theme === "dark" ? "只读视图" : "Read-only viewer";
+  label.textContent = "只读视图";
 }
 
 /**
@@ -331,10 +331,9 @@ function closeModePicker() {
  * @returns {HTMLElement}
  */
 function buildModePicker() {
-  const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
-  const labelActive = isDark ? "只读视图" : "Read-only viewer";
-  const labelAlt    = isDark ? "配置模式" : "Config mode";
-  const title       = isDark ? "选择模式" : "Select mode";
+  const labelActive = "只读视图";
+  const labelAlt    = "配置模式";
+  const title       = "选择模式";
 
   const wrap = document.createElement("div");
   wrap.className = "mode-picker";
@@ -403,10 +402,7 @@ function syncModePickerAltRow() {
   } else {
     altRow.classList.add("is-disabled");
     altRow.setAttribute("aria-disabled", "true");
-    const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
-    altRow.title = isDark
-      ? "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换"
-      : "This proxy runs in restricted mode. Set \"restricted\": false in the XMRig-Proxy config to enable config mode.";
+    altRow.title = "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换";
   }
 }
 
