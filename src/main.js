@@ -1159,7 +1159,8 @@ function startAutoRefresh() {
   stopAutoRefresh();
   const cfg = getConfig();
   if (!cfg) return;
-  const intervalMs = Math.max(1000, Math.min(120000, (cfg.refreshInterval ?? 10) * 1000));
+  // visible-polling.js owns interval clamping so there is one source of bounds.
+  const intervalMs = (cfg.refreshInterval ?? 10) * 1000;
   cleanupAutoRefresh = registerVisiblePolling({
     documentRef: document,
     intervalMs,
