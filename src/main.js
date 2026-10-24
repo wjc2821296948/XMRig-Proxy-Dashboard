@@ -253,6 +253,7 @@ let modePickerEl = null;
 let modePickerEscHandler = null;
 let modePickerOutsideClickHandler = null;
 let modePickerResizeHandler = null;
+let modePickerResizeFrame = null;
 let modePickerTheme = null;
 
 // The dashboard currently renders in only one mode; tracking the active
@@ -304,7 +305,14 @@ function openModePicker() {
     document.addEventListener("click", modePickerOutsideClickHandler);
   }
   if (!modePickerResizeHandler) {
-    modePickerResizeHandler = () => positionModePicker();
+    // Coalesce rapid resize events into one layout update per animation frame.
+    modePickerResizeHandler = () => {
+      if (modePickerResizeFrame !== null) return;
+      modePickerResizeFrame = window.requestAnimationFrame(() => {
+        modePickerResizeFrame = null;
+        if (modePickerEl?.classList.contains("open")) positionModePicker();
+      });
+    };
     window.addEventListener("resize", modePickerResizeHandler);
   }
 }
@@ -328,6 +336,10 @@ function closeModePicker() {
   if (modePickerResizeHandler) {
     window.removeEventListener("resize", modePickerResizeHandler);
     modePickerResizeHandler = null;
+  }
+  if (modePickerResizeFrame !== null) {
+    window.cancelAnimationFrame(modePickerResizeFrame);
+    modePickerResizeFrame = null;
   }
 }
 
