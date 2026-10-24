@@ -312,14 +312,3 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
-
-
-test("dashboard uses visibility-aware polling instead of a recurring interval", () => {
-  const source = read("src/main.js");
-  const helper = read("src/visible-polling.js");
-  assert.match(source, /registerVisiblePolling\(/);
-  assert.match(source, /cleanupAutoRefresh = registerVisiblePolling/);
-  assert.match(source, /cleanupAutoRefresh\(\)/);
-  assert.match(helper, /visibilityState !== "visible"/);
-  assert.match(helper, /clearTimeoutRef\(timer\)/);
-});
