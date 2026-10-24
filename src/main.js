@@ -154,10 +154,10 @@ function toggleTheme() {
  *
  * @param {"dark"|"light"} theme
  */
-function syncViewModeBadgeText(theme) {
+function syncViewModeBadgeText(_theme) {
   const label = document.getElementById("viewModeBadgeText");
   if (!label) return;
-  label.textContent = theme === "dark" ? "只读视图" : "Read-only viewer";
+  label.textContent = "只读视图";
 }
 
 /**
@@ -340,10 +340,9 @@ function closeModePicker() {
  * @returns {HTMLElement}
  */
 function buildModePicker() {
-  const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
-  const labelActive = isDark ? "只读视图" : "Read-only viewer";
-  const labelAlt    = isDark ? "配置模式" : "Config mode";
-  const title       = isDark ? "选择模式" : "Select mode";
+  const labelActive = "只读视图";
+  const labelAlt    = "配置模式";
+  const title       = "选择模式";
 
   const wrap = document.createElement("div");
   wrap.className = "mode-picker";
@@ -416,10 +415,7 @@ function syncModePickerAltRow() {
   } else {
     altRow.classList.add("is-disabled");
     altRow.setAttribute("aria-disabled", "true");
-    const isDark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
-    altRow.title = isDark
-      ? "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换"
-      : "This proxy runs in restricted mode. Set \"restricted\": false in the XMRig-Proxy config to enable config mode.";
+    altRow.title = "本 Proxy 启用了 restricted 模式，需在 XMRig-Proxy 配置文件中将 \"restricted\" 设为 false 才能切换";
   }
 }
 
@@ -452,10 +448,13 @@ function switchDashboardMode(mode) {
     // by re-fetching — keeps the chart, cards, and status all in sync
     // without us having to cache the data elsewhere.
     showToast("已切换到只读视图", "info");
-    fetchAndRender().catch(() => {
+    fetchAndRender().then(() => {
+      if (getConfig() && activeDashboardMode === "readonly") startAutoRefresh();
+    }).catch(() => {
       showToast("无法恢复只读视图，请刷新页面", "error");
     });
   } else if (mode === "config") {
+    stopAutoRefresh();
     showToast("配置模式 — 占位 (即将推出)", "info");
     renderConfigPlaceholder();
   }
@@ -617,7 +616,7 @@ function renderDashboard(data) {
   const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
   els.statusBadge.className = `status-badge ${status.cls}`;
-  els.workerId.textContent = `Worker: ${escapeHtml(data.worker_id || "未知")} | 版本: ${escapeHtml(data.version || "未知")}`;
+  els.workerId.textContent = `Worker: ${data.worker_id || "未知"} | 版本: ${data.version || "未知"}`;
   els.lastUpdate.textContent = new Date().toLocaleTimeString();
 
   // Re-sync the view-mode ribbon on every render. Defensive against any
@@ -716,7 +715,10 @@ function renderDashboard(data) {
   const acceptance = totalShares ? ((accepted / totalShares) * 100).toFixed(2) : "0.00";
 
   // Upstream ratio
-  const upstreamRatio = data.upstreams?.ratio ? data.upstreams.ratio.toFixed(1) : "0.0";
+  const rawUpstreamRatio = data.upstreams?.ratio;
+  const upstreamRatio = Number.isFinite(rawUpstreamRatio) && rawUpstreamRatio >= 0
+    ? rawUpstreamRatio.toFixed(1)
+    : "0.0";
 
   // Build HTML
   const html = `
