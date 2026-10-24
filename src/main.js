@@ -439,10 +439,13 @@ function switchDashboardMode(mode) {
     // by re-fetching — keeps the chart, cards, and status all in sync
     // without us having to cache the data elsewhere.
     showToast("已切换到只读视图", "info");
-    fetchAndRender().catch(() => {
+    fetchAndRender().then(() => {
+      if (getConfig() && activeDashboardMode === "readonly") startAutoRefresh();
+    }).catch(() => {
       showToast("无法恢复只读视图，请刷新页面", "error");
     });
   } else if (mode === "config") {
+    stopAutoRefresh();
     showToast("配置模式 — 占位 (即将推出)", "info");
     renderConfigPlaceholder();
   }
