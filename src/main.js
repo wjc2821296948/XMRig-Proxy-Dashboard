@@ -435,10 +435,13 @@ function switchDashboardMode(mode) {
     // by re-fetching — keeps the chart, cards, and status all in sync
     // without us having to cache the data elsewhere.
     showToast("已切换到只读视图", "info");
-    fetchAndRender().catch(() => {
+    fetchAndRender().then(() => {
+      if (getConfig() && activeDashboardMode === "readonly") startAutoRefresh();
+    }).catch(() => {
       showToast("无法恢复只读视图，请刷新页面", "error");
     });
   } else if (mode === "config") {
+    stopAutoRefresh();
     showToast("配置模式 — 占位 (即将推出)", "info");
     renderConfigPlaceholder();
   }
@@ -600,7 +603,7 @@ function renderDashboard(data) {
   const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
   els.statusBadge.className = `status-badge ${status.cls}`;
-  els.workerId.textContent = `Worker: ${escapeHtml(data.worker_id || "未知")} | 版本: ${escapeHtml(data.version || "未知")}`;
+  els.workerId.textContent = `Worker: ${data.worker_id || "未知"} | 版本: ${data.version || "未知"}`;
   els.lastUpdate.textContent = new Date().toLocaleTimeString();
 
   // Re-sync the view-mode ribbon on every render. Defensive against any
@@ -699,7 +702,10 @@ function renderDashboard(data) {
   const acceptance = totalShares ? ((accepted / totalShares) * 100).toFixed(2) : "0.00";
 
   // Upstream ratio
-  const upstreamRatio = data.upstreams?.ratio ? data.upstreams.ratio.toFixed(1) : "0.0";
+  const rawUpstreamRatio = data.upstreams?.ratio;
+  const upstreamRatio = Number.isFinite(rawUpstreamRatio) && rawUpstreamRatio >= 0
+    ? rawUpstreamRatio.toFixed(1)
+    : "0.0";
 
   // Build HTML
   const html = `
