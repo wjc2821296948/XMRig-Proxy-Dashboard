@@ -9,9 +9,9 @@
  *  5. Wire UI events: Settings, Logout, Connect form.
  */
 
+import { registerManualRefresh } from "./manual-refresh.js";
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
-import { registerManualRefresh } from "./manual-refresh.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
