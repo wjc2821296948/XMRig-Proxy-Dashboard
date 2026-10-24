@@ -755,7 +755,7 @@ function renderDashboard(data) {
         <div class="stat-row"><span class="stat-label">内存使用</span><span class="stat-value">${formatBytes(memUsed)} / ${formatBytes(memTotal)}</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${memPct}%"></div></div>
         <div class="stat-row" style="margin-top:0.75rem"><span class="stat-label">RSS 内存</span><span class="stat-value">${formatBytes(data.resources?.memory?.resident_set_memory || 0)}</span></div>
-        <div class="stat-row"><span class="stat-label">负载均值</span><span class="stat-value">${(data.resources?.load_average || []).join(" / ")}</span></div>
+        <div class="stat-row"><span class="stat-label">负载均值</span><span class="stat-value">${Array.isArray(data.resources?.load_average) ? data.resources.load_average.map(value => Number.isFinite(value) ? value : "—").join(" / ") : "—"}</span></div>
         <div class="stat-row"><span class="stat-label">CPU 核心</span><span class="stat-value">${data.resources?.hardware_concurrency || "未知"}</span></div>
       </div>
 
