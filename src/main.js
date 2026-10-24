@@ -11,6 +11,7 @@
 
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
+import { registerManualRefresh } from "./manual-refresh.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
@@ -1181,6 +1182,14 @@ async function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
+  registerManualRefresh({
+    documentRef: document,
+    container: document.querySelector(".subtitle"),
+    hasConfig: () => Boolean(getConfig()),
+    shouldRefresh: () => activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
+    notify: showToast,
+  });
 
   // Wire the view-mode ribbon: click or keyboard activation opens the
   // mode picker. The ribbon itself never closes the picker — that lives
