@@ -977,6 +977,10 @@ function openSettingsModal(selectedProfileId = null) {
   overlay.querySelectorAll('[data-action="select-profile"]').forEach(button => {
     button.addEventListener("click", async () => {
       const requestedId = button.dataset.profileId;
+      if (requestedId === loadActiveProfileId()) {
+        showToast("当前已在使用该 Proxy 配置", "info");
+        return;
+      }
       const lookup = getProfileById(requestedId);
       if (lookup.status === "storage-unavailable") {
         showToast("无法读取 Proxy 配置：浏览器存储不可用，请检查存储设置后重试", "error");
