@@ -312,3 +312,14 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
+
+
+test("dashboard offers a local metrics snapshot export without exporting credentials", () => {
+  const source = read("src/main.js");
+  const helper = read("src/snapshot-export.js");
+  assert.match(source, /registerSnapshotExport\(/);
+  assert.match(source, /latestSummaryData = data/);
+  assert.match(helper, /xmrig-proxy-dashboard-metrics/);
+  assert.match(helper, /createObjectURL/);
+  assert.doesNotMatch(helper, /apiToken|accessToken|Authorization/i);
+});
