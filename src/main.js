@@ -706,7 +706,10 @@ function renderDashboard(data) {
   const acceptance = totalShares ? ((accepted / totalShares) * 100).toFixed(2) : "0.00";
 
   // Upstream ratio
-  const upstreamRatio = data.upstreams?.ratio ? data.upstreams.ratio.toFixed(1) : "0.0";
+  const rawUpstreamRatio = data.upstreams?.ratio;
+  const upstreamRatio = Number.isFinite(rawUpstreamRatio) && rawUpstreamRatio >= 0
+    ? rawUpstreamRatio.toFixed(1)
+    : "0.0";
 
   // Build HTML
   const html = `

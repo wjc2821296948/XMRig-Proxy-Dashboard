@@ -220,12 +220,21 @@ h1 {
 
 .edit-url {
   color: var(--text-secondary);
+  font: inherit;
   font-size: 0.7rem;
   cursor: pointer;
   text-decoration: underline;
+  background: none;
+  border: 0;
+  padding: 0;
   transition: color var(--transition-fast);
 }
 .edit-url:hover { color: var(--accent-copper); }
+.edit-url:focus-visible {
+  outline: 2px solid var(--accent-copper);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
 
 .refresh-time {
   color: var(--text-muted);
