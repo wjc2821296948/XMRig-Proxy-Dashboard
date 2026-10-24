@@ -33,6 +33,19 @@ test("dashboard snapshot includes useful metrics but excludes saved connection s
   assert.doesNotMatch(json, /private-proxy\.example|do-not-export-this-token|apiToken/);
 });
 
+test("snapshot export handles a missing header container without throwing", () => {
+  const messages = [];
+  const cleanup = registerSnapshotExport({
+    documentRef: { createElement: () => { throw new Error("should not create an element"); } },
+    container: null,
+    getData: () => null,
+    notify: (message, type) => messages.push({ message, type }),
+  });
+  assert.equal(typeof cleanup, "function");
+  assert.equal(messages[0].type, "warning");
+  cleanup();
+});
+
 test("snapshot filename is timestamped and filesystem-friendly", () => {
   assert.equal(
     buildSnapshotFilename(fixedDate),
