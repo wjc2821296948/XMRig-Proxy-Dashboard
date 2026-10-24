@@ -604,7 +604,7 @@ function renderDashboard(data) {
   const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
   els.statusBadge.className = `status-badge ${status.cls}`;
-  els.workerId.textContent = `Worker: ${escapeHtml(data.worker_id || "未知")} | 版本: ${escapeHtml(data.version || "未知")}`;
+  els.workerId.textContent = `Worker: ${data.worker_id || "未知"} | 版本: ${data.version || "未知"}`;
   els.lastUpdate.textContent = new Date().toLocaleTimeString();
 
   // Re-sync the view-mode ribbon on every render. Defensive against any
