@@ -1091,7 +1091,13 @@ function openSettingsModal(selectedProfileId = null) {
       const fallbackNotice = result.activeProfileFallback
         ? " 原活动配置已失效，已按你的确认自动选择第一个可用配置。"
         : "";
-      showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。" + fallbackNotice + " 请检查配置列表", "success");
+      const tokenCleanupNotice = result.sessionTokenCleanupSkipped
+        ? " 警告：会话存储不可用，旧会话 Token 暂时无法清理；当前配置仍使用导入文件中的持久化 Token。"
+        : "";
+      showToast(
+        "导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。" + fallbackNotice + tokenCleanupNotice + " 请检查配置列表",
+        result.sessionTokenCleanupSkipped ? "warn" : "success",
+      );
       replaceSettingsModal(overlay);
     } catch (error) {
       showToast(error?.message || "导入失败：文件无效或浏览器存储不可用", "error");
