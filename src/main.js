@@ -1017,7 +1017,7 @@ function openSettingsModal(selectedProfileId = null) {
 
       const result = importProfiles(bundle.profiles);
       showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。请检查配置列表", "success");
-      closeModalAndReopenSettings(overlay);
+      replaceSettingsModal(overlay);
     } catch (error) {
       showToast(error?.message || "导入失败：文件无效或浏览器存储不可用", "error");
     } finally {
@@ -1058,8 +1058,7 @@ function openSettingsModal(selectedProfileId = null) {
           return;
         }
       }
-      closeModal(overlay);
-      openSettingsModal();
+      replaceSettingsModal(overlay);
       showToast("已删除 " + profile.name, "info");
     });
   });
@@ -1124,24 +1123,16 @@ function openSettingsModal(selectedProfileId = null) {
   overlay._escHandler = escHandler;
 }
 
-function closeModalAndReopenSettings(overlay) {
-  let reopened = false;
-  let timer = null;
-  const reopen = () => {
-    if (reopened) return;
-    reopened = true;
-    if (timer !== null) window.clearTimeout(timer);
-    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-    openSettingsModal();
-  };
-
-  // Reopen on the fade-out completion, with a bounded fallback for reduced
-  // motion settings or browsers that do not dispatch transitionend.
-  overlay.addEventListener("transitionend", event => {
-    if (event.target === overlay && event.propertyName === "opacity") reopen();
-  }, { once: true });
-  timer = window.setTimeout(reopen, 350);
-  closeModal(overlay);
+function replaceSettingsModal(overlay, selectedProfileId = null) {
+  // This is a content replacement, not a user-requested animated close.
+  // Remove the old node synchronously to avoid duplicate modal IDs while
+  // the refreshed profile list is rendered.
+  if (overlay._escHandler) {
+    document.removeEventListener("keydown", overlay._escHandler);
+    overlay._escHandler = null;
+  }
+  if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  openSettingsModal(selectedProfileId);
 }
 
 function closeModal(overlay) {
