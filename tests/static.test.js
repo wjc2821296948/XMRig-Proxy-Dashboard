@@ -359,6 +359,8 @@ test("initial connection form rejects control characters in access tokens", () =
   const start = source.indexOf("async function handleConnect()");
   const end = source.indexOf("\n}", start);
   const handler = source.slice(start, end);
-  assert.match(handler, /\\u0000-\\u001F\\u007F/);
+  const slash = String.fromCharCode(92);
+  assert.ok(handler.includes(slash + "u0000-" + slash + "u001F" + slash + "u007F"));
+  assert.equal(handler.includes(slash + slash + "u0000"), false);
   assert.match(handler, /Token 不能包含控制字符/);
 });
