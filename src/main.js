@@ -50,6 +50,7 @@ function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
 let refreshInterval = null;
 let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
+let cleanupManualRefresh = null;
 const statusTracker = createStatusTracker();
 
 
@@ -1182,7 +1183,8 @@ async function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
-  registerManualRefresh({
+  cleanupManualRefresh?.();
+  cleanupManualRefresh = registerManualRefresh({
     documentRef: document,
     container: document.querySelector(".subtitle"),
     hasConfig: () => Boolean(getConfig()),
