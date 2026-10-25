@@ -11,6 +11,7 @@ export function registerVisiblePolling({
   intervalMs,
   refresh,
   shouldRun = () => true,
+  onError = () => {},
   setTimeoutRef = setTimeout,
   clearTimeoutRef = clearTimeout,
 }) {
@@ -28,19 +29,17 @@ export function registerVisiblePolling({
   };
 
   const scheduleNext = () => {
-    if (disposed || running || timer !== null || documentRef.visibilityState !== "visible") return;
+    if (disposed || running || timer !== null || documentRef.visibilityState !== "visible" || !shouldRun()) return;
     timer = setTimeoutRef(async () => {
       timer = null;
       if (disposed || documentRef.visibilityState !== "visible") return;
-      if (!shouldRun()) {
-        scheduleNext();
-        return;
-      }
+      if (!shouldRun()) return;
       running = true;
       try {
         await refresh();
-      } catch {
-        // The refresh owner handles errors. Keep the polling loop alive.
+      } catch (error) {
+        // Surface unexpected rejections while keeping periodic polling alive.
+        try { onError(error); } catch { /* error reporting must not break the loop */ }
       } finally {
         running = false;
         scheduleNext();
