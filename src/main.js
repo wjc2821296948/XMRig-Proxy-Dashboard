@@ -1189,6 +1189,10 @@ async function init() {
     shouldRefresh: () => activeDashboardMode === "readonly",
     refresh: fetchAndRender,
     notify: showToast,
+    onRefreshStart: stopAutoRefresh,
+    onRefreshEnd: () => {
+      if (getConfig() && activeDashboardMode === "readonly") startAutoRefresh();
+    },
   });
 
   // Wire the view-mode ribbon: click or keyboard activation opens the
