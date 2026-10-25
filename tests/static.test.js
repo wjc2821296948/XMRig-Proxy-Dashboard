@@ -312,3 +312,10 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
+
+
+test("manual refresh lifecycle only restarts polling for a connected read-only dashboard", () => {
+  const source = read("src/main.js");
+  assert.match(source, /onRefreshEnd:\s*\(\) => \{[\s\S]*?els\.viewModeBadge\?\.dataset\?\.connectState === "connected"[\s\S]*?startAutoRefresh\(\)/);
+  assert.match(source, /cleanupManualRefresh\?\.\(\);[\s\S]*?cleanupManualRefresh = registerManualRefresh/);
+});
