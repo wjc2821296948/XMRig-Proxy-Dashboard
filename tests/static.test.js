@@ -343,3 +343,11 @@ test("profile export measures the generated JSON in UTF-8 bytes", () => {
   assert.ok(storage.includes("utf8ByteLength(JSON.stringify(bundle, null, 2))"));
   assert.ok(storage.includes("utf8ByteLength(raw) > MAX_PROFILE_BUNDLE_BYTES"));
 });
+
+
+test("profile transfer blocks control characters and restores configs through the safe helper", () => {
+  const source = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.ok(source.includes("配置名称和 Token 不能包含控制字符"));
+  assert.match(storage, /entry\\.key === CONFIG_KEY[\\s\\S]*?restoreStoredConfigEntry\\(entry\\.kind, entry\\.value\\)/);
+});
