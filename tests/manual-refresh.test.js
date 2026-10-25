@@ -54,12 +54,14 @@ test("manual refresh disables the button until the refresh settles", async () =>
   button.click();
   assert.equal(button.disabled, true);
   assert.equal(button.textContent, "刷新中…");
+  assert.equal(button.attributes["aria-busy"], "true");
   button.click();
   assert.equal(calls, 1);
   release();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, "立即刷新");
+  assert.equal(button.attributes["aria-busy"], "false");
 });
 
 test("manual refresh removes its listener and button on cleanup", () => {
