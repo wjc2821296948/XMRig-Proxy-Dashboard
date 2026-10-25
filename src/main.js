@@ -1255,7 +1255,13 @@ async function init() {
     notify: showToast,
     onRefreshStart: stopAutoRefresh,
     onRefreshEnd: () => {
-      if (getConfig() && activeDashboardMode === "readonly") startAutoRefresh();
+      // A profile switch or authentication failure may abort a manual refresh.
+      // Do not restart polling until the current dashboard is actually connected.
+      if (
+        getConfig()
+        && activeDashboardMode === "readonly"
+        && els.viewModeBadge?.dataset?.connectState === "connected"
+      ) startAutoRefresh();
     },
   });
 
