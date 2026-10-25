@@ -161,11 +161,10 @@ export function saveConfig(cfg) {
       // no stale session config exists. If one exists, restore the old local
       // value, but never reactivate malformed credentials during that rollback.
       if (previousSession.value !== null) {
-        if (!restoreStoredConfigEntry("local", previousLocal.value)) {
-          storageRecoveryWarningPending = true;
-        }
-        // The stale session entry could not be removed or blanked, so the
-        // failed save may leave an older credential available after refresh.
+        // Best-effort restoration may fail, and an uncleared session config
+        // may still shadow the remembered value after refresh; either way,
+        // the caller must be warned that the connection state may be stale.
+        restoreStoredConfigEntry("local", previousLocal.value);
         storageRecoveryWarningPending = true;
         return false;
       }
