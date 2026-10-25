@@ -546,6 +546,10 @@ async function handleConnect() {
   const token = document.getElementById("apiTokenInput").value.trim();
   const remember = document.getElementById("rememberMe").checked;
 
+  if (/[\\u0000-\\u001F\\u007F]/.test(token)) {
+    showToast("Token 不能包含控制字符", "error");
+    return;
+  }
   if (!url) {
     showToast("请输入 API URL", "error");
     return;
