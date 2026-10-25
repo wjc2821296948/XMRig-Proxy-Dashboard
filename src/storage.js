@@ -788,7 +788,7 @@ function validateImportedProfiles(value) {
     const refreshInterval = profile.refreshInterval;
 
     if (typeof id !== "string" || id !== id.trim() || !id
-        || id.length > 128 || /[\\u0000-\\u001F\\u007F]/.test(id)) {
+        || id.length > 128 || /[\u0000-\u001F\u007F]/.test(id)) {
       throw new ProfileBundleValidationError("第 " + number + " 个配置的 ID 无效");
     }
     if (seen.has(id)) throw new ProfileBundleValidationError("导入文件包含重复的配置 ID");
