@@ -30,6 +30,8 @@ function setup(options = {}) {
     shouldRefresh: options.shouldRefresh ?? (() => true),
     refresh: options.refresh ?? (() => {}),
     notify: (message, type) => messages.push({ message, type }),
+    onRefreshStart: options.onRefreshStart,
+    onRefreshEnd: options.onRefreshEnd,
   });
   return { button, container, messages, cleanup };
 }
@@ -67,4 +69,29 @@ test("manual refresh removes its listener and button on cleanup", () => {
   assert.equal(button.removed, true);
   button.click();
   assert.equal(calls, 0);
+});
+
+
+test("manual refresh pauses and restores automatic polling on success or failure", async () => {
+  const events = [];
+  const successful = setup({
+    onRefreshStart: () => events.push("pause"),
+    onRefreshEnd: () => events.push("resume"),
+    refresh: () => events.push("refresh"),
+  });
+  successful.button.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(events, ["pause", "refresh", "resume"]);
+
+  const failedEvents = [];
+  const failed = setup({
+    onRefreshStart: () => failedEvents.push("pause"),
+    onRefreshEnd: () => failedEvents.push("resume"),
+    refresh: async () => { throw new Error("network failure"); },
+  });
+  failed.button.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(failedEvents, ["pause", "resume"]);
+  assert.equal(failed.button.disabled, false);
+  assert.equal(failed.messages.at(-1).type, "error");
 });
