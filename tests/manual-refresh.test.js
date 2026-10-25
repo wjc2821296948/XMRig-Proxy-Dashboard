@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { registerManualRefresh } from "../src/manual-refresh.js";
 
 class FakeButton extends EventTarget {
+  constructor(tagName = "button") { super(); this.tagName = tagName; }
   id = "";
   type = "";
   className = "";
@@ -17,14 +18,14 @@ class FakeButton extends EventTarget {
 }
 
 function setup(options = {}) {
-  const button = new FakeButton();
+  const created = [];
   const container = {
     children: [],
     appendChild(node) { this.children.push(node); },
   };
   const messages = [];
   const cleanup = registerManualRefresh({
-    documentRef: { createElement: () => button },
+    documentRef: { createElement: tagName => { const element = new FakeButton(tagName); created.push(element); return element; } },
     container,
     hasConfig: options.hasConfig ?? (() => true),
     shouldRefresh: options.shouldRefresh ?? (() => true),
@@ -33,7 +34,7 @@ function setup(options = {}) {
     onRefreshStart: options.onRefreshStart,
     onRefreshEnd: options.onRefreshEnd,
   });
-  return { button, container, messages, cleanup };
+  return { button: created.find(element => element.id === "refreshDashboardButton"), status: created.find(element => element.attributes.role === "status"), container, messages, cleanup };
 }
 
 test("manual refresh requires a saved connection and read-only mode", () => {
@@ -50,18 +51,23 @@ test("manual refresh disables the button until the refresh settles", async () =>
   let release;
   let calls = 0;
   const pending = new Promise(resolve => { release = resolve; });
-  const { button } = setup({ refresh: async () => { calls += 1; await pending; } });
+  const { button, status } = setup({ refresh: async () => { calls += 1; await pending; } });
   button.click();
   assert.equal(button.disabled, true);
   assert.equal(button.textContent, "刷新中…");
+  assert.equal(status.textContent, "正在刷新监控数据");
   assert.equal(button.attributes["aria-busy"], "true");
+  assert.equal(button.attributes["aria-disabled"], "true");
+  const setupState = null;
   button.click();
   assert.equal(calls, 1);
   release();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, "立即刷新");
+  assert.equal(status.textContent, "监控数据刷新完成");
   assert.equal(button.attributes["aria-busy"], "false");
+  assert.equal(button.attributes["aria-disabled"], "false");
 });
 
 test("manual refresh removes its listener and button on cleanup", () => {
