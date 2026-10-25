@@ -69,11 +69,12 @@ test("manual refresh disables the button until the refresh settles", async () =>
   assert.equal(button.attributes["aria-disabled"], "false");
 });
 
-test("manual refresh removes its listener and button on cleanup", () => {
+test("manual refresh removes its listener, button, and status region on cleanup", () => {
   let calls = 0;
-  const { button, cleanup } = setup({ refresh: () => { calls += 1; } });
+  const { button, status, cleanup } = setup({ refresh: () => { calls += 1; } });
   cleanup();
   assert.equal(button.removed, true);
+  assert.equal(status.removed, true);
   button.click();
   assert.equal(calls, 0);
 });
