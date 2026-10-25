@@ -1034,7 +1034,7 @@ function openSettingsModal(selectedProfileId = null) {
     try {
       const bundle = createProfilesExport();
       const json = JSON.stringify(bundle, null, 2);
-      if (json.length > 1024 * 1024) {
+      if (new TextEncoder().encode(json).byteLength > 1024 * 1024) {
         showToast("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试", "error");
         return;
       }
@@ -1073,9 +1073,19 @@ function openSettingsModal(selectedProfileId = null) {
       );
       if (!accepted) return;
 
-      const result = importProfiles(bundle.profiles);
+      let result;
+      try {
+        result = importProfiles(bundle.profiles);
+      } catch (error) {
+        if (error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED") throw error;
+        const allowFallback = confirm(
+          "检测到当前活动配置已失效。继续导入将自动选择第一个可用配置作为当前配置。是否继续？",
+        );
+        if (!allowFallback) return;
+        result = importProfiles(bundle.profiles, { allowActiveProfileFallback: true });
+      }
       const fallbackNotice = result.activeProfileFallback
-        ? " 原活动配置已失效，已自动选择第一个可用配置。"
+        ? " 原活动配置已失效，已按你的确认自动选择第一个可用配置。"
         : "";
       showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。" + fallbackNotice + " 请检查配置列表", "success");
       replaceSettingsModal(overlay);
