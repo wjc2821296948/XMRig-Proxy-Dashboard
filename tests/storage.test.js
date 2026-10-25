@@ -1214,3 +1214,44 @@ test("saved profile values remain compatible with the import/export schema", asy
   assert.equal(parsed.profiles[0].remember, false);
   assert.equal(parsed.profiles[0].refreshInterval, 10);
 });
+
+
+test("persistent profile import aborts if stale session-token cleanup cannot be written", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  const workingSession = new MemoryStorage();
+  globalThis.sessionStorage = workingSession;
+  const { saveProfile, parseProfilesImportJson, importProfiles } = await import("../src/storage.js");
+  saveProfile({
+    id: "cleanup-token", name: "Cleanup", apiUrl: "https://cleanup.example",
+    apiToken: "old-session-token", remember: false, refreshInterval: 10,
+  });
+  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  const beforeTokens = workingSession.getItem("xmrig_proxy_session_tokens");
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() {
+      return {
+        getItem: key => workingSession.getItem(key),
+        removeItem: key => workingSession.removeItem(key),
+        setItem(key, value) {
+          if (key === "xmrig_proxy_session_tokens") throw new DOMException("write denied", "QuotaExceededError");
+          workingSession.setItem(key, value);
+        },
+        clear: () => workingSession.clear(),
+      };
+    },
+  });
+  try {
+    const bundle = parseProfilesImportJson(JSON.stringify({
+      format: "xmrig-proxy-dashboard-profile-bundle",
+      version: 1,
+      profiles: [{ id: "cleanup-token", name: "Cleanup", apiUrl: "https://cleanup.example", apiToken: "remembered-token", remember: true, refreshInterval: 10 }],
+    }));
+    assert.throws(() => importProfiles(bundle.profiles), /导入失败/);
+    assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles"), beforeProfiles);
+    assert.equal(workingSession.getItem("xmrig_proxy_session_tokens"), beforeTokens);
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", descriptor);
+  }
+});
