@@ -77,7 +77,13 @@ function normalizeProfile(profile) {
 }
 
 function readProfileTokens() {
-  const raw = sessionStorage.getItem(PROFILE_TOKENS_KEY);
+  let raw;
+  try {
+    raw = globalThis.sessionStorage.getItem(PROFILE_TOKENS_KEY);
+  } catch {
+    // Persistent profiles remain usable when the browser disables sessionStorage.
+    return Object.create(null);
+  }
   if (!raw) return Object.create(null);
   try {
     const parsed = JSON.parse(raw);
@@ -269,7 +275,12 @@ export function loadConfig() {
     }
     localStorage.removeItem(CONFIG_KEY);
   }
-  raw = sessionStorage.getItem(CONFIG_KEY);
+  try {
+    raw = globalThis.sessionStorage.getItem(CONFIG_KEY);
+  } catch {
+    // Session-only config is unavailable, but local persistent config was already checked.
+    return null;
+  }
   if (raw) {
     try {
       const hydrated = hydrateConnection(raw);
@@ -277,7 +288,7 @@ export function loadConfig() {
     } catch {
       // JSON parse failure — return null below.
     }
-    sessionStorage.removeItem(CONFIG_KEY);
+    try { globalThis.sessionStorage.removeItem(CONFIG_KEY); } catch { /* storage is unavailable */ }
   }
   return null;
 }
@@ -556,9 +567,13 @@ function snapshotImportKeys(local, session) {
     { storage: local, key: PROFILES_KEY },
     { storage: local, key: ACTIVE_PROFILE_KEY },
     { storage: local, key: CONFIG_KEY },
-    { storage: session, key: PROFILE_TOKENS_KEY },
-    { storage: session, key: CONFIG_KEY },
   ];
+  if (session) {
+    entries.push(
+      { storage: session, key: PROFILE_TOKENS_KEY },
+      { storage: session, key: CONFIG_KEY },
+    );
+  }
   return entries.map(entry => ({ ...entry, value: entry.storage.getItem(entry.key) }));
 }
 
@@ -588,12 +603,26 @@ export function importProfiles(importedProfiles) {
   // code paths other than parseProfilesImportJson(); never trust raw callers.
   const incoming = validateImportedProfiles(importedProfiles);
   let local;
-  let session;
+  let session = null;
   let snapshot;
+  const needsSessionStorage = incoming.some(profile => !profile.remember);
 
   try {
     local = globalThis.localStorage;
-    session = globalThis.sessionStorage;
+  } catch {
+    throw new Error("浏览器存储不可用，无法安全导入配置");
+  }
+  try {
+    const candidate = globalThis.sessionStorage;
+    candidate.getItem(PROFILE_TOKENS_KEY);
+    session = candidate;
+  } catch {
+    // Session storage is optional for persistent-only imports.
+  }
+  if (needsSessionStorage && !session) {
+    throw new Error("浏览器会话存储不可用，无法导入未启用“记住我”的配置");
+  }
+  try {
     snapshot = snapshotImportKeys(local, session);
   } catch {
     throw new Error("浏览器存储不可用，无法安全导入配置");
@@ -620,18 +649,27 @@ export function importProfiles(importedProfiles) {
       throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
     }
 
-    const tokens = Object.assign(Object.create(null), readProfileTokens());
-    for (const profile of incoming) {
-      if (profile.remember) delete tokens[profile.id];
-      else tokens[profile.id] = profile.apiToken;
+    if (session) {
+      try {
+        const tokens = Object.assign(Object.create(null), readProfileTokens());
+        for (const profile of incoming) {
+          if (profile.remember) delete tokens[profile.id];
+          else tokens[profile.id] = profile.apiToken;
+        }
+        writeProfileTokens(tokens);
+      } catch (error) {
+        // Session token persistence is mandatory for session-only profiles;
+        // cleanup of stale session tokens is best-effort for persistent imports.
+        if (needsSessionStorage) throw error;
+      }
     }
-
-    writeProfileTokens(tokens);
     writeProfiles(merged);
 
     const previousActiveId = local.getItem(ACTIVE_PROFILE_KEY);
     const activeStillExists = merged.some(profile => profile.id === previousActiveId);
     if (!activeStillExists && merged.length) {
+      // Repair a stale active ID deterministically so the dashboard always has
+      // a valid active profile after importing into a fresh or manually edited store.
       local.setItem(ACTIVE_PROFILE_KEY, merged[0].id);
     }
 
