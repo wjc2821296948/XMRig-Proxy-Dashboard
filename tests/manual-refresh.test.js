@@ -39,6 +39,7 @@ function setup(options = {}) {
 
 test("manual refresh handles a missing container without throwing", () => {
   const messages = [];
+  const warnings = [];
   let created = false;
   const cleanup = registerManualRefresh({
     documentRef: { createElement: () => { created = true; throw new Error("should not create an element"); } },
@@ -46,10 +47,12 @@ test("manual refresh handles a missing container without throwing", () => {
     hasConfig: () => false,
     refresh() {},
     notify: (message, type) => messages.push({ message, type }),
+    warn: message => warnings.push(message),
   });
   assert.equal(typeof cleanup, "function");
   assert.equal(created, false);
-  assert.equal(messages[0].type, "warning");
+  assert.equal(messages.length, 0);
+  assert.match(warnings[0], /\.subtitle/);
   cleanup();
 });
 
