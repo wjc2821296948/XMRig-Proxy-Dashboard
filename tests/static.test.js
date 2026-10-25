@@ -349,5 +349,6 @@ test("profile transfer blocks control characters and restores configs through th
   const source = read("src/main.js");
   const storage = read("src/storage.js");
   assert.ok(source.includes("配置名称和 Token 不能包含控制字符"));
-  assert.match(storage, /entry\\.key === CONFIG_KEY[\\s\\S]*?restoreStoredConfigEntry\\(entry\\.kind, entry\\.value\\)/);
+  assert.ok(storage.includes("entry.key === CONFIG_KEY"));
+  assert.ok(storage.includes("restoreStoredConfigEntry(entry.kind, entry.value)"));
 });
