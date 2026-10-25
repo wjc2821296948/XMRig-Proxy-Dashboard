@@ -12,6 +12,11 @@ export function registerManualRefresh({
   onRefreshStart = () => {},
   onRefreshEnd = () => {},
 }) {
+  if (!container || typeof container.appendChild !== "function") {
+    notify("无法初始化手动刷新按钮：未找到仪表盘标题栏", "warning");
+    return () => {};
+  }
+
   const button = documentRef.createElement("button");
   button.id = "refreshDashboardButton";
   button.type = "button";
