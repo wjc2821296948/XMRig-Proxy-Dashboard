@@ -1255,3 +1255,75 @@ test("persistent profile import aborts if stale session-token cleanup cannot be 
     Object.defineProperty(globalThis, "sessionStorage", descriptor);
   }
 });
+
+
+test("profile IDs with legacy spaces remain exportable and importable", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, createProfilesExport, parseProfilesImportJson, importProfiles, loadProfiles } = await import("../src/storage.js");
+  const saved = saveProfile({
+    id: "legacy profile id", name: "Legacy", apiUrl: "https://legacy-profile.example",
+    apiToken: "token", remember: true, refreshInterval: 10,
+  });
+  assert.equal(saved.id, "legacy profile id");
+  const bundle = parseProfilesImportJson(JSON.stringify(createProfilesExport()));
+  assert.equal(bundle.profiles[0].id, "legacy profile id");
+
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  importProfiles(bundle.profiles);
+  assert.equal(loadProfiles()[0].id, "legacy profile id");
+});
+
+test("persistent profile import is refused when blocked session storage prevents stale-token cleanup", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  const workingSession = new MemoryStorage();
+  globalThis.sessionStorage = workingSession;
+  const { saveProfile, parseProfilesImportJson, importProfiles, loadActiveProfileId } = await import("../src/storage.js");
+  saveProfile({
+    id: "same-profile", name: "Session-only", apiUrl: "https://session-only.example",
+    apiToken: "session-token", remember: false, refreshInterval: 10,
+  });
+  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
+  const beforeActive = globalThis.localStorage.getItem("xmrig_proxy_active_profile");
+  const bundle = parseProfilesImportJson(JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [{ id: "same-profile", name: "Remembered", apiUrl: "https://remembered.example", apiToken: "persistent-token", remember: true, refreshInterval: 10 }],
+  }));
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() { throw new Error("session storage blocked"); },
+  });
+  try {
+    assert.throws(() => importProfiles(bundle.profiles), /导入失败/);
+    assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles"), beforeProfiles);
+    assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), beforeActive);
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", descriptor);
+  }
+});
+
+test("remembered connection config can be saved when sessionStorage is inaccessible", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const { saveConfig, loadConfig } = await import("../src/storage.js");
+  const config = {
+    apiUrl: "https://persistent-only.example",
+    apiToken: "persistent-token",
+    remember: true,
+    refreshInterval: 10,
+  };
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() { throw new Error("session storage blocked"); },
+  });
+  try {
+    assert.equal(saveConfig(config), true);
+    assert.deepEqual(loadConfig(), config);
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", descriptor);
+  }
+});
