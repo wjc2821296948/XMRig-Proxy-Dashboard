@@ -1192,6 +1192,10 @@ function openSettingsModal(selectedProfileId = null) {
       showToast("刷新间隔必须在 1-120 秒之间", "error");
       return;
     }
+    if (/[\u0000-\u001F\u007F]/.test(name) || /[\u0000-\u001F\u007F]/.test(token)) {
+      showToast("配置名称和 Token 不能包含控制字符", "error");
+      return;
+    }
 
     saveSettingsButton.disabled = true;
     saveSettingsButton.textContent = "保存中...";
