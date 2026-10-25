@@ -184,7 +184,7 @@ function normalizeProfile(profile) {
   const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
-  const refreshInterval = Math.min(120, Math.max(1, Number(profile.refreshInterval) || 10));
+  const refreshInterval = Math.min(120, Math.max(1, Math.trunc(Number(profile.refreshInterval) || 10)));
   return {
     id,
     name,
@@ -291,6 +291,13 @@ export function saveProfile(profile) {
     id: profile.id || `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   });
   if (!normalized) return null;
+  try {
+    // New writes must meet the same schema that export/import will serialize.
+    // normalizeProfile still accepts older stored records for backward compatibility.
+    validateImportedProfiles([normalized]);
+  } catch {
+    return null;
+  }
 
   const profiles = loadProfiles();
   const index = profiles.findIndex(item => item.id === normalized.id);
@@ -897,9 +904,11 @@ function restoreImportSnapshot(snapshot) {
     }
     if (current.value === entry.value) continue;
 
-    const written = entry.value === null
-      ? safeRemove(entry.kind, entry.key)
-      : safeSet(entry.kind, entry.key, entry.value);
+    const written = entry.key === CONFIG_KEY
+      ? restoreStoredConfigEntry(entry.kind, entry.value)
+      : entry.value === null
+        ? safeRemove(entry.kind, entry.key)
+        : safeSet(entry.kind, entry.key, entry.value);
     if (!written) {
       restored = false;
       continue;
@@ -908,6 +917,7 @@ function restoreImportSnapshot(snapshot) {
     const verified = readStorageEntry(entry.kind, entry.key);
     if (!verified.ok || verified.value !== entry.value) restored = false;
   }
+  if (!restored) storageRecoveryWarningPending = true;
   return restored;
 }
 
