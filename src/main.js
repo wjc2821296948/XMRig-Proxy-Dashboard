@@ -1016,7 +1016,10 @@ function openSettingsModal(selectedProfileId = null) {
       if (!accepted) return;
 
       const result = importProfiles(bundle.profiles);
-      showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。请检查配置列表", "success");
+      const fallbackNotice = result.activeProfileFallback
+        ? " 原活动配置已失效，已自动选择第一个可用配置。"
+        : "";
+      showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。" + fallbackNotice + " 请检查配置列表", "success");
       replaceSettingsModal(overlay);
     } catch (error) {
       showToast(error?.message || "导入失败：文件无效或浏览器存储不可用", "error");
