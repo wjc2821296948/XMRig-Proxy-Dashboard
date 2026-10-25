@@ -9,6 +9,8 @@ export function registerManualRefresh({
   shouldRefresh = () => true,
   refresh,
   notify,
+  onRefreshStart = () => {},
+  onRefreshEnd = () => {},
 }) {
   const button = documentRef.createElement("button");
   button.id = "refreshDashboardButton";
@@ -36,10 +38,16 @@ export function registerManualRefresh({
     button.disabled = true;
     button.textContent = "刷新中…";
     try {
+      onRefreshStart();
       await refresh();
     } catch {
       notify("手动刷新失败，请检查 Proxy 连接", "error");
     } finally {
+      try {
+        onRefreshEnd();
+      } catch {
+        notify("无法恢复自动刷新，请刷新页面", "error");
+      }
       busy = false;
       button.disabled = false;
       button.textContent = idleText;
