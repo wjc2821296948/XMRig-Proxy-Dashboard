@@ -980,16 +980,17 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
     }
 
+    let sessionTokenCleanupSkipped = false;
     if (!session) {
       const existingSessionOnlyIds = new Set(
         existing.filter(profile => !profile.remember).map(profile => profile.id),
       );
-      const staleSessionTokenCleanupNeeded = incoming.some(
+      sessionTokenCleanupSkipped = incoming.some(
         profile => profile.remember && existingSessionOnlyIds.has(profile.id),
       );
-      if (staleSessionTokenCleanupNeeded) {
-        throw new Error("会话存储不可用，无法清理该配置的旧会话 Token；已取消导入");
-      }
+      // The persistent profile record contains its own credential and takes
+      // precedence over session tokens. Continue the import, but report that
+      // an inaccessible stale session token could not be removed.
     }
 
     const activeEntry = readStorageEntry("local", ACTIVE_PROFILE_KEY);
@@ -1034,6 +1035,7 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       updated,
       total: merged.length,
       ...(activeProfileFallback ? { activeProfileFallback: true } : {}),
+      ...(sessionTokenCleanupSkipped ? { sessionTokenCleanupSkipped: true } : {}),
     };
   } catch (error) {
     const restored = snapshot ? restoreImportSnapshot(snapshot) : true;
