@@ -1166,6 +1166,7 @@ function startAutoRefresh() {
     intervalMs,
     shouldRun: () => Boolean(getConfig()) && activeDashboardMode === "readonly",
     refresh: fetchAndRender,
+    onError: error => showToast(`刷新失败: ${error?.message || "未知错误"}`, "error"),
   });
 }
 
