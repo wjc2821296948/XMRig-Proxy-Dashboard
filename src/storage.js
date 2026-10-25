@@ -953,14 +953,19 @@ export function importProfiles(importedProfiles) {
           if (profile.remember) delete tokens[profile.id];
           else tokens[profile.id] = profile.apiToken;
         }
-        writeProfileTokens(tokens);
+        const tokensSaved = writeProfileTokens(tokens);
+        if (!tokensSaved && needsSessionStorage) {
+          throw new Error("无法保存会话配置的 Token");
+        }
       } catch (error) {
         // Session token persistence is mandatory for session-only profiles;
         // cleanup of stale session tokens is best-effort for persistent imports.
         if (needsSessionStorage) throw error;
       }
     }
-    writeProfiles(merged);
+    if (!writeProfiles(merged)) {
+      throw new Error("无法保存导入的 Proxy 配置");
+    }
 
     const previousActiveId = local.getItem(ACTIVE_PROFILE_KEY);
     const activeStillExists = merged.some(profile => profile.id === previousActiveId);
@@ -968,7 +973,9 @@ export function importProfiles(importedProfiles) {
     if (!activeStillExists && merged.length) {
       // Repair a stale active ID deterministically so the dashboard always has
       // a valid active profile after importing into a fresh or manually edited store.
-      local.setItem(ACTIVE_PROFILE_KEY, merged[0].id);
+      if (!safeSet("local", ACTIVE_PROFILE_KEY, merged[0].id)) {
+        throw new Error("无法保存活动配置 ID");
+      }
     }
 
     return {
