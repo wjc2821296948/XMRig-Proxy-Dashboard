@@ -58,7 +58,6 @@ test("manual refresh disables the button until the refresh settles", async () =>
   assert.equal(status.textContent, "正在刷新监控数据");
   assert.equal(button.attributes["aria-busy"], "true");
   assert.equal(button.attributes["aria-disabled"], "true");
-  const setupState = null;
   button.click();
   assert.equal(calls, 1);
   release();
