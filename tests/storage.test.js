@@ -1275,17 +1275,16 @@ test("profile IDs with legacy spaces remain exportable and importable", async ()
   assert.equal(loadProfiles()[0].id, "legacy profile id");
 });
 
-test("persistent profile import is refused when blocked session storage prevents stale-token cleanup", async () => {
+test("persistent profile import warns when stale session-token cleanup is blocked", async () => {
   globalThis.localStorage = new MemoryStorage();
   const workingSession = new MemoryStorage();
   globalThis.sessionStorage = workingSession;
-  const { saveProfile, parseProfilesImportJson, importProfiles, loadActiveProfileId } = await import("../src/storage.js");
+  const { saveProfile, parseProfilesImportJson, importProfiles, loadProfiles } = await import("../src/storage.js");
   saveProfile({
     id: "same-profile", name: "Session-only", apiUrl: "https://session-only.example",
     apiToken: "session-token", remember: false, refreshInterval: 10,
   });
-  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
-  const beforeActive = globalThis.localStorage.getItem("xmrig_proxy_active_profile");
+  const oldTokens = workingSession.getItem("xmrig_proxy_session_tokens");
   const bundle = parseProfilesImportJson(JSON.stringify({
     format: "xmrig-proxy-dashboard-profile-bundle",
     version: 1,
@@ -1297,12 +1296,14 @@ test("persistent profile import is refused when blocked session storage prevents
     get() { throw new Error("session storage blocked"); },
   });
   try {
-    assert.throws(() => importProfiles(bundle.profiles), /导入失败/);
-    assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles"), beforeProfiles);
-    assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), beforeActive);
+    const result = importProfiles(bundle.profiles);
+    assert.equal(result.updated, 1);
+    assert.equal(result.sessionTokenCleanupSkipped, true);
   } finally {
     Object.defineProperty(globalThis, "sessionStorage", descriptor);
   }
+  assert.equal(workingSession.getItem("xmrig_proxy_session_tokens"), oldTokens);
+  assert.equal(loadProfiles().find(profile => profile.id === "same-profile").apiToken, "persistent-token");
 });
 
 test("remembered connection config can be saved when sessionStorage is inaccessible", async () => {
