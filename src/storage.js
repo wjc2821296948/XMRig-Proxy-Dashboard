@@ -146,8 +146,14 @@ export function saveConfig(cfg) {
     // A rollback must know the exact previous values. Do not overwrite an
     // existing credential when a restricted storage context makes snapshots unreadable.
     const previousLocal = readStorageEntry("local", CONFIG_KEY);
+    if (!previousLocal.ok) return false;
     const previousSession = readStorageEntry("session", CONFIG_KEY);
-    if (!previousLocal.ok || !previousSession.ok) return false;
+    if (!previousSession.ok) {
+      // localStorage wins over sessionStorage during loadConfig(). When session
+      // storage is inaccessible, writing the remembered value locally is safe;
+      // it cannot be shadowed by an unreadable session-only value.
+      return safeSet("local", CONFIG_KEY, serialized);
+    }
     if (!safeSet("local", CONFIG_KEY, serialized)) return false;
 
     if (!safeRemoveOrReplace("session", CONFIG_KEY, "")) {
@@ -781,8 +787,8 @@ function validateImportedProfiles(value) {
     const remember = profile.remember;
     const refreshInterval = profile.refreshInterval;
 
-    if (typeof id !== "string" || id !== id.trim()
-        || !/^[A-Za-z0-9_][A-Za-z0-9._:-]{0,127}$/.test(id)) {
+    if (typeof id !== "string" || id !== id.trim() || !id
+        || id.length > 128 || /[\\u0000-\\u001F\\u007F]/.test(id)) {
       throw new ProfileBundleValidationError("第 " + number + " 个配置的 ID 无效");
     }
     if (seen.has(id)) throw new ProfileBundleValidationError("导入文件包含重复的配置 ID");
@@ -973,6 +979,18 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
 
     if (merged.length > MAX_IMPORTED_PROFILES) {
       throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
+    }
+
+    if (!session) {
+      const existingSessionOnlyIds = new Set(
+        existing.filter(profile => !profile.remember).map(profile => profile.id),
+      );
+      const staleSessionTokenCleanupNeeded = incoming.some(
+        profile => profile.remember && existingSessionOnlyIds.has(profile.id),
+      );
+      if (staleSessionTokenCleanupNeeded) {
+        throw new Error("会话存储不可用，无法清理该配置的旧会话 Token；已取消导入");
+      }
     }
 
     const activeEntry = readStorageEntry("local", ACTIVE_PROFILE_KEY);
