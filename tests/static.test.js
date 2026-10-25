@@ -322,3 +322,12 @@ test("profile transfer UI warns about tokens and processes files locally", () =>
   assert.match(source, /importProfiles\(bundle\.profiles\)/);
   assert.doesNotMatch(source, /fetch\(.*(?:profile|bundle|json)/i);
 });
+
+
+test("profile import refresh replaces the modal synchronously", () => {
+  const source = read("src/main.js");
+  assert.match(source, /function replaceSettingsModal\(overlay, selectedProfileId = null\)/);
+  assert.match(source, /replaceSettingsModal\(overlay\)/);
+  assert.doesNotMatch(source, /function closeModalAndReopenSettings/);
+  assert.match(source, /result\.activeProfileFallback[\s\S]*?已自动选择第一个可用配置/);
+});
