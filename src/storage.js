@@ -291,6 +291,13 @@ export function saveProfile(profile) {
     id: profile.id || `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   });
   if (!normalized) return null;
+  try {
+    // Normalize legacy values first, then enforce the safe export/import schema
+    // for new writes. Prototype-like IDs remain safe because token maps use null prototypes.
+    validateImportedProfiles([normalized]);
+  } catch {
+    return null;
+  }
 
   const profiles = loadProfiles();
   const index = profiles.findIndex(item => item.id === normalized.id);
@@ -747,7 +754,6 @@ function utf8ByteLength(value) {
   return new TextEncoder().encode(value).byteLength;
 }
 const MAX_IMPORTED_PROFILES = 100;
-const IMPORT_FORBIDDEN_IDS = new Set(Object.getOwnPropertyNames(Object.prototype));
 
 class ProfileBundleValidationError extends Error {
   constructor(message) {
@@ -776,8 +782,7 @@ function validateImportedProfiles(value) {
     const refreshInterval = profile.refreshInterval;
 
     if (typeof id !== "string" || id !== id.trim()
-        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)
-        || IMPORT_FORBIDDEN_IDS.has(id)) {
+        || !/^[A-Za-z0-9_][A-Za-z0-9._:-]{0,127}$/.test(id)) {
       throw new ProfileBundleValidationError("第 " + number + " 个配置的 ID 无效");
     }
     if (seen.has(id)) throw new ProfileBundleValidationError("导入文件包含重复的配置 ID");
@@ -982,20 +987,17 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
     }
 
     if (session) {
-      try {
-        const tokens = Object.assign(Object.create(null), readProfileTokens());
-        for (const profile of incoming) {
-          if (profile.remember) delete tokens[profile.id];
-          else tokens[profile.id] = profile.apiToken;
-        }
-        const tokensSaved = writeProfileTokens(tokens);
-        if (!tokensSaved && needsSessionStorage) {
-          throw new Error("无法保存会话配置的 Token");
-        }
-      } catch (error) {
-        // Session token persistence is mandatory for session-only profiles;
-        // cleanup of stale session tokens is best-effort for persistent imports.
-        if (needsSessionStorage) throw error;
+      const previousTokens = readProfileTokens();
+      const tokens = Object.assign(Object.create(null), previousTokens);
+      for (const profile of incoming) {
+        if (profile.remember) delete tokens[profile.id];
+        else tokens[profile.id] = profile.apiToken;
+      }
+      // Do not write when no token keys change. If cleanup or persistence is
+      // required but the session store is unwritable, abort and roll back instead
+      // of silently leaving a stale credential behind.
+      if (JSON.stringify(tokens) !== JSON.stringify(previousTokens) && !writeProfileTokens(tokens)) {
+        throw new Error("无法更新会话 Token 存储");
       }
     }
     if (!writeProfiles(merged)) {
