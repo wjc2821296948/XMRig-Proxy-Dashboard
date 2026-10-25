@@ -291,13 +291,6 @@ export function saveProfile(profile) {
     id: profile.id || `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   });
   if (!normalized) return null;
-  try {
-    // New writes must meet the same schema that export/import will serialize.
-    // normalizeProfile still accepts older stored records for backward compatibility.
-    validateImportedProfiles([normalized]);
-  } catch {
-    return null;
-  }
 
   const profiles = loadProfiles();
   const index = profiles.findIndex(item => item.id === normalized.id);
