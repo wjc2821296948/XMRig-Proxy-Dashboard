@@ -546,7 +546,7 @@ async function handleConnect() {
   const token = document.getElementById("apiTokenInput").value.trim();
   const remember = document.getElementById("rememberMe").checked;
 
-  if (/[\\u0000-\\u001F\\u007F]/.test(token)) {
+  if (/[\u0000-\u001F\u007F]/.test(token)) {
     showToast("Token 不能包含控制字符", "error");
     return;
   }
