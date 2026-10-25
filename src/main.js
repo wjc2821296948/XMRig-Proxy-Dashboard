@@ -1137,8 +1137,15 @@ function openSettingsModal(selectedProfileId = null) {
       return;
     }
 
-    applyThemePreference(themePreference, { persist: true });
-    await reconnectProfile(profile);
+    try {
+      applyThemePreference(themePreference, { persist: true });
+      await reconnectProfile(profile);
+    } catch (err) {
+      showToast("配置已保存，但切换连接失败: " + (err?.message || "未知错误"), "error");
+    } finally {
+      saveSettingsButton.disabled = false;
+      saveSettingsButton.textContent = "保存并切换";
+    }
   });
 
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(overlay); });
