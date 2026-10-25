@@ -667,13 +667,19 @@ export function importProfiles(importedProfiles) {
 
     const previousActiveId = local.getItem(ACTIVE_PROFILE_KEY);
     const activeStillExists = merged.some(profile => profile.id === previousActiveId);
+    const activeProfileFallback = previousActiveId !== null && !activeStillExists;
     if (!activeStillExists && merged.length) {
       // Repair a stale active ID deterministically so the dashboard always has
       // a valid active profile after importing into a fresh or manually edited store.
       local.setItem(ACTIVE_PROFILE_KEY, merged[0].id);
     }
 
-    return { added, updated, total: merged.length };
+    return {
+      added,
+      updated,
+      total: merged.length,
+      ...(activeProfileFallback ? { activeProfileFallback: true } : {}),
+    };
   } catch (error) {
     const restored = snapshot ? restoreImportSnapshot(snapshot) : true;
     if (!restored) {
