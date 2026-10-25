@@ -101,3 +101,49 @@ test("visible polling clamps invalidly short intervals to one second", () => {
   assert.equal([...timers.jobs.values()][0].delay, 1000);
   cleanup();
 });
+
+
+test("visible polling stops rescheduling while shouldRun is false", async () => {
+  const documentRef = new TestDocument();
+  const timers = createFakeTimers();
+  let canRun = true;
+  const cleanup = registerVisiblePolling({
+    documentRef,
+    intervalMs: 5000,
+    shouldRun: () => canRun,
+    refresh() {},
+    setTimeoutRef: timers.setTimeout,
+    clearTimeoutRef: timers.clearTimeout,
+  });
+
+  canRun = false;
+  await timers.fireNext();
+  assert.equal(timers.jobs.size, 0, "inactive polling should leave no timer pending");
+
+  canRun = true;
+  documentRef.visibilityState = "hidden";
+  documentRef.dispatchEvent(new Event("visibilitychange"));
+  documentRef.visibilityState = "visible";
+  documentRef.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(timers.jobs.size, 1, "a visible-state change can restart eligible polling");
+  cleanup();
+});
+
+test("unexpected refresh rejections are reported and polling remains scheduled", async () => {
+  const documentRef = new TestDocument();
+  const timers = createFakeTimers();
+  const errors = [];
+  const cleanup = registerVisiblePolling({
+    documentRef,
+    intervalMs: 5000,
+    refresh: async () => { throw new Error("unexpected failure"); },
+    onError: error => errors.push(error.message),
+    setTimeoutRef: timers.setTimeout,
+    clearTimeoutRef: timers.clearTimeout,
+  });
+
+  await timers.fireNext();
+  assert.deepEqual(errors, ["unexpected failure"]);
+  assert.equal(timers.jobs.size, 1);
+  cleanup();
+});
