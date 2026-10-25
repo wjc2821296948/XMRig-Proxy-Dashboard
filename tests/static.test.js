@@ -312,3 +312,24 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
+
+test("profile transfer UI warns about tokens and processes files locally", () => {
+  const source = read("src/main.js");
+  assert.match(source, /id="exportProfiles"/);
+  assert.match(source, /id="importProfiles"/);
+  assert.match(source, /id="profileImportFile" type="file" accept="\.json,application\/json"/);
+  assert.match(source, /访问 Token/);
+  assert.match(source, /URL\.createObjectURL\(blob\)/);
+  assert.match(source, /parseProfilesImportJson\(await file\.text\(\)\)/);
+  assert.match(source, /importProfiles\(bundle\.profiles\)/);
+  assert.doesNotMatch(source, /fetch\(.*(?:profile|bundle|json)/i);
+});
+
+
+test("profile import refresh replaces the modal synchronously", () => {
+  const source = read("src/main.js");
+  assert.match(source, /function replaceSettingsModal\(overlay, selectedProfileId = null\)/);
+  assert.match(source, /replaceSettingsModal\(overlay\)/);
+  assert.doesNotMatch(source, /function closeModalAndReopenSettings/);
+  assert.match(source, /result\.activeProfileFallback[\s\S]*?已自动选择第一个可用配置/);
+});

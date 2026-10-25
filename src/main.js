@@ -14,6 +14,7 @@ import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
+  createProfilesExport, parseProfilesImportJson, importProfiles,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
@@ -921,6 +922,12 @@ function openSettingsModal(selectedProfileId = null) {
             <span class="input-label">已保存的 Proxy</span>
             <button class="btn btn-secondary btn-sm" id="newProfile">+ 新建 Proxy</button>
           </div>
+          <div class="profile-transfer-actions">
+            <button class="btn btn-secondary btn-sm" id="exportProfiles" type="button">导出配置</button>
+            <button class="btn btn-secondary btn-sm" id="importProfiles" type="button">导入配置</button>
+            <input id="profileImportFile" type="file" accept=".json,application/json" aria-label="选择要导入的 Proxy 配置 JSON 文件" hidden>
+          </div>
+          <p class="input-hint profile-transfer-warning">导出文件可能包含访问 Token；请妥善保管。导入会合并配置，同 ID 项目将被覆盖。文件只在本机处理，不会上传。</p>
           <div class="profile-list" id="profileList">
             ${profiles.length ? profiles.map(profile => profileRowHtml(profile, activeId)).join("") : '<p class="profile-empty">暂无保存的 Proxy 配置</p>'}
           </div>
@@ -1018,6 +1025,67 @@ function openSettingsModal(selectedProfileId = null) {
     openSettingsModal("__new__");
   });
 
+  document.getElementById("exportProfiles").addEventListener("click", () => {
+    const confirmed = confirm(
+      "导出的 JSON 文件可能包含一个或多个 Proxy 的访问 Token。文件会在本机生成并下载，不会上传；任何拿到文件的人都可能使用其中的 Token。确定导出？",
+    );
+    if (!confirmed) return;
+
+    try {
+      const bundle = createProfilesExport();
+      const json = JSON.stringify(bundle, null, 2);
+      if (json.length > 1024 * 1024) {
+        showToast("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试", "error");
+        return;
+      }
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.href = downloadUrl;
+      link.download = "xmrig-proxy-profiles-" + stamp + ".json";
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
+      showToast("配置已导出。请妥善保管可能包含访问 Token 的文件", "success");
+    } catch (error) {
+      showToast(error?.message || "导出配置失败，请检查浏览器存储", "error");
+    }
+  });
+
+  const profileImportFile = document.getElementById("profileImportFile");
+  document.getElementById("importProfiles").addEventListener("click", () => {
+    profileImportFile.click();
+  });
+  profileImportFile.addEventListener("change", async () => {
+    const file = profileImportFile.files?.[0];
+    if (!file) return;
+
+    try {
+      if (file.size > 1024 * 1024) {
+        throw new Error("导入文件超过 1 MB 限制");
+      }
+      const bundle = parseProfilesImportJson(await file.text());
+      const accepted = confirm(
+        "已验证 " + bundle.profiles.length + " 个配置。导入将按配置 ID 合并；相同 ID 的现有配置会被覆盖，其他配置保留。文件可能包含访问 Token，仅会写入本地浏览器存储。继续导入？",
+      );
+      if (!accepted) return;
+
+      const result = importProfiles(bundle.profiles);
+      const fallbackNotice = result.activeProfileFallback
+        ? " 原活动配置已失效，已自动选择第一个可用配置。"
+        : "";
+      showToast("导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。" + fallbackNotice + " 请检查配置列表", "success");
+      replaceSettingsModal(overlay);
+    } catch (error) {
+      showToast(error?.message || "导入失败：文件无效或浏览器存储不可用", "error");
+    } finally {
+      profileImportFile.value = "";
+    }
+  });
+
   overlay.querySelectorAll('[data-action="select-profile"]').forEach(button => {
     button.addEventListener("click", async () => {
       const requestedId = button.dataset.profileId;
@@ -1071,8 +1139,7 @@ function openSettingsModal(selectedProfileId = null) {
           return;
         }
       }
-      closeModal(overlay);
-      openSettingsModal();
+      replaceSettingsModal(overlay);
       showToast("已删除 " + profile.name, "info");
     });
   });
@@ -1153,6 +1220,19 @@ function openSettingsModal(selectedProfileId = null) {
   document.addEventListener("keydown", escHandler);
   overlay._escHandler = escHandler;
 }
+
+function replaceSettingsModal(overlay, selectedProfileId = null) {
+  // This is a content replacement, not a user-requested animated close.
+  // Remove the old node synchronously to avoid duplicate modal IDs while
+  // the refreshed profile list is rendered.
+  if (overlay._escHandler) {
+    document.removeEventListener("keydown", overlay._escHandler);
+    overlay._escHandler = null;
+  }
+  if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  openSettingsModal(selectedProfileId);
+}
+
 
 function closeModal(overlay) {
   if (!overlay.parentNode) {
