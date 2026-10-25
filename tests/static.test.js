@@ -326,10 +326,20 @@ test("profile transfer UI warns about tokens and processes files locally", () =>
 });
 
 
-test("profile import refresh replaces the modal synchronously", () => {
+test("profile import refresh replaces the modal synchronously and requires fallback consent", () => {
   const source = read("src/main.js");
-  assert.match(source, /function replaceSettingsModal\(overlay, selectedProfileId = null\)/);
-  assert.match(source, /replaceSettingsModal\(overlay\)/);
+  assert.match(source, /function replaceSettingsModal\\(overlay, selectedProfileId = null\\)/);
+  assert.ok(source.includes("replaceSettingsModal(overlay)"));
   assert.doesNotMatch(source, /function closeModalAndReopenSettings/);
-  assert.match(source, /result\.activeProfileFallback[\s\S]*?已自动选择第一个可用配置/);
+  assert.ok(source.includes('error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED"'));
+  assert.ok(source.includes("importProfiles(bundle.profiles, { allowActiveProfileFallback: true })"));
+  assert.ok(source.includes("已按你的确认自动选择第一个可用配置"));
+});
+
+test("profile export measures the generated JSON in UTF-8 bytes", () => {
+  const source = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.ok(source.includes("new TextEncoder().encode(json).byteLength"));
+  assert.ok(storage.includes("utf8ByteLength(JSON.stringify(bundle, null, 2))"));
+  assert.ok(storage.includes("utf8ByteLength(raw) > MAX_PROFILE_BUNDLE_BYTES"));
 });
