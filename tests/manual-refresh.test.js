@@ -37,6 +37,22 @@ function setup(options = {}) {
   return { button: created.find(element => element.id === "refreshDashboardButton"), status: created.find(element => element.attributes.role === "status"), container, messages, cleanup };
 }
 
+test("manual refresh handles a missing container without throwing", () => {
+  const messages = [];
+  let created = false;
+  const cleanup = registerManualRefresh({
+    documentRef: { createElement: () => { created = true; throw new Error("should not create an element"); } },
+    container: null,
+    hasConfig: () => false,
+    refresh() {},
+    notify: (message, type) => messages.push({ message, type }),
+  });
+  assert.equal(typeof cleanup, "function");
+  assert.equal(created, false);
+  assert.equal(messages[0].type, "warning");
+  cleanup();
+});
+
 test("manual refresh requires a saved connection and read-only mode", () => {
   const disconnected = setup({ hasConfig: () => false });
   disconnected.button.click();
