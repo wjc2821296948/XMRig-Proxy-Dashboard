@@ -554,6 +554,7 @@ test("profile import repairs a stale active profile ID deterministically", async
     version: 1,
     profiles: [{ id: "first-imported", name: "First", apiUrl: "https://first.example", apiToken: "", remember: true, refreshInterval: 10 }],
   }));
-  importProfiles(bundle.profiles);
+  const result = importProfiles(bundle.profiles);
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "first-imported");
+  assert.equal(result.activeProfileFallback, true);
 });
