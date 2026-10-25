@@ -49,6 +49,7 @@ function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
 let refreshInterval = null;
 let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
+let connectPending = false;
 const statusTracker = createStatusTracker();
 
 
@@ -554,7 +555,15 @@ async function handleConnect() {
     showApiUrlValidationError(urlError);
     return;
   }
+  if (connectPending) return;
+  connectPending = true;
+  const connectButton = document.getElementById("connectBtn");
+  if (connectButton) {
+    connectButton.disabled = true;
+    connectButton.textContent = "连接中...";
+  }
 
+  try {
   // Save the connection as a profile so the current single-config flow
   // automatically participates in the multi-Proxy profile list.
   const existingProfile = getActiveProfile() || loadProfiles()[0] || null;
@@ -617,6 +626,14 @@ async function handleConnect() {
     // transient hiccup doesn't silently downgrade the picker.
     markDisconnected({ clearWriteAccess: err.status === 401 || err.status === 403 });
     renderConnectForm({ apiUrl: url, apiToken: token, remember });
+  }
+  } finally {
+    connectPending = false;
+    const currentButton = document.getElementById("connectBtn");
+    if (currentButton) {
+      currentButton.disabled = false;
+      currentButton.textContent = "连接";
+    }
   }
 }
 
@@ -1076,7 +1093,9 @@ function openSettingsModal(selectedProfileId = null) {
     stopAutoRefresh();
   });
 
-  document.getElementById("saveSettings").addEventListener("click", async () => {
+  const saveSettingsButton = document.getElementById("saveSettings");
+  saveSettingsButton.addEventListener("click", async () => {
+    if (saveSettingsButton.disabled) return;
     const name = document.getElementById("sProfileName").value.trim();
     const url = document.getElementById("sApiUrl").value.trim();
     const token = document.getElementById("sApiToken").value.trim();
@@ -1097,6 +1116,9 @@ function openSettingsModal(selectedProfileId = null) {
       return;
     }
 
+    saveSettingsButton.disabled = true;
+    saveSettingsButton.textContent = "保存中...";
+
     const profile = saveProfile({
       id: selectedId === "__new__" ? undefined : selectedId,
       name,
@@ -1110,11 +1132,20 @@ function openSettingsModal(selectedProfileId = null) {
         "配置保存失败：浏览器存储不可用或空间不足，请检查存储设置后重试",
         "配置保存失败，而且浏览器存储未能完整恢复之前的状态。配置或凭据可能不一致，请清理此站点的浏览数据后重新配置",
       ), "error");
+      saveSettingsButton.disabled = false;
+      saveSettingsButton.textContent = "保存并切换";
       return;
     }
 
-    applyThemePreference(themePreference, { persist: true });
-    await reconnectProfile(profile);
+    try {
+      applyThemePreference(themePreference, { persist: true });
+      await reconnectProfile(profile);
+    } catch (err) {
+      showToast("配置已保存，但切换连接失败: " + (err?.message || "未知错误"), "error");
+    } finally {
+      saveSettingsButton.disabled = false;
+      saveSettingsButton.textContent = "保存并切换";
+    }
   });
 
   overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(overlay); });
