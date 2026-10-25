@@ -741,7 +741,11 @@ export function getConfig() {
 // tokens so users can move a complete profile set between browsers/devices.
 const PROFILE_BUNDLE_FORMAT = "xmrig-proxy-dashboard-profile-bundle";
 const PROFILE_BUNDLE_VERSION = 1;
-const MAX_PROFILE_BUNDLE_CHARS = 1024 * 1024;
+const MAX_PROFILE_BUNDLE_BYTES = 1024 * 1024;
+
+function utf8ByteLength(value) {
+  return new TextEncoder().encode(value).byteLength;
+}
 const MAX_IMPORTED_PROFILES = 100;
 const IMPORT_FORBIDDEN_IDS = new Set(Object.getOwnPropertyNames(Object.prototype));
 
@@ -827,7 +831,7 @@ export function createProfilesExport() {
   };
   // The UI writes pretty-printed JSON; measure that representation so every
   // generated file also fits the parser's limit when re-imported.
-  if (JSON.stringify(bundle, null, 2).length > MAX_PROFILE_BUNDLE_CHARS) {
+  if (utf8ByteLength(JSON.stringify(bundle, null, 2)) > MAX_PROFILE_BUNDLE_BYTES) {
     throw new Error("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试");
   }
   return bundle;
@@ -835,7 +839,12 @@ export function createProfilesExport() {
 
 /** Parse and validate a bundle fully before any persistent state is changed. */
 export function parseProfilesImportJson(raw) {
-  if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_PROFILE_BUNDLE_CHARS) {
+  if (
+    typeof raw !== "string"
+    || raw.length === 0
+    || raw.length > MAX_PROFILE_BUNDLE_BYTES
+    || utf8ByteLength(raw) > MAX_PROFILE_BUNDLE_BYTES
+  ) {
     throw new ProfileBundleValidationError("导入文件为空或超过 1 MB 限制");
   }
 
@@ -859,33 +868,45 @@ export function parseProfilesImportJson(raw) {
   };
 }
 
-function snapshotImportKeys(local, session) {
+function snapshotImportKeys(includeSessionStorage) {
   const entries = [
-    { storage: local, key: PROFILES_KEY },
-    { storage: local, key: ACTIVE_PROFILE_KEY },
-    { storage: local, key: CONFIG_KEY },
+    { kind: "local", key: PROFILES_KEY },
+    { kind: "local", key: ACTIVE_PROFILE_KEY },
+    { kind: "local", key: CONFIG_KEY },
   ];
-  if (session) {
+  if (includeSessionStorage) {
     entries.push(
-      { storage: session, key: PROFILE_TOKENS_KEY },
-      { storage: session, key: CONFIG_KEY },
+      { kind: "session", key: PROFILE_TOKENS_KEY },
+      { kind: "session", key: CONFIG_KEY },
     );
   }
-  return entries.map(entry => ({ ...entry, value: entry.storage.getItem(entry.key) }));
+  return entries.map(entry => {
+    const current = readStorageEntry(entry.kind, entry.key);
+    if (!current.ok) throw new Error("无法读取浏览器存储快照");
+    return { ...entry, value: current.value };
+  });
 }
 
 function restoreImportSnapshot(snapshot) {
   let restored = true;
   for (const entry of snapshot) {
-    try {
-      const current = entry.storage.getItem(entry.key);
-      if (current === entry.value) continue;
-      if (entry.value === null) entry.storage.removeItem(entry.key);
-      else entry.storage.setItem(entry.key, entry.value);
-      if (entry.storage.getItem(entry.key) !== entry.value) restored = false;
-    } catch {
+    const current = readStorageEntry(entry.kind, entry.key);
+    if (!current.ok) {
       restored = false;
+      continue;
     }
+    if (current.value === entry.value) continue;
+
+    const written = entry.value === null
+      ? safeRemove(entry.kind, entry.key)
+      : safeSet(entry.kind, entry.key, entry.value);
+    if (!written) {
+      restored = false;
+      continue;
+    }
+
+    const verified = readStorageEntry(entry.kind, entry.key);
+    if (!verified.ok || verified.value !== entry.value) restored = false;
   }
   return restored;
 }
@@ -895,7 +916,7 @@ function restoreImportSnapshot(snapshot) {
  * saved profiles remain untouched, and the current active profile is preserved.
  * A failed multi-key write rolls back the raw pre-import values where possible.
  */
-export function importProfiles(importedProfiles) {
+export function importProfiles(importedProfiles, { allowActiveProfileFallback = false } = {}) {
   // Revalidate at the write boundary as this exported API may be called by
   // code paths other than parseProfilesImportJson(); never trust raw callers.
   const incoming = validateImportedProfiles(importedProfiles);
@@ -920,7 +941,7 @@ export function importProfiles(importedProfiles) {
     throw new Error("浏览器会话存储不可用，无法导入未启用“记住我”的配置");
   }
   try {
-    snapshot = snapshotImportKeys(local, session);
+    snapshot = snapshotImportKeys(Boolean(session));
   } catch {
     throw new Error("浏览器存储不可用，无法安全导入配置");
   }
@@ -946,6 +967,17 @@ export function importProfiles(importedProfiles) {
       throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
     }
 
+    const activeEntry = readStorageEntry("local", ACTIVE_PROFILE_KEY);
+    if (!activeEntry.ok) throw new Error("无法读取当前活动配置");
+    const previousActiveId = activeEntry.value;
+    const activeStillExists = merged.some(profile => profile.id === previousActiveId);
+    const activeProfileFallback = previousActiveId !== null && !activeStillExists;
+    if (activeProfileFallback && !allowActiveProfileFallback) {
+      const error = new Error("导入需要切换到第一个可用配置，请明确确认后重试");
+      error.code = "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED";
+      throw error;
+    }
+
     if (session) {
       try {
         const tokens = Object.assign(Object.create(null), readProfileTokens());
@@ -967,9 +999,6 @@ export function importProfiles(importedProfiles) {
       throw new Error("无法保存导入的 Proxy 配置");
     }
 
-    const previousActiveId = local.getItem(ACTIVE_PROFILE_KEY);
-    const activeStillExists = merged.some(profile => profile.id === previousActiveId);
-    const activeProfileFallback = previousActiveId !== null && !activeStillExists;
     if (!activeStillExists && merged.length) {
       // Repair a stale active ID deterministically so the dashboard always has
       // a valid active profile after importing into a fresh or manually edited store.
@@ -989,7 +1018,8 @@ export function importProfiles(importedProfiles) {
     if (!restored) {
       throw new Error("导入失败，且浏览器存储未能完整恢复原状态。请清理此站点的浏览数据后检查配置");
     }
-    if (error instanceof ProfileBundleValidationError) throw error;
+    if (error instanceof ProfileBundleValidationError
+        || error?.code === "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED") throw error;
     throw new Error("导入失败，现有配置已尽力恢复。请检查浏览器存储空间后重试");
   }
 }
