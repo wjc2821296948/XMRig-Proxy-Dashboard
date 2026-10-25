@@ -18,6 +18,8 @@ export function registerManualRefresh({
   button.className = "btn btn-secondary btn-sm";
   button.textContent = "立即刷新";
   button.setAttribute("aria-label", "立即刷新监控数据");
+  button.setAttribute("aria-live", "polite");
+  button.setAttribute("aria-busy", "false");
   button.title = "立即获取最新的 Proxy 监控数据";
   container.appendChild(button);
 
@@ -36,6 +38,7 @@ export function registerManualRefresh({
 
     busy = true;
     button.disabled = true;
+    button.setAttribute("aria-busy", "true");
     button.textContent = "刷新中…";
     try {
       onRefreshStart();
@@ -50,6 +53,7 @@ export function registerManualRefresh({
       }
       busy = false;
       button.disabled = false;
+      button.setAttribute("aria-busy", "false");
       button.textContent = idleText;
     }
   };
