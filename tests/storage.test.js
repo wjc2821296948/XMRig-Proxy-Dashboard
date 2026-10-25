@@ -1192,3 +1192,25 @@ test("profile import enforces the bundle size limit in UTF-8 bytes", async () =>
   assert.ok(new TextEncoder().encode(raw).byteLength > 1024 * 1024, "UTF-8 byte count exceeds the limit");
   assert.throws(() => parseProfilesImportJson(raw), /1 MB/);
 });
+
+
+test("saved profile values remain compatible with the import/export schema", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, createProfilesExport, parseProfilesImportJson } = await import("../src/storage.js");
+  const saved = saveProfile({
+    id: "roundtrip-profile",
+    name: "Round trip",
+    apiUrl: "https://roundtrip.example",
+    apiToken: "token",
+    remember: "false",
+    refreshInterval: 10.75,
+  });
+  assert.equal(saved.remember, false);
+  assert.equal(saved.refreshInterval, 10);
+  const bundle = createProfilesExport();
+  const parsed = parseProfilesImportJson(JSON.stringify(bundle));
+  assert.equal(parsed.profiles[0].id, "roundtrip-profile");
+  assert.equal(parsed.profiles[0].remember, false);
+  assert.equal(parsed.profiles[0].refreshInterval, 10);
+});
