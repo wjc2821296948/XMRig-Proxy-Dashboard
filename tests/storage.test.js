@@ -520,3 +520,40 @@ test("profile import merges by ID and atomically rolls back a failed storage wri
   assert.equal(blockedLocal.getItem("xmrig_proxy_profiles"), beforeProfiles);
   assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens"), beforeTokens);
 });
+
+
+test("persistent-only profile imports work when sessionStorage is blocked", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { parseProfilesImportJson, importProfiles, loadProfiles } = await import("../src/storage.js");
+  const bundle = parseProfilesImportJson(JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [{ id: "persistent-import", name: "Persistent", apiUrl: "https://persistent.example", apiToken: "token", remember: true, refreshInterval: 10 }],
+  }));
+  const sessionDescriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() { throw new Error("session storage blocked"); },
+  });
+  try {
+    assert.deepEqual(importProfiles(bundle.profiles), { added: 1, updated: 0, total: 1 });
+    assert.equal(loadProfiles()[0].id, "persistent-import");
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", sessionDescriptor);
+  }
+});
+
+test("profile import repairs a stale active profile ID deterministically", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { parseProfilesImportJson, importProfiles } = await import("../src/storage.js");
+  globalThis.localStorage.setItem("xmrig_proxy_active_profile", "removed-profile");
+  const bundle = parseProfilesImportJson(JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [{ id: "first-imported", name: "First", apiUrl: "https://first.example", apiToken: "", remember: true, refreshInterval: 10 }],
+  }));
+  importProfiles(bundle.profiles);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "first-imported");
+});
