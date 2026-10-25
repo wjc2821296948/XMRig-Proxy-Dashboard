@@ -1156,17 +1156,39 @@ test("persistent-only profile imports work when sessionStorage is blocked", asyn
   }
 });
 
-test("profile import repairs a stale active profile ID deterministically", async () => {
+test("profile import requires consent before repairing a stale active profile ID", async () => {
   globalThis.localStorage = new MemoryStorage();
   globalThis.sessionStorage = new MemoryStorage();
   const { parseProfilesImportJson, importProfiles } = await import("../src/storage.js");
   globalThis.localStorage.setItem("xmrig_proxy_active_profile", "removed-profile");
+  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
   const bundle = parseProfilesImportJson(JSON.stringify({
     format: "xmrig-proxy-dashboard-profile-bundle",
     version: 1,
     profiles: [{ id: "first-imported", name: "First", apiUrl: "https://first.example", apiToken: "", remember: true, refreshInterval: 10 }],
   }));
-  const result = importProfiles(bundle.profiles);
+
+  assert.throws(
+    () => importProfiles(bundle.profiles),
+    error => error.code === "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED",
+  );
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "removed-profile");
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles"), beforeProfiles);
+
+  const result = importProfiles(bundle.profiles, { allowActiveProfileFallback: true });
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "first-imported");
   assert.equal(result.activeProfileFallback, true);
+});
+
+test("profile import enforces the bundle size limit in UTF-8 bytes", async () => {
+  const { parseProfilesImportJson } = await import("../src/storage.js");
+  const raw = JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [{ id: "byte-test", name: "Byte test", apiUrl: "https://example.test", apiToken: "", remember: true, refreshInterval: 10 }],
+    extra: "界".repeat(350_000),
+  });
+  assert.ok(raw.length < 1024 * 1024, "character count is below the limit");
+  assert.ok(new TextEncoder().encode(raw).byteLength > 1024 * 1024, "UTF-8 byte count exceeds the limit");
+  assert.throws(() => parseProfilesImportJson(raw), /1 MB/);
 });
