@@ -10,6 +10,7 @@
  */
 
 import { request, probeWriteAccess } from "./api.js";
+import { registerManualRefresh } from "./manual-refresh.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
@@ -49,6 +50,7 @@ function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
 let refreshInterval = null;
 let fetchAbortController = null;
 let cleanupVisibilityRefresh = null;
+let cleanupManualRefresh = null;
 let connectPending = false;
 const statusTracker = createStatusTracker();
 
@@ -1243,6 +1245,19 @@ async function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
+  cleanupManualRefresh?.();
+  cleanupManualRefresh = registerManualRefresh({
+    documentRef: document,
+    container: document.querySelector(".subtitle"),
+    hasConfig: () => Boolean(getConfig()),
+    shouldRefresh: () => activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
+    notify: showToast,
+    onRefreshStart: stopAutoRefresh,
+    onRefreshEnd: () => {
+      if (getConfig() && activeDashboardMode === "readonly") startAutoRefresh();
+    },
+  });
 
   // Wire the view-mode ribbon: click or keyboard activation opens the
   // mode picker. The ribbon itself never closes the picker — that lives
