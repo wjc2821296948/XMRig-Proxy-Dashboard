@@ -328,7 +328,7 @@ test("profile transfer UI warns about tokens and processes files locally", () =>
 
 test("profile import refresh replaces the modal synchronously and requires fallback consent", () => {
   const source = read("src/main.js");
-  assert.match(source, /function replaceSettingsModal\\(overlay, selectedProfileId = null\\)/);
+  assert.ok(source.includes("function replaceSettingsModal(overlay, selectedProfileId = null)"));
   assert.ok(source.includes("replaceSettingsModal(overlay)"));
   assert.doesNotMatch(source, /function closeModalAndReopenSettings/);
   assert.ok(source.includes('error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED"'));
