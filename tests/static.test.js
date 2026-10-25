@@ -352,3 +352,13 @@ test("profile transfer blocks control characters and restores configs through th
   assert.ok(storage.includes("entry.key === CONFIG_KEY"));
   assert.ok(storage.includes("restoreStoredConfigEntry(entry.kind, entry.value)"));
 });
+
+
+test("initial connection form rejects control characters in access tokens", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf("async function handleConnect()");
+  const end = source.indexOf("\n}", start);
+  const handler = source.slice(start, end);
+  assert.match(handler, /\\u0000-\\u001F\\u007F/);
+  assert.match(handler, /Token 不能包含控制字符/);
+});
