@@ -253,7 +253,7 @@ test("aborted refreshes are checked before rendering stale data", () => {
   const source = read("src/main.js");
   assert.match(
     source,
-    /const data = await request\("\/1\/summary", \{ signal: controller\.signal \}\);\s*if \(controller\.signal\.aborted\) return;\s*renderDashboard\(data\);/,
+    /const data = await request\("\/1\/summary", \{ signal: controller\.signal \}\);\s*if \(controller\.signal\.aborted\) return(?: false|\s*\{\s*status:\s*"cancelled"\s*\})?;\s*renderDashboard\(data\);/,
   );
 });
 
@@ -321,4 +321,20 @@ test("snapshot export is registered after DOMContentLoaded against the static su
     main,
     /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("\.subtitle"\)/,
   );
+});
+
+
+
+test("manual refresh lifecycle only restarts polling for a connected read-only dashboard", () => {
+  const source = read("src/main.js");
+  assert.match(source, /onRefreshEnd:\s*\(\) => \{[\s\S]*?els\.viewModeBadge\?\.dataset\?\.connectState === "connected"[\s\S]*?startAutoRefresh\(\)/);
+  assert.match(source, /cleanupManualRefresh\?\.\(\);[\s\S]*?cleanupManualRefresh = registerManualRefresh/);
+});
+
+
+test("fetchAndRender distinguishes cancellation from already-reported failures", () => {
+  const source = read("src/main.js");
+  assert.match(source, /if \(controller\.signal\.aborted\) return \{ status: "cancelled" \};/);
+  assert.match(source, /if \(controller\.signal\.aborted \|\| err\.name === "AbortError" \|\| err\.name === "CancellationError"\) \{\s*return \{ status: "cancelled" \};/);
+  assert.match(source, /return \{ status: "failed", notified: true \};/);
 });

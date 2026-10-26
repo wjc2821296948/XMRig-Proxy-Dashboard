@@ -10,6 +10,7 @@
  */
 
 import { request, probeWriteAccess } from "./api.js";
+import { registerManualRefresh } from "./manual-refresh.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import { registerVisiblePolling } from "./visible-polling.js";
 import {
@@ -53,6 +54,7 @@ let cleanupAutoRefresh = null;
 let fetchAbortController = null;
 let latestSummaryData = null;
 let cleanupVisibilityRefresh = null;
+let cleanupManualRefresh = null;
 let connectPending = false;
 const statusTracker = createStatusTracker();
 
@@ -1198,11 +1200,12 @@ async function fetchAndRender() {
 
   try {
     const data = await request("/1/summary", { signal: controller.signal });
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted) return { status: "cancelled" };
     renderDashboard(data);
+    return true;
   } catch (err) {
     if (controller.signal.aborted || err.name === "AbortError" || err.name === "CancellationError") {
-      return;
+      return { status: "cancelled" };
     }
     if (err.status === 401 || err.status === 403) {
       clearConfigWithWarning();
@@ -1217,6 +1220,7 @@ async function fetchAndRender() {
     } else {
       showToast(`刷新失败: ${err.message}`, "error");
     }
+    return { status: "failed", notified: true };
   } finally {
     if (fetchAbortController === controller) fetchAbortController = null;
   }
@@ -1257,6 +1261,25 @@ async function init() {
 
   // Wire settings button
   els.editUrl.addEventListener("click", openSettingsModal);
+  cleanupManualRefresh?.();
+  cleanupManualRefresh = registerManualRefresh({
+    documentRef: document,
+    container: document.querySelector(".subtitle"),
+    hasConfig: () => Boolean(getConfig()),
+    shouldRefresh: () => activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
+    notify: showToast,
+    onRefreshStart: stopAutoRefresh,
+    onRefreshEnd: () => {
+      // A profile switch or authentication failure may abort a manual refresh.
+      // Do not restart polling until the current dashboard is actually connected.
+      if (
+        getConfig()
+        && activeDashboardMode === "readonly"
+        && els.viewModeBadge?.dataset?.connectState === "connected"
+      ) startAutoRefresh();
+    },
+  });
 
   // Wire the view-mode ribbon: click or keyboard activation opens the
   // mode picker. The ribbon itself never closes the picker — that lives
