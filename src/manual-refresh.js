@@ -56,8 +56,13 @@ export function registerManualRefresh({
     status.textContent = "正在刷新监控数据";
     try {
       onRefreshStart();
-      await refresh();
-      status.textContent = "监控数据刷新完成";
+      const refreshResult = await refresh();
+      if (refreshResult === false) {
+        status.textContent = "手动刷新失败";
+        notify("手动刷新失败，请检查 Proxy 连接", "error");
+      } else {
+        status.textContent = "监控数据刷新完成";
+      }
     } catch {
       status.textContent = "手动刷新失败";
       notify("手动刷新失败，请检查 Proxy 连接", "error");
