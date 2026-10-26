@@ -33,6 +33,7 @@ import {
   getStatusInfo,
 } from "./status.js";
 import { escapeHtml } from "./escape-html.js";
+import { formatLoadAverage } from "./load-average.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
@@ -804,7 +805,7 @@ function renderDashboard(data) {
         <div class="stat-row"><span class="stat-label">内存使用</span><span class="stat-value">${formatBytes(memUsed)} / ${formatBytes(memTotal)}</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${memPct}%"></div></div>
         <div class="stat-row" style="margin-top:0.75rem"><span class="stat-label">RSS 内存</span><span class="stat-value">${formatBytes(data.resources?.memory?.resident_set_memory || 0)}</span></div>
-        <div class="stat-row"><span class="stat-label">负载均值</span><span class="stat-value">${(data.resources?.load_average || []).join(" / ")}</span></div>
+        <div class="stat-row"><span class="stat-label">负载均值</span><span class="stat-value">${formatLoadAverage(data.resources?.load_average)}</span></div>
         <div class="stat-row"><span class="stat-label">CPU 核心</span><span class="stat-value">${data.resources?.hardware_concurrency || "未知"}</span></div>
       </div>
 
