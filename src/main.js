@@ -33,6 +33,7 @@ import {
   getStatusInfo,
 } from "./status.js";
 import { escapeHtml } from "./escape-html.js";
+import { registerSnapshotExport } from "./snapshot-export.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -49,6 +50,7 @@ function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
 // Global state
 let cleanupAutoRefresh = null;
 let fetchAbortController = null;
+let latestSummaryData = null;
 let cleanupVisibilityRefresh = null;
 let connectPending = false;
 const statusTracker = createStatusTracker();
@@ -501,6 +503,7 @@ function renderConfigPlaceholder() {
    Connection Form Rendering
    ========================================================================== */
 function renderConnectForm(prefill = {}) {
+  latestSummaryData = null;
   const { apiUrl = "", apiToken = "", remember = true } = prefill;
   els.dashboard.innerHTML = `
     <div class="config-panel" role="dialog" aria-labelledby="connect-title">
@@ -642,6 +645,7 @@ async function handleConnect() {
    Dashboard Rendering
    ========================================================================== */
 function renderDashboard(data) {
+  latestSummaryData = data;
   // Header info
   const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
@@ -1311,4 +1315,12 @@ async function init() {
 /* ==========================================================================
    Bootstrap
    ========================================================================== */
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  registerSnapshotExport({
+    documentRef: document,
+    container: document.querySelector(".subtitle"),
+    getData: () => latestSummaryData,
+    notify: showToast,
+  });
+  init();
+});
