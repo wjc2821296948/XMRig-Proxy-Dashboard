@@ -1194,11 +1194,12 @@ async function fetchAndRender() {
 
   try {
     const data = await request("/1/summary", { signal: controller.signal });
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted) return false;
     renderDashboard(data);
+    return true;
   } catch (err) {
     if (controller.signal.aborted || err.name === "AbortError" || err.name === "CancellationError") {
-      return;
+      return false;
     }
     if (err.status === 401 || err.status === 403) {
       clearConfigWithWarning();
@@ -1213,10 +1214,10 @@ async function fetchAndRender() {
     } else {
       showToast(`刷新失败: ${err.message}`, "error");
     }
+    return false;
   } finally {
     if (fetchAbortController === controller) fetchAbortController = null;
-  }
-}
+  }}
 
 function startAutoRefresh() {
   stopAutoRefresh();
