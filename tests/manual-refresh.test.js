@@ -88,6 +88,16 @@ test("manual refresh disables the button until the refresh settles", async () =>
   assert.equal(button.attributes["aria-disabled"], "false");
 });
 
+test("manual refresh announces failure when the refresh handler returns false", async () => {
+  const { button, status, messages } = setup({ refresh: async () => false });
+  button.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(status.textContent, "手动刷新失败");
+  assert.equal(messages.at(-1).type, "error");
+  assert.equal(messages.at(-1).message, "手动刷新失败，请检查 Proxy 连接");
+  assert.equal(button.disabled, false);
+});
+
 test("manual refresh removes its listener, button, and status region on cleanup", () => {
   let calls = 0;
   const { button, status, cleanup } = setup({ refresh: () => { calls += 1; } });
