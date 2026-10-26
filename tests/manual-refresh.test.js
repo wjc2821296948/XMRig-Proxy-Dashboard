@@ -132,3 +132,27 @@ test("manual refresh pauses and restores automatic polling on success or failure
   assert.equal(failed.button.disabled, false);
   assert.equal(failed.messages.at(-1).type, "error");
 });
+
+
+test("manual refresh treats an aborted request as cancellation without an error toast", async () => {
+  const { button, status, messages } = setup({
+    refresh: async () => ({ status: "cancelled" }),
+  });
+  button.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(status.textContent, "刷新已取消");
+  assert.equal(messages.length, 0);
+  assert.equal(button.disabled, false);
+  assert.equal(button.attributes["aria-busy"], "false");
+});
+
+test("manual refresh does not duplicate an error already reported by the refresh handler", async () => {
+  const { button, status, messages } = setup({
+    refresh: async () => ({ status: "failed", notified: true }),
+  });
+  button.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(status.textContent, "手动刷新失败");
+  assert.equal(messages.length, 0);
+  assert.equal(button.disabled, false);
+});

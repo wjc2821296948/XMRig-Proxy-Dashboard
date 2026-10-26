@@ -330,3 +330,11 @@ test("manual refresh lifecycle only restarts polling for a connected read-only d
   assert.match(source, /onRefreshEnd:\s*\(\) => \{[\s\S]*?els\.viewModeBadge\?\.dataset\?\.connectState === "connected"[\s\S]*?startAutoRefresh\(\)/);
   assert.match(source, /cleanupManualRefresh\?\.\(\);[\s\S]*?cleanupManualRefresh = registerManualRefresh/);
 });
+
+
+test("fetchAndRender distinguishes cancellation from already-reported failures", () => {
+  const source = read("src/main.js");
+  assert.match(source, /if \(controller\.signal\.aborted\) return \{ status: "cancelled" \};/);
+  assert.match(source, /if \(controller\.signal\.aborted \|\| err\.name === "AbortError" \|\| err\.name === "CancellationError"\) \{\s*return \{ status: "cancelled" \};/);
+  assert.match(source, /return \{ status: "failed", notified: true \};/);
+});

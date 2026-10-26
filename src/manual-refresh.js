@@ -57,9 +57,16 @@ export function registerManualRefresh({
     try {
       onRefreshStart();
       const refreshResult = await refresh();
-      if (refreshResult === false) {
+      if (refreshResult?.status === "cancelled") {
+        // An aborted request is a normal lifecycle event, not a connection failure.
+        status.textContent = "刷新已取消";
+      } else if (refreshResult === false || refreshResult?.status === "failed") {
         status.textContent = "手动刷新失败";
-        notify("手动刷新失败，请检查 Proxy 连接", "error");
+        // fetchAndRender() already shows the specific error toast itself.
+        // Keep the generic fallback for injected handlers that report bare false.
+        if (!refreshResult?.notified) {
+          notify("手动刷新失败，请检查 Proxy 连接", "error");
+        }
       } else {
         status.textContent = "监控数据刷新完成";
       }

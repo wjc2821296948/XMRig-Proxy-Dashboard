@@ -1200,12 +1200,12 @@ async function fetchAndRender() {
 
   try {
     const data = await request("/1/summary", { signal: controller.signal });
-    if (controller.signal.aborted) return false;
+    if (controller.signal.aborted) return { status: "cancelled" };
     renderDashboard(data);
     return true;
   } catch (err) {
     if (controller.signal.aborted || err.name === "AbortError" || err.name === "CancellationError") {
-      return false;
+      return { status: "cancelled" };
     }
     if (err.status === 401 || err.status === 403) {
       clearConfigWithWarning();
@@ -1220,10 +1220,11 @@ async function fetchAndRender() {
     } else {
       showToast(`刷新失败: ${err.message}`, "error");
     }
-    return false;
+    return { status: "failed", notified: true };
   } finally {
     if (fetchAbortController === controller) fetchAbortController = null;
-  }}
+  }
+}
 
 function startAutoRefresh() {
   stopAutoRefresh();
