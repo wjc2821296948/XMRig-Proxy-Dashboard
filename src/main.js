@@ -11,6 +11,7 @@
 
 import { request, probeWriteAccess } from "./api.js";
 import { registerVisibilityRefresh } from "./visibility-refresh.js";
+import { registerVisiblePolling } from "./visible-polling.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
@@ -33,6 +34,7 @@ import {
   getStatusInfo,
 } from "./status.js";
 import { escapeHtml } from "./escape-html.js";
+import { registerSnapshotExport } from "./snapshot-export.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -47,8 +49,9 @@ function storageFailureMessage(defaultMessage, rollbackFailureMessage) {
 }
 
 // Global state
-let refreshInterval = null;
+let cleanupAutoRefresh = null;
 let fetchAbortController = null;
+let latestSummaryData = null;
 let cleanupVisibilityRefresh = null;
 let connectPending = false;
 const statusTracker = createStatusTracker();
@@ -501,6 +504,7 @@ function renderConfigPlaceholder() {
    Connection Form Rendering
    ========================================================================== */
 function renderConnectForm(prefill = {}) {
+  latestSummaryData = null;
   const { apiUrl = "", apiToken = "", remember = true } = prefill;
   els.dashboard.innerHTML = `
     <div class="config-panel" role="dialog" aria-labelledby="connect-title">
@@ -646,6 +650,7 @@ async function handleConnect() {
    Dashboard Rendering
    ========================================================================== */
 function renderDashboard(data) {
+  latestSummaryData = data;
   // Header info
   const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
@@ -1323,14 +1328,22 @@ async function fetchAndRender() {
 function startAutoRefresh() {
   stopAutoRefresh();
   const cfg = getConfig();
-  const interval = (cfg?.refreshInterval ?? 10) * 1000; // seconds → ms
-  refreshInterval = setInterval(fetchAndRender, Math.max(1000, Math.min(120000, interval)));
+  if (!cfg) return;
+  // visible-polling.js owns interval clamping so there is one source of bounds.
+  const intervalMs = (cfg.refreshInterval ?? 10) * 1000;
+  cleanupAutoRefresh = registerVisiblePolling({
+    documentRef: document,
+    intervalMs,
+    shouldRun: () => Boolean(getConfig()) && activeDashboardMode === "readonly",
+    refresh: fetchAndRender,
+    onError: error => showToast(`刷新失败: ${error?.message || "未知错误"}`, "error"),
+  });
 }
 
 function stopAutoRefresh() {
-  if (refreshInterval) {
-    clearInterval(refreshInterval);
-    refreshInterval = null;
+  if (cleanupAutoRefresh) {
+    cleanupAutoRefresh();
+    cleanupAutoRefresh = null;
   }
   if (fetchAbortController) {
     fetchAbortController.abort();
@@ -1406,4 +1419,12 @@ async function init() {
 /* ==========================================================================
    Bootstrap
    ========================================================================== */
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  registerSnapshotExport({
+    documentRef: document,
+    container: document.querySelector(".subtitle"),
+    getData: () => latestSummaryData,
+    notify: showToast,
+  });
+  init();
+});
