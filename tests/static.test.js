@@ -312,3 +312,13 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /Array\.isArray\(rawHashrates\)[\s\S]*?Number\.isFinite\(value\) && value >= 0 \? value : 0/);
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
+
+test("snapshot export is registered after DOMContentLoaded against the static subtitle container", () => {
+  const html = read("index.html");
+  const main = read("src/main.js");
+  assert.match(html, /<div class="subtitle">/);
+  assert.match(
+    main,
+    /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("\.subtitle"\)/,
+  );
+});
