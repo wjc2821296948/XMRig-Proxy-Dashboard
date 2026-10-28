@@ -817,19 +817,59 @@ function validateImportedProfiles(value) {
   });
 }
 
-/** Build an export payload; the UI confirms token export before downloading it. */
-export function createProfilesExport() {
+function readProfileTokensForExport() {
+  const entry = readStorageEntry("session", PROFILE_TOKENS_KEY);
+  if (!entry.ok) {
+    throw new Error("无法读取会话 Token，不能生成包含敏感信息的完整备份。请选择“不含 Token”导出，或允许浏览器访问会话存储后重试");
+  }
+  if (!entry.value) return Object.create(null);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(entry.value);
+  } catch {
+    throw new Error("会话 Token 存储已损坏，不能生成包含敏感信息的完整备份");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("会话 Token 存储格式无效，不能生成包含敏感信息的完整备份");
+  }
+
+  const tokens = Object.create(null);
+  for (const [id, token] of Object.entries(parsed)) {
+    if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
+      throw new Error("会话 Token 存储包含无效数据，不能生成包含敏感信息的完整备份");
+    }
+    tokens[id] = token;
+  }
+  return tokens;
+}
+
+/**
+ * Build an export payload.
+ * @param {{includeSensitiveData?: boolean}} [options]
+ *   When false, every Token is deliberately removed from the bundle.
+ *   When true, session-only Token storage must be readable so a partial
+ *   backup can never be mistaken for a complete one.
+ */
+export function createProfilesExport({ includeSensitiveData = true } = {}) {
   const profiles = loadProfiles();
   if (!profiles.length) throw new Error("没有可导出的 Proxy 配置");
   if (profiles.length > MAX_IMPORTED_PROFILES) {
     throw new Error("配置数量超过 100 个，无法生成兼容的导出文件");
   }
 
+  const sessionTokens = includeSensitiveData && profiles.some(profile => !profile.remember)
+    ? readProfileTokensForExport()
+    : null;
   const exportable = validateImportedProfiles(profiles.map(profile => ({
     id: profile.id,
     name: profile.name,
     apiUrl: profile.apiUrl,
-    apiToken: typeof profile.apiToken === "string" ? profile.apiToken : "",
+    apiToken: includeSensitiveData
+      ? (profile.remember
+        ? (typeof profile.apiToken === "string" ? profile.apiToken : "")
+        : (Object.hasOwn(sessionTokens, profile.id) ? sessionTokens[profile.id] : ""))
+      : "",
     remember: profile.remember === true,
     refreshInterval: profile.refreshInterval,
   })));
@@ -837,6 +877,7 @@ export function createProfilesExport() {
     format: PROFILE_BUNDLE_FORMAT,
     version: PROFILE_BUNDLE_VERSION,
     exportedAt: new Date().toISOString(),
+    includesSensitiveData: includeSensitiveData,
     profiles: exportable,
   };
   // The UI writes pretty-printed JSON; measure that representation so every
