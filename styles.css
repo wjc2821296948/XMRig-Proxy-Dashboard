@@ -1227,3 +1227,107 @@ a:focus-visible,
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* ==========================================================================
+   Visual Refresh — layered depth, softer surfaces, stronger hierarchy
+   ========================================================================== */
+
+/* The dashboard keeps the existing theme palette, but gives the page a
+   quieter atmospheric background instead of a flat single-color canvas. */
+body {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent-copper) 10%, transparent), transparent 30rem),
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent-blue) 8%, transparent), transparent 34rem),
+    linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.32;
+  background:
+    linear-gradient(90deg, transparent 0, color-mix(in srgb, var(--border-color) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, transparent 0, color-mix(in srgb, var(--border-color) 16%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+.container {
+  position: relative;
+}
+
+header {
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--bg-secondary) 88%, var(--accent-copper) 12%),
+      color-mix(in srgb, var(--bg-card) 94%, var(--accent-blue) 6%));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    var(--shadow-md),
+    0 12px 40px color-mix(in srgb, var(--accent-copper) 8%, transparent);
+}
+
+.card {
+  background:
+    linear-gradient(145deg,
+      color-mix(in srgb, var(--bg-card) 96%, var(--accent-copper) 4%),
+      color-mix(in srgb, var(--bg-card) 98%, var(--accent-blue) 2%));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--accent-copper) 42%, var(--border-color));
+  box-shadow:
+    var(--shadow-md),
+    0 10px 28px color-mix(in srgb, var(--accent-copper) 7%, transparent);
+}
+
+.metric-item {
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--bg-secondary) 94%, var(--accent-blue) 6%),
+      color-mix(in srgb, var(--bg-secondary) 98%, var(--accent-copper) 2%));
+}
+
+.status-online,
+.status-warning,
+.status-offline,
+.status-waiting,
+.status-restarting {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, currentColor 16%, transparent) inset,
+    0 2px 10px color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.progress-fill {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-copper) 24%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    opacity: 0.18;
+  }
+}
+
+@supports not (color: color-mix(in srgb, black 50%, white)) {
+  body {
+    background: var(--bg-primary);
+  }
+  header,
+  .card,
+  .metric-item {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
