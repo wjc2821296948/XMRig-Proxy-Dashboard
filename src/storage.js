@@ -1108,7 +1108,11 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       // Do not write when no token keys change. If cleanup or persistence is
       // required but the session store is unwritable, abort and roll back instead
       // of silently leaving a stale credential behind.
-      if (JSON.stringify(tokens) !== JSON.stringify(previousTokens) && !writeProfileTokens(tokens)) {
+      const previousTokenIds = Object.keys(previousTokens);
+      const nextTokenIds = Object.keys(tokens);
+      const tokensChanged = previousTokenIds.length !== nextTokenIds.length
+        || nextTokenIds.some(id => !Object.hasOwn(previousTokens, id) || previousTokens[id] !== tokens[id]);
+      if (tokensChanged && !writeProfileTokens(tokens)) {
         throw new Error("无法更新会话 Token 存储");
       }
     }
