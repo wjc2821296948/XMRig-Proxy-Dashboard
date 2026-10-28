@@ -1,5 +1,5 @@
 /**
- * Add an accessible manual refresh control to the dashboard subtitle.
+ * Add an accessible manual refresh control to the dashboard manual-refresh slot.
  * The refresh operation is injected so it can be tested without a browser.
  */
 export function registerManualRefresh({
@@ -14,7 +14,7 @@ export function registerManualRefresh({
   warn = message => console.warn(message),
 }) {
   if (!container || typeof container.appendChild !== "function") {
-    warn("Manual refresh control was not registered because .subtitle is missing.");
+    warn("Manual refresh control was not registered because #manualRefreshSlot is missing.");
     return () => {};
   }
 

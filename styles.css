@@ -1331,3 +1331,102 @@ header {
     -webkit-backdrop-filter: none;
   }
 }
+
+/* ==========================================================================
+   Header action layout — metadata first, actions grouped consistently
+   ========================================================================== */
+.subtitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+#workerId {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refresh-time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.header-action-slot {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.header-action-slot:empty {
+  display: none;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.header-actions .btn,
+.header-actions > .edit-url {
+  min-height: 30px;
+  white-space: nowrap;
+  text-decoration: none;
+  border-radius: 999px;
+  padding-inline: 0.8rem;
+}
+
+#refreshDashboardButton {
+  border-color: color-mix(in srgb, var(--accent-copper) 45%, var(--border-color));
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-meta {
+    justify-content: space-between;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .header-actions .btn,
+  .header-actions > .edit-url {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@supports not (color: color-mix(in srgb, black 50%, white)) {
+  #refreshDashboardButton {
+    border-color: var(--accent-copper);
+  }
+}

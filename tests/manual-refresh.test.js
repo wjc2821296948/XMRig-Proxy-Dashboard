@@ -52,7 +52,7 @@ test("manual refresh handles a missing container without throwing", () => {
   assert.equal(typeof cleanup, "function");
   assert.equal(created, false);
   assert.equal(messages.length, 0);
-  assert.match(warnings[0], /\.subtitle/);
+  assert.match(warnings[0], /#manualRefreshSlot/);
   cleanup();
 });
 

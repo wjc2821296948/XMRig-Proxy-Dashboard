@@ -34,9 +34,15 @@
         <span id="viewModeBadge" class="view-mode-badge" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-label="只读视图"><span class="view-mode-dot" aria-hidden="true"></span><span id="viewModeBadgeText">只读视图</span><span class="view-mode-caret" aria-hidden="true">▾</span></span>
       </h1>
       <div class="subtitle">
-        <span id="workerId">初始化…</span>
-        <button type="button" class="edit-url" id="editUrl" aria-label="设置">⚙ 设置</button>
-        <span class="refresh-time">最后更新: <span id="lastUpdate">--</span></span>
+        <div class="header-meta">
+          <span id="workerId">初始化…</span>
+          <span class="refresh-time">最后更新: <span id="lastUpdate">--</span></span>
+        </div>
+        <div class="header-actions" aria-label="仪表盘操作">
+          <span class="header-action-slot" id="snapshotExportSlot"></span>
+          <span class="header-action-slot" id="manualRefreshSlot"></span>
+          <button type="button" class="edit-url btn btn-secondary btn-sm" id="editUrl" aria-label="设置">⚙ 设置</button>
+        </div>
       </div>
     </header>
 

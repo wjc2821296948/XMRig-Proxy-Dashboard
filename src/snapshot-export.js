@@ -91,7 +91,7 @@ export function registerSnapshotExport({
   setTimeoutRef = setTimeout,
 }) {
   if (!container || typeof container.appendChild !== "function") {
-    notify("无法初始化快照导出按钮：未找到仪表盘标题栏", "warning");
+    notify("无法初始化快照导出按钮：未找到导出操作槽位", "warning");
     return () => {};
   }
   const button = documentRef.createElement("button");
