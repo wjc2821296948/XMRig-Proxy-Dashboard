@@ -1035,7 +1035,7 @@ test("profile lookup distinguishes a missing profile from unavailable storage", 
   assert.equal(getProfileById("known-profile").status, "storage-unavailable");
 });
 
-test("profile export includes session-only tokens and uses a versioned local bundle", async () => {
+test("profile export can include session-only tokens in a versioned local bundle", async () => {
   globalThis.localStorage = new MemoryStorage();
   globalThis.sessionStorage = new MemoryStorage();
   const { saveProfile, createProfilesExport, parseProfilesImportJson } = await import("../src/storage.js");
@@ -1044,14 +1044,62 @@ test("profile export includes session-only tokens and uses a versioned local bun
     apiToken: "session-secret", remember: false, refreshInterval: 15,
   });
 
-  const bundle = createProfilesExport();
+  const bundle = createProfilesExport({ includeSensitiveData: true });
   assert.equal(bundle.format, "xmrig-proxy-dashboard-profile-bundle");
   assert.equal(bundle.version, 1);
+  assert.equal(bundle.includesSensitiveData, true);
   assert.equal(bundle.profiles[0].apiToken, "session-secret");
   assert.equal(bundle.profiles[0].remember, false);
   assert.equal(typeof bundle.exportedAt, "string");
   const roundTrip = parseProfilesImportJson(JSON.stringify(bundle));
   assert.deepEqual(roundTrip.profiles, bundle.profiles);
+});
+
+test("redacted profile export removes all tokens", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, createProfilesExport } = await import("../src/storage.js");
+  saveProfile({
+    id: "remembered-export", name: "Remembered", apiUrl: "https://remembered.example",
+    apiToken: "persistent-secret", remember: true, refreshInterval: 10,
+  });
+  saveProfile({
+    id: "session-export", name: "Session", apiUrl: "https://session.example",
+    apiToken: "session-secret", remember: false, refreshInterval: 10,
+  });
+
+  const bundle = createProfilesExport({ includeSensitiveData: false });
+  assert.equal(bundle.includesSensitiveData, false);
+  assert.equal(bundle.profiles.length, 2);
+  assert.ok(bundle.profiles.every(profile => profile.apiToken === ""));
+});
+
+test("complete profile export fails instead of silently dropping inaccessible session tokens", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  const workingSession = new MemoryStorage();
+  globalThis.sessionStorage = workingSession;
+  const { saveProfile, createProfilesExport } = await import("../src/storage.js");
+  saveProfile({
+    id: "blocked-session-export", name: "Blocked Session", apiUrl: "https://blocked.example",
+    apiToken: "must-not-disappear", remember: false, refreshInterval: 10,
+  });
+
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() { throw new DOMException("session storage blocked", "SecurityError"); },
+  });
+  try {
+    assert.throws(
+      () => createProfilesExport({ includeSensitiveData: true }),
+      /无法读取会话 Token/,
+    );
+    const redacted = createProfilesExport({ includeSensitiveData: false });
+    assert.equal(redacted.includesSensitiveData, false);
+    assert.equal(redacted.profiles[0].apiToken, "");
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", descriptor);
+  }
 });
 
 test("profile import rejects malformed bundles before changing existing storage", async () => {
