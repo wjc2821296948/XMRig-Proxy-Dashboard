@@ -1,0 +1,11 @@
+{
+  "name": "XMRig Proxy Dashboard",
+  "short_name": "XMRig Dashboard",
+  "description": "Real-time XMRig Proxy monitoring dashboard",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e0f1a",
+  "theme_color": "#0e0f1a",
+  "icons": []
+}
