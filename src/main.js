@@ -1243,9 +1243,14 @@ function openSettingsModal(selectedProfileId = null) {
     const themePreference = document.getElementById("sTheme").value;
     const backgroundInput = document.getElementById("sBackgroundImage");
     const backgroundImage = uploadedBackgroundImage ?? normalizeBackgroundImageUrl(backgroundInput.value);
+    const backgroundFileInput = document.getElementById("sBackgroundFile");
     const refreshInput = document.getElementById("sRefreshInterval");
     const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10)) ? parseInt(refreshInput.value, 10) : 10;
 
+    if (backgroundFileInput.disabled && backgroundFileInput.files?.length) {
+      showToast("图片仍在处理中，请处理完成后再保存", "warning");
+      return;
+    }
     if (backgroundImage === null) {
       showToast("背景图片必须是有效的 HTTPS 图片链接，或通过本地图片上传选择", "error");
       backgroundInput.focus();

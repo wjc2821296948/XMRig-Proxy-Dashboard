@@ -49,7 +49,7 @@ const MAX_URL_LENGTH = 2048;
 const MAX_PROFILE_NAME_LENGTH = 128;
 const MAX_BACKGROUND_IMAGE_URL_LENGTH = 2048;
 const MAX_BACKGROUND_DATA_URL_LENGTH = 1_800_000;
-const BACKGROUND_DATA_URL_PATTERN = /^data:image\\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const BACKGROUND_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Storage access can throw in privacy-restricted contexts or at quota. */
 function storageFor(kind) {
