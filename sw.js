@@ -5,6 +5,8 @@ const APP_SHELL = [
   "./styles.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
+  "./app-icon-192.png",
+  "./app-icon-512.png",
   "./src/main.js",
   "./src/api.js",
   "./src/manual-refresh.js",
@@ -63,7 +65,7 @@ self.addEventListener("fetch", event => {
           }
           return response;
         })
-        .catch(async () => (await caches.match(request)) || (await caches.match(new URL("./index.html", self.registration.scope).href)))
+        .catch(async () => (await caches.match(new URL("./index.html", self.registration.scope).href)) || Response.error())
     );
     return;
   }
