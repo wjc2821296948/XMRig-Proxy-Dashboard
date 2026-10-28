@@ -348,8 +348,8 @@ export function importProfiles(importedProfiles) {
       || !writeProfiles(profiles)
       || !saveConfig(profiles[0])
       || !safeSet("local", ACTIVE_PROFILE_KEY, profiles[0].id)) {
-    rollback();
-    return { ok: false, error: consumeStorageRecoveryWarning() ? "rollback-failed" : "storage-write-failed" };
+    const restored = rollback();
+    return { ok: false, error: restored ? "storage-write-failed" : "rollback-failed" };
   }
   return { ok: true, profiles };
 }
