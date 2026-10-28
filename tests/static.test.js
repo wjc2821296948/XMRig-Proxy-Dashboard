@@ -329,7 +329,9 @@ test("profile transfer UI warns about tokens and processes files locally", () =>
   assert.match(source, /id="exportProfiles"/);
   assert.match(source, /id="importProfiles"/);
   assert.match(source, /id="profileImportFile" type="file" accept="\.json,application\/json"/);
-  assert.match(source, /访问 Token/);
+  assert.match(source, /完整备份（包含 Token）/);
+  assert.match(source, /脱敏备份（不包含 Token）/);
+  assert.match(source, /createProfilesExport\(\{ includeSensitiveData \}\)/);
   assert.match(source, /URL\.createObjectURL\(blob\)/);
   assert.match(source, /parseProfilesImportJson\(await file\.text\(\)\)/);
   assert.match(source, /importProfiles\(bundle\.profiles\)/);
