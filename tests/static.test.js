@@ -42,7 +42,7 @@ test("index keeps the dashboard CSP security boundaries intact", () => {
     "default-src 'self'",
     "script-src 'self'",
     "font-src 'self' data:",
-    "img-src 'self' data:",
+    "img-src 'self' data: https:",
     "connect-src http: https:",
     "base-uri 'self'",
     "form-action 'self'",
@@ -338,4 +338,28 @@ test("fetchAndRender distinguishes cancellation from already-reported failures",
   assert.match(source, /if \(controller\.signal\.aborted\) return \{ status: "cancelled" \};/);
   assert.match(source, /if \(controller\.signal\.aborted \|\| err\.name === "AbortError" \|\| err\.name === "CancellationError"\) \{\s*return \{ status: "cancelled" \};/);
   assert.match(source, /return \{ status: "failed", notified: true \};/);
+});
+
+test("custom background setting is persisted locally and restored at startup", () => {
+  const html = read("index.html");
+  const main = read("src/main.js");
+  const storage = read("src/storage.js");
+  const css = read("styles.css");
+
+  assert.match(html, /img-src 'self' data: https:/);
+  assert.match(main, /id="sBackgroundImage"/);
+  assert.match(main, /id="sBackgroundFile"/);
+  assert.match(main, /createBackgroundUploadGuard/);
+  assert.match(main, /const requestId = backgroundUploadGuard\.begin\(\)/);
+  assert.match(main, /if \(!backgroundUploadGuard\.isCurrent\(requestId\)\) return;/);
+  assert.match(main, /backgroundUploadGuard\.invalidate\(\)/);
+  assert.match(main, /id="backgroundImageStatus"/);
+  assert.match(main, /let uploadedBackgroundImage = backgroundImage\.startsWith\("data:image\/"\) \? backgroundImage : null;/);
+  assert.match(main, /accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(main, /encodeBackgroundImageFile\(file\)/);
+  assert.match(main, /MAX_BACKGROUND_FILE_BYTES = 10 \* 1024 \* 1024/);
+  assert.match(main, /saveBackgroundImage\(backgroundImage\)/);
+  assert.match(main, /applyBackgroundImage\(loadBackgroundImage\(\)\)/);
+  assert.match(storage, /dashboard_background_image/);
+  assert.match(css, /body\.has-custom-background/);
 });

@@ -1430,3 +1430,56 @@ header {
     border-color: var(--accent-copper);
   }
 }
+
+
+/* ==========================================================================
+   Custom background image
+   ========================================================================== */
+.background-url-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.background-url-row .input-field {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.background-url-row .btn {
+  flex: 0 0 auto;
+}
+
+body.has-custom-background {
+  background-color: var(--bg-primary);
+  background-image:
+    linear-gradient(rgba(14, 15, 26, 0.38), rgba(14, 15, 26, 0.58)),
+    var(--custom-background-image);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
+}
+
+@media (max-width: 480px) {
+  .background-url-row {
+    flex-direction: column;
+  }
+
+  .background-url-row .btn {
+    width: 100%;
+  }
+}
+
+
+.background-preview {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  margin-top: 0.65rem;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}

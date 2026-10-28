@@ -17,7 +17,7 @@ import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
   loadActiveProfileId, getActiveProfile,
-  loadTheme, saveTheme,
+  loadTheme, saveTheme, loadBackgroundImage, saveBackgroundImage, normalizeBackgroundImageUrl,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
 } from "./storage.js";
 import {
@@ -35,6 +35,7 @@ import {
 } from "./status.js";
 import { escapeHtml } from "./escape-html.js";
 import { formatLoadAverage } from "./load-average.js";
+import { createBackgroundUploadGuard } from "./background-upload-guard.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
@@ -143,8 +144,79 @@ function applyThemePreference(preference, { persist = false } = {}) {
   return themePreference;
 }
 
+
+const MAX_BACKGROUND_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_BACKGROUND_DATA_URL_LENGTH = 1_800_000;
+const MAX_BACKGROUND_IMAGE_EDGE = 1920;
+
+/**
+ * Decode and compress an uploaded image before saving it in localStorage.
+ * The output size is bounded so background preferences cannot consume all
+ * of the browser's per-origin storage quota.
+ */
+async function encodeBackgroundImageFile(file) {
+  const supportedTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+  if (!file || !supportedTypes.has(file.type)) {
+    throw new Error("请选择 PNG、JPG 或 WebP 图片");
+  }
+  if (file.size > MAX_BACKGROUND_FILE_BYTES) {
+    throw new Error("原始图片不能超过 10 MB");
+  }
+  if (typeof createImageBitmap !== "function") {
+    throw new Error("当前浏览器不支持本地图片处理，请改用 HTTPS 图片链接");
+  }
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > 40_000_000) {
+      throw new Error("图片尺寸过大，请先缩小图片后再上传");
+    }
+
+    let scale = Math.min(1, MAX_BACKGROUND_IMAGE_EDGE / bitmap.width, MAX_BACKGROUND_IMAGE_EDGE / bitmap.height);
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("无法处理图片，请改用 HTTPS 图片链接");
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+      for (const quality of [0.84, 0.74, 0.64, 0.54, 0.44]) {
+        let dataUrl = canvas.toDataURL("image/webp", quality);
+        if (!dataUrl.startsWith("data:image/webp;base64,")) {
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+        if (
+          dataUrl.length <= MAX_BACKGROUND_DATA_URL_LENGTH
+          && normalizeBackgroundImageUrl(dataUrl) !== null
+        ) return dataUrl;
+      }
+      scale *= 0.8;
+    }
+    throw new Error("压缩后图片仍然过大，请选择更小的图片");
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+function applyBackgroundImage(value) {
+  const backgroundImage = normalizeBackgroundImageUrl(value);
+  if (backgroundImage === null || !document.body) return false;
+
+  if (!backgroundImage) {
+    document.body.classList.remove("has-custom-background");
+    document.body.style.removeProperty("--custom-background-image");
+    return true;
+  }
+
+  document.body.style.setProperty("--custom-background-image", `url("${backgroundImage}")`);
+  document.body.classList.add("has-custom-background");
+  return true;
+}
+
 function initTheme() {
   applyThemePreference(loadTheme());
+  applyBackgroundImage(loadBackgroundImage());
 }
 
 function toggleTheme() {
@@ -916,6 +988,8 @@ function openSettingsModal(selectedProfileId = null) {
     refreshInterval: 10,
   };
   const themePreference = loadTheme();
+  const backgroundImage = loadBackgroundImage();
+  const backgroundImageUrl = backgroundImage.startsWith("https://") ? backgroundImage : "";
 
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -966,6 +1040,18 @@ function openSettingsModal(selectedProfileId = null) {
                 <option value="light" ${themePreference === "light" ? "selected" : ""}>浅色模式</option>
               </select>
               <span class="input-hint">选择“跟随系统”后，面板会随设备的明暗外观自动切换。</span>
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="sBackgroundImage">背景图片链接（可选）</label>
+              <input type="url" class="input-field" id="sBackgroundImage" value="${escapeHtml(backgroundImageUrl)}" maxlength="2048" placeholder="https://example.com/background.jpg">
+              <label class="input-label" for="sBackgroundFile">或上传本地图片</label>
+              <input type="file" class="input-field" id="sBackgroundFile" accept="image/png,image/jpeg,image/webp">
+              <span class="input-hint">支持 PNG、JPG、WebP，原图最大 10 MB；上传后会自动缩放压缩并存储在当前浏览器 localStorage，不会上传到服务器。</span>
+              <img id="backgroundPreview" class="background-preview ${backgroundImage ? "" : "hidden"}" src="${escapeHtml(backgroundImage)}" alt="背景图片预览">
+              <span id="backgroundImageStatus" class="input-hint">${backgroundImage.startsWith("data:image/") ? "当前使用已保存的本地图片。" : backgroundImage ? "当前使用已保存的图片链接。" : "未使用自定义背景。"}</span>
+              <div class="background-url-row">
+                <button type="button" class="btn btn-secondary btn-sm" id="clearBackgroundImage">恢复默认背景</button>
+              </div>
             </div>
             <div class="config-actions">
               <button class="btn btn-secondary" id="cancelSettings">取消</button>
@@ -1024,6 +1110,77 @@ function openSettingsModal(selectedProfileId = null) {
   document.getElementById("newProfile").addEventListener("click", () => {
     closeModal(overlay);
     openSettingsModal("__new__");
+  });
+  const backgroundInput = document.getElementById("sBackgroundImage");
+  const backgroundFileInput = document.getElementById("sBackgroundFile");
+  const backgroundPreview = document.getElementById("backgroundPreview");
+  const backgroundImageStatus = document.getElementById("backgroundImageStatus");
+  const backgroundUploadGuard = createBackgroundUploadGuard();
+  // Keep a persisted upload selected when opening settings, even though its
+  // data URL is intentionally not placed in the URL input.
+  let uploadedBackgroundImage = backgroundImage.startsWith("data:image/") ? backgroundImage : null;
+
+  const updateBackgroundPreview = value => {
+    const previewUrl = normalizeBackgroundImageUrl(value);
+    if (previewUrl) {
+      backgroundPreview.src = previewUrl;
+      backgroundPreview.classList.remove("hidden");
+      backgroundImageStatus.textContent = previewUrl.startsWith("data:image/")
+        ? "已选择本地图片；保存后会保留在此浏览器。"
+        : "已填写图片链接；保存后应用。";
+    } else {
+      backgroundPreview.removeAttribute("src");
+      backgroundPreview.classList.add("hidden");
+      backgroundImageStatus.textContent = "将恢复默认渐变背景；保存后生效。";
+    }
+  };
+
+  backgroundInput.addEventListener("input", () => {
+    // A user-edited link takes precedence over any unfinished local upload.
+    backgroundUploadGuard.invalidate();
+    backgroundFileInput.disabled = false;
+    uploadedBackgroundImage = null;
+    backgroundFileInput.value = "";
+    updateBackgroundPreview(backgroundInput.value);
+  });
+
+  backgroundFileInput.addEventListener("change", async () => {
+    const file = backgroundFileInput.files?.[0];
+    if (!file) return;
+
+    const requestId = backgroundUploadGuard.begin();
+    backgroundFileInput.disabled = true;
+    try {
+      const encodedImage = await encodeBackgroundImageFile(file);
+      // Ignore stale work if the user cleared the image or chose a link while
+      // this async compression was still running.
+      if (!backgroundUploadGuard.isCurrent(requestId)) return;
+      uploadedBackgroundImage = encodedImage;
+      backgroundInput.value = "";
+      updateBackgroundPreview(uploadedBackgroundImage);
+      showToast("图片已处理；点击“保存并切换”后应用", "success");
+    } catch (err) {
+      if (!backgroundUploadGuard.isCurrent(requestId)) return;
+      uploadedBackgroundImage = null;
+      backgroundFileInput.value = "";
+      showToast(err?.message || "处理图片失败，请重试", "error");
+    } finally {
+      if (backgroundUploadGuard.isCurrent(requestId)) {
+        backgroundFileInput.disabled = false;
+      }
+    }
+  });
+
+  document.getElementById("clearBackgroundImage").addEventListener("click", () => {
+    // Invalidate any image compression already in progress so it cannot
+    // re-apply the cleared image when its promise resolves.
+    backgroundUploadGuard.invalidate();
+    backgroundFileInput.disabled = false;
+    backgroundInput.value = "";
+    backgroundFileInput.value = "";
+    uploadedBackgroundImage = null;
+    updateBackgroundPreview("");
+    backgroundInput.focus();
   });
 
   overlay.querySelectorAll('[data-action="select-profile"]').forEach(button => {
@@ -1109,9 +1266,21 @@ function openSettingsModal(selectedProfileId = null) {
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
     const themePreference = document.getElementById("sTheme").value;
+    const backgroundInput = document.getElementById("sBackgroundImage");
+    const backgroundImage = uploadedBackgroundImage ?? normalizeBackgroundImageUrl(backgroundInput.value);
+    const backgroundFileInput = document.getElementById("sBackgroundFile");
     const refreshInput = document.getElementById("sRefreshInterval");
     const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10)) ? parseInt(refreshInput.value, 10) : 10;
 
+    if (backgroundFileInput.disabled && backgroundFileInput.files?.length) {
+      showToast("图片仍在处理中，请处理完成后再保存", "warning");
+      return;
+    }
+    if (backgroundImage === null) {
+      showToast("背景图片必须是有效的 HTTPS 图片链接，或通过本地图片上传选择", "error");
+      backgroundInput.focus();
+      return;
+    }
     if (!name) { showToast("请输入配置名称", "error"); return; }
     if (!url) { showToast("请输入 API URL", "error"); return; }
     const urlError = getApiUrlValidationError(url);
@@ -1146,6 +1315,12 @@ function openSettingsModal(selectedProfileId = null) {
     }
 
     try {
+      const backgroundSaved = saveBackgroundImage(backgroundImage);
+      if (backgroundSaved) {
+        applyBackgroundImage(backgroundImage);
+      } else {
+        showToast("Proxy 配置已保存，但背景设置保存失败；请检查浏览器 localStorage 空间或权限", "warning");
+      }
       applyThemePreference(themePreference, { persist: true });
       await reconnectProfile(profile);
     } catch (err) {
