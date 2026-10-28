@@ -277,6 +277,83 @@ export function loadProfiles() {
   return migrated;
 }
 
+
+/**
+ * Replace all saved profiles from a user-selected import file.
+ * Every profile is validated before storage is touched, and the previous
+ * storage snapshot is restored if any write fails.
+ *
+ * @param {unknown} importedProfiles
+ * @returns {{ok:boolean, profiles?:object[], error?:string}}
+ */
+export function importProfiles(importedProfiles) {
+  if (!Array.isArray(importedProfiles) || importedProfiles.length < 1 || importedProfiles.length > 50) {
+    return { ok: false, error: "invalid-count" };
+  }
+
+  let serialized;
+  try {
+    serialized = JSON.stringify(importedProfiles);
+  } catch {
+    return { ok: false, error: "invalid-json" };
+  }
+  if (typeof serialized !== "string" || serialized.length > MAX_CONFIG_SIZE) {
+    return { ok: false, error: "too-large" };
+  }
+
+  const profiles = [];
+  const ids = new Set();
+  for (const item of importedProfiles) {
+    if (!item || typeof item !== "object" || Array.isArray(item)
+        || typeof item.id !== "string" || !item.id.trim() || item.id.length > 128
+        || typeof item.name !== "string" || !item.name.trim() || item.name.length > MAX_PROFILE_NAME_LENGTH
+        || typeof item.apiUrl !== "string"
+        || (item.apiToken !== undefined && typeof item.apiToken !== "string")
+        || typeof item.remember !== "boolean"
+        || !Number.isInteger(item.refreshInterval) || item.refreshInterval < 1 || item.refreshInterval > 120) {
+      return { ok: false, error: "invalid-profile" };
+    }
+    const profile = normalizeProfile(item);
+    if (!profile || (typeof item.apiToken === "string" && item.apiToken.length > MAX_TOKEN_LENGTH)
+        || ids.has(profile.id)) {
+      return { ok: false, error: "invalid-profile" };
+    }
+    ids.add(profile.id);
+    profiles.push(profile);
+  }
+
+  const entries = [
+    ["profiles", "local", PROFILES_KEY],
+    ["activeId", "local", ACTIVE_PROFILE_KEY],
+    ["localConfig", "local", CONFIG_KEY],
+    ["sessionConfig", "session", CONFIG_KEY],
+    ["tokens", "session", PROFILE_TOKENS_KEY],
+  ];
+  const previous = captureStorageEntries(entries);
+  if (!previous) return { ok: false, error: "storage-unavailable" };
+  const warningBeforeMutation = storageRecoveryWarningPending;
+  const rollback = () => {
+    const restored = restoreStorageEntries(previous, entries);
+    if (restored) storageRecoveryWarningPending = warningBeforeMutation;
+    else storageRecoveryWarningPending = true;
+    return restored;
+  };
+
+  const tokens = Object.create(null);
+  for (const profile of profiles) {
+    if (!profile.remember) tokens[profile.id] = profile.apiToken;
+  }
+
+  if (!writeProfileTokens(tokens)
+      || !writeProfiles(profiles)
+      || !saveConfig(profiles[0])
+      || !safeSet("local", ACTIVE_PROFILE_KEY, profiles[0].id)) {
+    rollback();
+    return { ok: false, error: consumeStorageRecoveryWarning() ? "rollback-failed" : "storage-write-failed" };
+  }
+  return { ok: true, profiles };
+}
+
 /** Distinguish a missing profile from an inaccessible profile store. */
 export function getProfileById(id) {
   const storedProfiles = readStorageEntry("local", PROFILES_KEY);
