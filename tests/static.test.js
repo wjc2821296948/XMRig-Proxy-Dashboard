@@ -348,6 +348,10 @@ test("custom background setting is persisted locally and restored at startup", (
 
   assert.match(html, /img-src 'self' data: https:/);
   assert.match(main, /id="sBackgroundImage"/);
+  assert.match(main, /id="sBackgroundFile"/);
+  assert.match(main, /accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(main, /encodeBackgroundImageFile\(file\)/);
+  assert.match(main, /MAX_BACKGROUND_FILE_BYTES = 10 \* 1024 \* 1024/);
   assert.match(main, /saveBackgroundImage\(backgroundImage\)/);
   assert.match(main, /applyBackgroundImage\(loadBackgroundImage\(\)\)/);
   assert.match(storage, /dashboard_background_image/);

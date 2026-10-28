@@ -48,6 +48,8 @@ const MAX_TOKEN_LENGTH = 4096;
 const MAX_URL_LENGTH = 2048;
 const MAX_PROFILE_NAME_LENGTH = 128;
 const MAX_BACKGROUND_IMAGE_URL_LENGTH = 2048;
+const MAX_BACKGROUND_DATA_URL_LENGTH = 1_800_000;
+const BACKGROUND_DATA_URL_PATTERN = /^data:image\\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Storage access can throw in privacy-restricted contexts or at quota. */
 function storageFor(kind) {
@@ -639,6 +641,11 @@ export function normalizeBackgroundImageUrl(value) {
   if (typeof value !== "string") return null;
   const input = value.trim();
   if (!input) return "";
+  if (input.startsWith("data:")) {
+    return input.length <= MAX_BACKGROUND_DATA_URL_LENGTH && BACKGROUND_DATA_URL_PATTERN.test(input)
+      ? input
+      : null;
+  }
   if (input.length > MAX_BACKGROUND_IMAGE_URL_LENGTH) return null;
 
   try {
@@ -650,14 +657,14 @@ export function normalizeBackgroundImageUrl(value) {
   }
 }
 
-/** Persist a custom background URL independently of connection credentials. */
+/** Persist a validated HTTPS URL or compressed image data URL independently of connection credentials. */
 export function saveBackgroundImage(value) {
   const normalized = normalizeBackgroundImageUrl(value);
   if (normalized === null) return false;
   return safeSet("local", BACKGROUND_IMAGE_KEY, normalized);
 }
 
-/** @returns {string} A validated HTTPS URL, or an empty string for the default. */
+/** @returns {string} A validated HTTPS URL or image data URL, or empty string for the default. */
 export function loadBackgroundImage() {
   const raw = safeGet("local", BACKGROUND_IMAGE_KEY);
   return normalizeBackgroundImageUrl(raw ?? "") ?? "";
