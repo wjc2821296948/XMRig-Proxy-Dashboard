@@ -91,7 +91,7 @@ export function registerSnapshotExport({
   setTimeoutRef = setTimeout,
 }) {
   if (!container || typeof container.appendChild !== "function") {
-    notify("无法初始化快照导出按钮：未找到仪表盘标题栏", "warning");
+    notify("无法初始化快照导出按钮：未找到导出操作槽位", "warning");
     return () => {};
   }
   const button = documentRef.createElement("button");
@@ -101,14 +101,7 @@ export function registerSnapshotExport({
   button.textContent = "导出快照";
   button.setAttribute("aria-label", "导出当前监控指标为 JSON 文件");
   button.title = "下载当前指标快照；不包含 Proxy URL 或 Token";
-  const refreshButton = container.querySelector?.("#refreshDashboardButton");
-  const settingsButton = container.querySelector?.("#editUrl");
-  const anchor = refreshButton || settingsButton;
-  if (anchor && typeof container.insertBefore === "function") {
-    container.insertBefore(button, anchor);
-  } else {
-    container.appendChild(button);
-  }
+  container.appendChild(button);
 
   const onClick = () => {
     const data = getData();

@@ -1,5 +1,5 @@
 /**
- * Add an accessible manual refresh control to the dashboard header actions.
+ * Add an accessible manual refresh control to the dashboard manual-refresh slot.
  * The refresh operation is injected so it can be tested without a browser.
  */
 export function registerManualRefresh({
@@ -14,7 +14,7 @@ export function registerManualRefresh({
   warn = message => console.warn(message),
 }) {
   if (!container || typeof container.appendChild !== "function") {
-    warn("Manual refresh control was not registered because .header-actions is missing.");
+    warn("Manual refresh control was not registered because #manualRefreshSlot is missing.");
     return () => {};
   }
 
@@ -32,12 +32,7 @@ export function registerManualRefresh({
   status.className = "sr-only";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  const settingsButton = container.querySelector?.("#editUrl");
-  if (settingsButton && typeof container.insertBefore === "function") {
-    container.insertBefore(button, settingsButton);
-  } else {
-    container.appendChild(button);
-  }
+  container.appendChild(button);
   container.appendChild(status);
 
   let busy = false;

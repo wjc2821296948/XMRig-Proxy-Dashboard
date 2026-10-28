@@ -313,10 +313,10 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
 
-test("snapshot export is registered after DOMContentLoaded against the static header actions container", () => {
+test("snapshot export uses a dedicated static action slot", () => {
   const html = read("index.html");
   const main = read("src/main.js");
-  assert.match(html, /<div class="header-actions" aria-label="仪表盘操作">/);
+  assert.match(html, /<span class="header-action-slot" id="snapshotExportSlot"><\/span>/);\n  assert.match(html, /<span class="header-action-slot" id="manualRefreshSlot"><\/span>/);
   assert.match(
     main,
     /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("\.header-actions"\)/,

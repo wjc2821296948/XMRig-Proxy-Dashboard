@@ -1361,6 +1361,16 @@ header {
   white-space: nowrap;
 }
 
+.header-action-slot {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.header-action-slot:empty {
+  display: none;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -1369,7 +1379,7 @@ header {
   flex: 0 0 auto;
 }
 
-.header-actions > .btn,
+.header-actions .btn,
 .header-actions > .edit-url {
   min-height: 30px;
   white-space: nowrap;
@@ -1397,7 +1407,7 @@ header {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .header-actions > .btn,
+  .header-actions .btn,
   .header-actions > .edit-url {
     width: 100%;
   }
