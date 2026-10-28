@@ -1323,7 +1323,7 @@ test("profile IDs with legacy spaces remain exportable and importable", async ()
   assert.equal(loadProfiles()[0].id, "legacy profile id");
 });
 
-test("persistent profile import warns when stale session-token cleanup is blocked", async () => {
+test("persistent profile import aborts when stale session-token cleanup is blocked", async () => {
   globalThis.localStorage = new MemoryStorage();
   const workingSession = new MemoryStorage();
   globalThis.sessionStorage = workingSession;
@@ -1332,6 +1332,7 @@ test("persistent profile import warns when stale session-token cleanup is blocke
     id: "same-profile", name: "Session-only", apiUrl: "https://session-only.example",
     apiToken: "session-token", remember: false, refreshInterval: 10,
   });
+  const beforeProfiles = globalThis.localStorage.getItem("xmrig_proxy_profiles");
   const oldTokens = workingSession.getItem("xmrig_proxy_session_tokens");
   const bundle = parseProfilesImportJson(JSON.stringify({
     format: "xmrig-proxy-dashboard-profile-bundle",
@@ -1344,14 +1345,13 @@ test("persistent profile import warns when stale session-token cleanup is blocke
     get() { throw new Error("session storage blocked"); },
   });
   try {
-    const result = importProfiles(bundle.profiles);
-    assert.equal(result.updated, 1);
-    assert.equal(result.sessionTokenCleanupSkipped, true);
+    assert.throws(() => importProfiles(bundle.profiles), /无法安全清理旧 Token/);
   } finally {
     Object.defineProperty(globalThis, "sessionStorage", descriptor);
   }
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles"), beforeProfiles);
   assert.equal(workingSession.getItem("xmrig_proxy_session_tokens"), oldTokens);
-  assert.equal(loadProfiles().find(profile => profile.id === "same-profile").apiToken, "persistent-token");
+  assert.equal(loadProfiles().find(profile => profile.id === "same-profile").apiToken, "session-token");
 });
 
 test("remembered connection config can be saved when sessionStorage is inaccessible", async () => {
@@ -1375,4 +1375,21 @@ test("remembered connection config can be saved when sessionStorage is inaccessi
   } finally {
     Object.defineProperty(globalThis, "sessionStorage", descriptor);
   }
+});
+
+
+test("saved profiles reject control characters so every saved profile remains exportable", async () => {
+  const { saveProfile } = await import("../src/storage.js");
+  assert.equal(saveProfile({
+    id: "invalid\\nid", name: "Valid", apiUrl: "https://safe.example",
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }), null);
+  assert.equal(saveProfile({
+    id: "valid-id", name: "invalid\\u0000name", apiUrl: "https://safe.example",
+    apiToken: "token", remember: true, refreshInterval: 10,
+  }), null);
+  assert.equal(saveProfile({
+    id: "valid-id", name: "Valid", apiUrl: "https://safe.example",
+    apiToken: "invalid\\rtoken", remember: true, refreshInterval: 10,
+  }), null);
 });
