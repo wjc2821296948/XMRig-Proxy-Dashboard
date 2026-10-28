@@ -297,7 +297,7 @@ export function importProfiles(importedProfiles) {
   } catch {
     return { ok: false, error: "invalid-json" };
   }
-  if (typeof serialized !== "string" || serialized.length > MAX_CONFIG_SIZE) {
+  if (typeof serialized !== "string" || serialized.length > 256 * 1024) {
     return { ok: false, error: "too-large" };
   }
 
