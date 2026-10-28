@@ -1081,7 +1081,9 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       if (sessionTokenCleanupSkipped) {
         // Never report a successful import when a stale session credential
         // for an ID being converted to persistent mode cannot be invalidated.
-        throw new Error("会话存储不可用，无法安全清理旧 Token；请恢复浏览器存储后重试");
+        const error = new Error("会话存储不可用，无法安全清理旧 Token；请恢复浏览器存储后重试");
+        error.code = "SESSION_TOKEN_CLEANUP_REQUIRED";
+        throw error;
       }
     }
 
@@ -1135,7 +1137,8 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       throw new Error("导入失败，且浏览器存储未能完整恢复原状态。请清理此站点的浏览数据后检查配置");
     }
     if (error instanceof ProfileBundleValidationError
-        || error?.code === "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED") throw error;
+        || error?.code === "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED"
+        || error?.code === "SESSION_TOKEN_CLEANUP_REQUIRED") throw error;
     throw new Error("导入失败，现有配置已尽力恢复。请检查浏览器存储空间后重试");
   }
 }
