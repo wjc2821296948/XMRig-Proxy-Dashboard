@@ -1119,9 +1119,9 @@ test("profile import rejects control characters in identifiers, names, and token
     apiToken: "safe-token", remember: true, refreshInterval: 10,
   };
   for (const invalid of [
-    { ...profile, id: "bad\\nprofile" },
-    { ...profile, name: "bad\\u0000name" },
-    { ...profile, apiToken: "bad\\rtoken" },
+    { ...profile, id: "bad\nprofile" },
+    { ...profile, name: "bad\u0000name" },
+    { ...profile, apiToken: "bad\rtoken" },
   ]) {
     assert.deepEqual(importProfiles([invalid]), { ok: false, error: "invalid-profile" });
   }
