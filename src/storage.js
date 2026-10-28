@@ -150,8 +150,14 @@ export function saveConfig(cfg) {
     // A rollback must know the exact previous values. Do not overwrite an
     // existing credential when a restricted storage context makes snapshots unreadable.
     const previousLocal = readStorageEntry("local", CONFIG_KEY);
+    if (!previousLocal.ok) return false;
     const previousSession = readStorageEntry("session", CONFIG_KEY);
-    if (!previousLocal.ok || !previousSession.ok) return false;
+    if (!previousSession.ok) {
+      // localStorage wins over sessionStorage during loadConfig(). When session
+      // storage is inaccessible, writing the remembered value locally is safe;
+      // it cannot be shadowed by an unreadable session-only value.
+      return safeSet("local", CONFIG_KEY, serialized);
+    }
     if (!safeSet("local", CONFIG_KEY, serialized)) return false;
 
     if (!safeRemoveOrReplace("session", CONFIG_KEY, "")) {
@@ -159,11 +165,10 @@ export function saveConfig(cfg) {
       // no stale session config exists. If one exists, restore the old local
       // value, but never reactivate malformed credentials during that rollback.
       if (previousSession.value !== null) {
-        if (!restoreStoredConfigEntry("local", previousLocal.value)) {
-          storageRecoveryWarningPending = true;
-        }
-        // The stale session entry could not be removed or blanked, so the
-        // failed save may leave an older credential available after refresh.
+        // Best-effort restoration may fail, and an uncleared session config
+        // may still shadow the remembered value after refresh; either way,
+        // the caller must be warned that the connection state may be stale.
+        restoreStoredConfigEntry("local", previousLocal.value);
         storageRecoveryWarningPending = true;
         return false;
       }
@@ -183,12 +188,15 @@ export function saveConfig(cfg) {
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
   if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
-  if (typeof profile.apiToken === "string" && profile.apiToken.length > MAX_TOKEN_LENGTH) return null;
-  if (typeof profile.name === "string" && profile.name.length > MAX_PROFILE_NAME_LENGTH) return null;
-  const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
+  if (typeof profile.apiToken === "string"
+      && (profile.apiToken.length > MAX_TOKEN_LENGTH || /[\u0000-\u001F\u007F]/.test(profile.apiToken))) return null;
+  if (typeof profile.name === "string"
+      && (profile.name.length > MAX_PROFILE_NAME_LENGTH || /[\u0000-\u001F\u007F]/.test(profile.name))) return null;
+  const id = typeof profile.id === "string" && profile.id.trim()
+      && !/[\u0000-\u001F\u007F]/.test(profile.id) ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
-  const refreshInterval = Math.min(120, Math.max(1, Number(profile.refreshInterval) || 10));
+  const refreshInterval = Math.min(120, Math.max(1, Math.trunc(Number(profile.refreshInterval) || 10)));
   return {
     id,
     name,
@@ -295,6 +303,13 @@ export function saveProfile(profile) {
     id: profile.id || `proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   });
   if (!normalized) return null;
+  try {
+    // Normalize legacy values first, then enforce the safe export/import schema
+    // for new writes. Prototype-like IDs remain safe because token maps use null prototypes.
+    validateImportedProfiles([normalized]);
+  } catch {
+    return null;
+  }
 
   const profiles = loadProfiles();
   const index = profiles.findIndex(item => item.id === normalized.id);
@@ -781,4 +796,346 @@ function writeWriteAccessMap(map) {
 export function getConfig() {
   const active = getActiveProfile();
   return active || loadConfig();
+}
+
+// The export is a local download only. It intentionally contains connection
+// tokens so users can move a complete profile set between browsers/devices.
+const PROFILE_BUNDLE_FORMAT = "xmrig-proxy-dashboard-profile-bundle";
+const PROFILE_BUNDLE_VERSION = 1;
+const MAX_PROFILE_BUNDLE_BYTES = 1024 * 1024;
+
+function utf8ByteLength(value) {
+  return new TextEncoder().encode(value).byteLength;
+}
+const MAX_IMPORTED_PROFILES = 100;
+
+class ProfileBundleValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ProfileBundleValidationError";
+  }
+}
+
+function validateImportedProfiles(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_IMPORTED_PROFILES) {
+    throw new ProfileBundleValidationError("导入文件必须包含 1 到 100 个 Proxy 配置");
+  }
+
+  const seen = new Set();
+  return value.map((profile, index) => {
+    const number = index + 1;
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置格式无效");
+    }
+
+    const id = profile.id;
+    const name = profile.name;
+    const apiUrl = profile.apiUrl;
+    const apiToken = profile.apiToken;
+    const remember = profile.remember;
+    const refreshInterval = profile.refreshInterval;
+
+    if (typeof id !== "string" || id !== id.trim() || !id
+        || id.length > 128 || /[\u0000-\u001F\u007F]/.test(id)) {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的 ID 无效");
+    }
+    if (seen.has(id)) throw new ProfileBundleValidationError("导入文件包含重复的配置 ID");
+    seen.add(id);
+
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 128
+        || /[\u0000-\u001F\u007F]/.test(name)) {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的名称无效");
+    }
+    if (typeof apiUrl !== "string" || apiUrl.length > 2048 || !isValidApiUrl(apiUrl)) {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的 API URL 无效");
+    }
+    if (typeof apiToken !== "string" || apiToken.length > 4096
+        || /[\u0000-\u001F\u007F]/.test(apiToken)) {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的 Token 无效或过长");
+    }
+    if (typeof remember !== "boolean") {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的“记住我”选项无效");
+    }
+    if (!Number.isInteger(refreshInterval) || refreshInterval < 1 || refreshInterval > 120) {
+      throw new ProfileBundleValidationError("第 " + number + " 个配置的刷新间隔必须是 1 到 120 秒的整数");
+    }
+
+    const normalized = normalizeProfile({ id, name: name.trim(), apiUrl, apiToken, remember, refreshInterval });
+    if (!normalized) throw new ProfileBundleValidationError("第 " + number + " 个配置无法验证");
+    return normalized;
+  });
+}
+
+function readProfileTokensForExport() {
+  const entry = readStorageEntry("session", PROFILE_TOKENS_KEY);
+  if (!entry.ok) {
+    throw new Error("无法读取会话 Token，不能生成包含敏感信息的完整备份。请选择“不含 Token”导出，或允许浏览器访问会话存储后重试");
+  }
+  if (!entry.value) return Object.create(null);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(entry.value);
+  } catch {
+    throw new Error("会话 Token 存储已损坏，不能生成包含敏感信息的完整备份");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("会话 Token 存储格式无效，不能生成包含敏感信息的完整备份");
+  }
+
+  const tokens = Object.create(null);
+  for (const [id, token] of Object.entries(parsed)) {
+    if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
+      throw new Error("会话 Token 存储包含无效数据，不能生成包含敏感信息的完整备份");
+    }
+    tokens[id] = token;
+  }
+  return tokens;
+}
+
+/**
+ * Build an export payload.
+ * @param {{includeSensitiveData?: boolean}} [options]
+ *   When false, every Token is deliberately removed from the bundle.
+ *   When true, session-only Token storage must be readable so a partial
+ *   backup can never be mistaken for a complete one.
+ */
+export function createProfilesExport({ includeSensitiveData = true } = {}) {
+  const profiles = loadProfiles();
+  if (!profiles.length) throw new Error("没有可导出的 Proxy 配置");
+  if (profiles.length > MAX_IMPORTED_PROFILES) {
+    throw new Error("配置数量超过 100 个，无法生成兼容的导出文件");
+  }
+
+  const sessionTokens = includeSensitiveData && profiles.some(profile => !profile.remember)
+    ? readProfileTokensForExport()
+    : null;
+  const exportable = validateImportedProfiles(profiles.map(profile => ({
+    id: profile.id,
+    name: profile.name,
+    apiUrl: profile.apiUrl,
+    apiToken: includeSensitiveData
+      ? (profile.remember
+        ? (typeof profile.apiToken === "string" ? profile.apiToken : "")
+        : (Object.hasOwn(sessionTokens, profile.id) ? sessionTokens[profile.id] : ""))
+      : "",
+    remember: profile.remember === true,
+    refreshInterval: profile.refreshInterval,
+  })));
+  const bundle = {
+    format: PROFILE_BUNDLE_FORMAT,
+    version: PROFILE_BUNDLE_VERSION,
+    exportedAt: new Date().toISOString(),
+    includesSensitiveData: includeSensitiveData,
+    profiles: exportable,
+  };
+  // The UI writes pretty-printed JSON; measure that representation so every
+  // generated file also fits the parser's limit when re-imported.
+  if (utf8ByteLength(JSON.stringify(bundle, null, 2)) > MAX_PROFILE_BUNDLE_BYTES) {
+    throw new Error("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试");
+  }
+  return bundle;
+}
+
+/** Parse and validate a bundle fully before any persistent state is changed. */
+export function parseProfilesImportJson(raw) {
+  if (
+    typeof raw !== "string"
+    || raw.length === 0
+    || raw.length > MAX_PROFILE_BUNDLE_BYTES
+    || utf8ByteLength(raw) > MAX_PROFILE_BUNDLE_BYTES
+  ) {
+    throw new ProfileBundleValidationError("导入文件为空或超过 1 MB 限制");
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    throw new ProfileBundleValidationError("导入文件不是有效的 JSON");
+  }
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)
+      || payload.format !== PROFILE_BUNDLE_FORMAT
+      || payload.version !== PROFILE_BUNDLE_VERSION) {
+    throw new ProfileBundleValidationError("导入文件格式或版本不受支持");
+  }
+
+  return {
+    format: PROFILE_BUNDLE_FORMAT,
+    version: PROFILE_BUNDLE_VERSION,
+    profiles: validateImportedProfiles(payload.profiles),
+  };
+}
+
+function snapshotImportKeys(includeSessionStorage) {
+  const entries = [
+    { kind: "local", key: PROFILES_KEY },
+    { kind: "local", key: ACTIVE_PROFILE_KEY },
+    { kind: "local", key: CONFIG_KEY },
+  ];
+  if (includeSessionStorage) {
+    entries.push(
+      { kind: "session", key: PROFILE_TOKENS_KEY },
+      { kind: "session", key: CONFIG_KEY },
+    );
+  }
+  return entries.map(entry => {
+    const current = readStorageEntry(entry.kind, entry.key);
+    if (!current.ok) throw new Error("无法读取浏览器存储快照");
+    return { ...entry, value: current.value };
+  });
+}
+
+function restoreImportSnapshot(snapshot) {
+  let restored = true;
+  for (const entry of snapshot) {
+    const current = readStorageEntry(entry.kind, entry.key);
+    if (!current.ok) {
+      restored = false;
+      continue;
+    }
+    if (current.value === entry.value) continue;
+
+    const written = entry.key === CONFIG_KEY
+      ? restoreStoredConfigEntry(entry.kind, entry.value)
+      : entry.value === null
+        ? safeRemove(entry.kind, entry.key)
+        : safeSet(entry.kind, entry.key, entry.value);
+    if (!written) {
+      restored = false;
+      continue;
+    }
+
+    const verified = readStorageEntry(entry.kind, entry.key);
+    if (!verified.ok || verified.value !== entry.value) restored = false;
+  }
+  if (!restored) storageRecoveryWarningPending = true;
+  return restored;
+}
+
+/**
+ * Merge a validated import by profile ID. Existing IDs are replaced, other
+ * saved profiles remain untouched, and the current active profile is preserved.
+ * A failed multi-key write rolls back the raw pre-import values where possible.
+ */
+export function importProfiles(importedProfiles, { allowActiveProfileFallback = false } = {}) {
+  // Revalidate at the write boundary as this exported API may be called by
+  // code paths other than parseProfilesImportJson(); never trust raw callers.
+  const incoming = validateImportedProfiles(importedProfiles);
+  let local;
+  let session = null;
+  let snapshot;
+  const needsSessionStorage = incoming.some(profile => !profile.remember);
+
+  try {
+    local = globalThis.localStorage;
+  } catch {
+    throw new Error("浏览器存储不可用，无法安全导入配置");
+  }
+  try {
+    const candidate = globalThis.sessionStorage;
+    candidate.getItem(PROFILE_TOKENS_KEY);
+    session = candidate;
+  } catch {
+    // Session storage is optional for persistent-only imports.
+  }
+  if (needsSessionStorage && !session) {
+    throw new Error("浏览器会话存储不可用，无法导入未启用“记住我”的配置");
+  }
+  try {
+    snapshot = snapshotImportKeys(Boolean(session));
+  } catch {
+    throw new Error("浏览器存储不可用，无法安全导入配置");
+  }
+
+  try {
+    const existing = loadProfiles();
+    const merged = existing.slice();
+    let added = 0;
+    let updated = 0;
+
+    for (const profile of incoming) {
+      const index = merged.findIndex(item => item.id === profile.id);
+      if (index >= 0) {
+        merged[index] = profile;
+        updated++;
+      } else {
+        merged.push(profile);
+        added++;
+      }
+    }
+
+    if (merged.length > MAX_IMPORTED_PROFILES) {
+      throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
+    }
+
+    let sessionTokenCleanupSkipped = false;
+    if (!session) {
+      const existingSessionOnlyIds = new Set(
+        existing.filter(profile => !profile.remember).map(profile => profile.id),
+      );
+      sessionTokenCleanupSkipped = incoming.some(
+        profile => profile.remember && existingSessionOnlyIds.has(profile.id),
+      );
+      if (sessionTokenCleanupSkipped) {
+        // Never report a successful import when a stale session credential
+        // for an ID being converted to persistent mode cannot be invalidated.
+        throw new Error("会话存储不可用，无法安全清理旧 Token；请恢复浏览器存储后重试");
+      }
+    }
+
+    const activeEntry = readStorageEntry("local", ACTIVE_PROFILE_KEY);
+    if (!activeEntry.ok) throw new Error("无法读取当前活动配置");
+    const previousActiveId = activeEntry.value;
+    const activeStillExists = merged.some(profile => profile.id === previousActiveId);
+    const activeProfileFallback = previousActiveId !== null && !activeStillExists;
+    if (activeProfileFallback && !allowActiveProfileFallback) {
+      const error = new Error("导入需要切换到第一个可用配置，请明确确认后重试");
+      error.code = "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED";
+      throw error;
+    }
+
+    if (session) {
+      const previousTokens = readProfileTokens();
+      const tokens = Object.assign(Object.create(null), previousTokens);
+      for (const profile of incoming) {
+        if (profile.remember) delete tokens[profile.id];
+        else tokens[profile.id] = profile.apiToken;
+      }
+      // Do not write when no token keys change. If cleanup or persistence is
+      // required but the session store is unwritable, abort and roll back instead
+      // of silently leaving a stale credential behind.
+      if (JSON.stringify(tokens) !== JSON.stringify(previousTokens) && !writeProfileTokens(tokens)) {
+        throw new Error("无法更新会话 Token 存储");
+      }
+    }
+    if (!writeProfiles(merged)) {
+      throw new Error("无法保存导入的 Proxy 配置");
+    }
+
+    if (!activeStillExists && merged.length) {
+      // Repair a stale active ID deterministically so the dashboard always has
+      // a valid active profile after importing into a fresh or manually edited store.
+      if (!safeSet("local", ACTIVE_PROFILE_KEY, merged[0].id)) {
+        throw new Error("无法保存活动配置 ID");
+      }
+    }
+
+    return {
+      added,
+      updated,
+      total: merged.length,
+      ...(activeProfileFallback ? { activeProfileFallback: true } : {}),
+      ...(sessionTokenCleanupSkipped ? { sessionTokenCleanupSkipped: true } : {}),
+    };
+  } catch (error) {
+    const restored = snapshot ? restoreImportSnapshot(snapshot) : true;
+    if (!restored) {
+      throw new Error("导入失败，且浏览器存储未能完整恢复原状态。请清理此站点的浏览数据后检查配置");
+    }
+    if (error instanceof ProfileBundleValidationError
+        || error?.code === "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED") throw error;
+    throw new Error("导入失败，现有配置已尽力恢复。请检查浏览器存储空间后重试");
+  }
 }
