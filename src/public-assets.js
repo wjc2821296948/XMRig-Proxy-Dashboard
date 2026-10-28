@@ -12,6 +12,8 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "manifest.webmanifest",
   "sw.js",
   "app-icon.svg",
+  "app-icon-192.png",
+  "app-icon-512.png",
   "src/api.js",
   "src/manual-refresh.js",
   "src/visibility-refresh.js",
