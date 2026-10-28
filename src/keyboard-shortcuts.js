@@ -1,7 +1,7 @@
 /** Keyboard shortcut for the dashboard's existing manual refresh action. */
 const isEditableTarget = target => {
   if (!(target instanceof Element)) return false;
-  return Boolean(target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]'));
+  return Boolean(target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]'));
 };
 
 document.addEventListener("keydown", event => {
