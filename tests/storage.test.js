@@ -12,6 +12,7 @@ import {
   normalizeBackgroundImageUrl,
   loadWriteAccess,
   saveConfig,
+  importProfiles,
   saveTheme,
   saveBackgroundImage,
   saveWriteAccess,
@@ -1076,4 +1077,77 @@ test("uploaded custom background data URLs persist in localStorage", () => {
 
   assert.equal(normalizeBackgroundImageUrl("data:image/svg+xml;base64,PHN2Zz4="), null);
   assert.equal(normalizeBackgroundImageUrl("data:image/webp;base64," + "A".repeat(1_800_000)), null);
+});
+
+
+test("profile import validates the complete file before replacing existing profiles", async () => {
+  const { saveProfile, loadProfiles, loadActiveProfileId, getConfig } = await import("../src/storage.js");
+  assert.ok(saveProfile({
+    id: "existing", name: "Existing", apiUrl: "https://existing.example:8080",
+    apiToken: "keep-me", remember: true, refreshInterval: 10,
+  }));
+  const beforeProfiles = loadProfiles();
+  const beforeActive = loadActiveProfileId();
+  const beforeConfig = getConfig();
+
+  const invalid = importProfiles([
+    { id: "good", name: "Good", apiUrl: "https://good.example:8080", apiToken: "ok", remember: true, refreshInterval: 10 },
+    { id: "bad", name: "Bad", apiUrl: "javascript:alert(1)", apiToken: "", remember: true, refreshInterval: 10 },
+  ]);
+  assert.deepEqual(invalid, { ok: false, error: "invalid-profile" });
+  assert.deepEqual(loadProfiles(), beforeProfiles);
+  assert.equal(loadActiveProfileId(), beforeActive);
+  assert.deepEqual(getConfig(), beforeConfig);
+});
+
+test("profile import replaces profiles atomically and keeps non-remembered tokens in session storage", () => {
+  const result = importProfiles([
+    { id: "import-a", name: "Imported A", apiUrl: "https://a.example:8080", apiToken: "session-secret", remember: false, refreshInterval: 5 },
+    { id: "import-b", name: "Imported B", apiUrl: "http://b.example:8080", apiToken: "persistent-secret", remember: true, refreshInterval: 30 },
+  ]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.profiles.map(p => p.id), ["import-a", "import-b"]);
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles").includes("session-secret"), false);
+  assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens").includes("session-secret"), true);
+  assert.equal(JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_active_profile")), "import-a");
+  assert.equal(loadConfig().apiUrl, "https://a.example:8080");
+});
+
+test("profile import rejects duplicate IDs and invalid refresh intervals", () => {
+  const profile = { id: "dup", name: "Duplicate", apiUrl: "https://dup.example:8080", apiToken: "", remember: true, refreshInterval: 10 };
+  assert.deepEqual(importProfiles([profile, { ...profile, name: "Duplicate 2" }]), { ok: false, error: "invalid-profile" });
+  assert.deepEqual(importProfiles([{ ...profile, refreshInterval: 121 }]), { ok: false, error: "invalid-profile" });
+  assert.deepEqual(importProfiles([]), { ok: false, error: "invalid-count" });
+});
+
+test("profile import rolls back storage when a write fails", () => {
+  const { localStorage: originalLocal, sessionStorage: originalSession } = globalThis;
+  const existing = {
+    id: "existing-import", name: "Existing", apiUrl: "https://existing.example:8080",
+    apiToken: "old-secret", remember: true, refreshInterval: 10,
+  };
+  assert.equal(importProfiles([existing]).ok, true);
+  const local = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => local.getItem(key),
+    removeItem: key => local.removeItem(key),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_profiles") throw new DOMException("quota exceeded", "QuotaExceededError");
+      local.setItem(key, value);
+    },
+    clear: () => local.clear(),
+  };
+  try {
+    const result = importProfiles([{
+      id: "new-import", name: "New", apiUrl: "https://new.example:8080",
+      apiToken: "new-secret", remember: true, refreshInterval: 10,
+    }]);
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "storage-write-failed");
+    assert.equal(JSON.parse(local.getItem("xmrig_proxy_profiles"))[0].id, "existing-import");
+    assert.equal(JSON.parse(local.getItem("xmrig_proxy_config")).apiToken, "old-secret");
+  } finally {
+    globalThis.localStorage = originalLocal;
+    globalThis.sessionStorage = originalSession;
+  }
 });
