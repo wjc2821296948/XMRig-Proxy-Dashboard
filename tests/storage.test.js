@@ -1109,7 +1109,7 @@ test("profile import replaces profiles atomically and keeps non-remembered token
   assert.deepEqual(result.profiles.map(p => p.id), ["import-a", "import-b"]);
   assert.equal(globalThis.localStorage.getItem("xmrig_proxy_profiles").includes("session-secret"), false);
   assert.equal(globalThis.sessionStorage.getItem("xmrig_proxy_session_tokens").includes("session-secret"), true);
-  assert.equal(JSON.parse(globalThis.localStorage.getItem("xmrig_proxy_active_profile")), "import-a");
+  assert.equal(globalThis.localStorage.getItem("xmrig_proxy_active_profile"), "import-a");
   assert.equal(loadConfig().apiUrl, "https://a.example:8080");
 });
 
