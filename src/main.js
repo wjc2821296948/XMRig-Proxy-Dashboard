@@ -1162,8 +1162,8 @@ function openSettingsModal(selectedProfileId = null) {
     const file = importFileInput.files?.[0];
     if (!file) return;
     importFileInput.value = "";
-    if (file.size > 100 * 1024) {
-      showToast("导入文件过大，最多允许 100 KB", "error");
+    if (file.size > 256 * 1024) {
+      showToast("导入文件过大，最多允许 256 KB", "error");
       return;
     }
     let payload;
