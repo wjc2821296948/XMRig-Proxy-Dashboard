@@ -307,12 +307,12 @@ export function importProfiles(importedProfiles) {
     if (!item || typeof item !== "object" || Array.isArray(item)
         || typeof item.id !== "string" || !item.id.trim() || item.id.length > 128
         || typeof item.name !== "string" || !item.name.trim() || item.name.length > MAX_PROFILE_NAME_LENGTH
-        || /[\\u0000-\\u001F\\u007F]/.test(item.id)
-        || /[\\u0000-\\u001F\\u007F]/.test(item.name)
+        || /[\u0000-\u001F\u007F]/.test(item.id)
+        || /[\u0000-\u001F\u007F]/.test(item.name)
         || typeof item.apiUrl !== "string" || item.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(item.apiUrl)
         || (item.apiToken !== undefined
           && (typeof item.apiToken !== "string" || item.apiToken.length > MAX_TOKEN_LENGTH
-            || /[\\u0000-\\u001F\\u007F]/.test(item.apiToken)))
+            || /[\u0000-\u001F\u007F]/.test(item.apiToken)))
         || typeof item.remember !== "boolean"
         || !Number.isInteger(item.refreshInterval) || item.refreshInterval < 1 || item.refreshInterval > 120) {
       return { ok: false, error: "invalid-profile" };
