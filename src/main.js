@@ -15,7 +15,7 @@ import { registerVisibilityRefresh } from "./visibility-refresh.js";
 import { registerVisiblePolling } from "./visible-polling.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
-  loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
+  loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile, importProfiles,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme, loadBackgroundImage, saveBackgroundImage, normalizeBackgroundImageUrl,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
@@ -1001,8 +1001,14 @@ function openSettingsModal(selectedProfileId = null) {
         <div class="modal-body">
           <div class="profile-list-header">
             <span class="input-label">已保存的 Proxy</span>
-            <button class="btn btn-secondary btn-sm" id="newProfile">+ 新建 Proxy</button>
+            <div class="profile-transfer-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="exportProfiles">导出</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="importProfilesButton">导入</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="newProfile">+ 新建</button>
+              <input type="file" id="importProfilesFile" accept="application/json,.json" hidden>
+            </div>
           </div>
+          <p class="input-hint profile-transfer-warning">导出文件包含连接地址和 Access Token，请妥善保管。导入会替换当前保存的全部 Proxy 配置；文件只在本地处理，不会上传。</p>
           <div class="profile-list" id="profileList">
             ${profiles.length ? profiles.map(profile => profileRowHtml(profile, activeId)).join("") : '<p class="profile-empty">暂无保存的 Proxy 配置</p>'}
           </div>
@@ -1110,6 +1116,86 @@ function openSettingsModal(selectedProfileId = null) {
   document.getElementById("newProfile").addEventListener("click", () => {
     closeModal(overlay);
     openSettingsModal("__new__");
+  });
+
+  document.getElementById("exportProfiles").addEventListener("click", () => {
+    const profiles = loadProfiles();
+    if (!profiles.length) {
+      showToast("没有可导出的 Proxy 配置", "warn");
+      return;
+    }
+    if (!confirm("导出文件会包含 Proxy 地址和 Access Token。请确保保存位置安全，是否继续？")) return;
+    try {
+      const payload = {
+        format: "xmrig-proxy-dashboard-profiles",
+        version: 1,
+        profiles: profiles.map(profile => ({
+          id: profile.id,
+          name: profile.name,
+          apiUrl: profile.apiUrl,
+          apiToken: profile.apiToken,
+          remember: profile.remember,
+          refreshInterval: profile.refreshInterval,
+        })),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "xmrig-proxy-profiles.json";
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      showToast("配置已导出到本地文件", "success");
+    } catch {
+      showToast("导出失败，请检查浏览器下载权限", "error");
+    }
+  });
+
+  const importFileInput = document.getElementById("importProfilesFile");
+  document.getElementById("importProfilesButton").addEventListener("click", () => {
+    importFileInput.click();
+  });
+  importFileInput.addEventListener("change", async () => {
+    const file = importFileInput.files?.[0];
+    if (!file) return;
+    importFileInput.value = "";
+    if (file.size > 100 * 1024) {
+      showToast("导入文件过大，最多允许 100 KB", "error");
+      return;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(await file.text());
+    } catch {
+      showToast("无法读取 JSON 文件，请检查文件格式", "error");
+      return;
+    }
+    if (!payload || payload.format !== "xmrig-proxy-dashboard-profiles"
+        || payload.version !== 1 || !Array.isArray(payload.profiles)) {
+      showToast("文件格式或版本不受支持", "error");
+      return;
+    }
+    if (!confirm("导入将替换当前保存的全部 Proxy 配置。请确认你信任该文件来源，是否继续？")) return;
+    const result = importProfiles(payload.profiles);
+    if (!result.ok) {
+      const messages = {
+        "invalid-count": "导入文件必须包含 1–50 个 Proxy 配置",
+        "invalid-json": "导入文件内容无效",
+        "too-large": "导入文件过大",
+        "invalid-profile": "配置字段无效：请检查 ID、名称、HTTP(S) 地址、Token 和 1–120 秒刷新间隔",
+        "storage-unavailable": "浏览器存储不可用，未更改现有配置",
+        "storage-write-failed": "保存导入配置失败，已尝试恢复原配置",
+        "rollback-failed": "导入失败且浏览器无法完整恢复原配置。请清理此站点数据并重新配置",
+      };
+      showToast(messages[result.error] || "导入失败，现有配置未被主动覆盖", "error");
+      return;
+    }
+    closeModal(overlay);
+    showToast("已导入 " + result.profiles.length + " 个 Proxy 配置", "success");
+    await reconnectProfile(result.profiles[0]);
   });
   const backgroundInput = document.getElementById("sBackgroundImage");
   const backgroundFileInput = document.getElementById("sBackgroundFile");
