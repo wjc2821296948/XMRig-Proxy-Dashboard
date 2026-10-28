@@ -48,6 +48,8 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/pwa.js": "export const pwa = true;",
     "manifest.webmanifest": "{}",
     "app-icon.svg": "<svg/>",
+    "app-icon-192.png": "fake-png-192",
+    "app-icon-512.png": "fake-png-512",
     "sw.js": "self.addEventListener('install', () => {});",
     "src/ui.js": "export const ui = true;",
     "package.json": "{ \"private\": true, \"type\": \"module\" }",
