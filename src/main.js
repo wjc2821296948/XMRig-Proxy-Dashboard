@@ -1035,33 +1035,82 @@ function openSettingsModal(selectedProfileId = null) {
   });
 
   document.getElementById("exportProfiles").addEventListener("click", () => {
-    const confirmed = confirm(
-      "导出的 JSON 文件可能包含一个或多个 Proxy 的访问 Token。文件会在本机生成并下载，不会上传；任何拿到文件的人都可能使用其中的 Token。确定导出？",
-    );
-    if (!confirmed) return;
+    const existingChoice = document.getElementById("profileExportModeModal");
+    if (existingChoice) existingChoice.remove();
 
-    try {
-      const bundle = createProfilesExport();
-      const json = JSON.stringify(bundle, null, 2);
-      if (new TextEncoder().encode(json).byteLength > 1024 * 1024) {
-        showToast("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试", "error");
-        return;
+    const choiceHtml = `
+      <div class="modal-overlay" id="profileExportModeModal" role="dialog" aria-modal="true" aria-labelledby="profile-export-mode-title">
+        <div class="modal" style="max-width: 560px">
+          <div class="modal-header">
+            <h2 id="profile-export-mode-title">选择备份内容</h2>
+            <button class="modal-close" type="button" aria-label="关闭">×</button>
+          </div>
+          <div class="modal-body">
+            <p>请选择是否把 Proxy 访问 Token 一并写入备份文件。文件只会在本机生成并下载，不会上传。</p>
+            <div class="form-actions" style="display:grid; gap:10px; margin-top:16px">
+              <button class="btn btn-danger" type="button" data-export-sensitive="yes">
+                完整备份（包含 Token）
+              </button>
+              <button class="btn" type="button" data-export-sensitive="no">
+                脱敏备份（不包含 Token）
+              </button>
+              <button class="btn btn-secondary" type="button" data-export-sensitive="cancel">取消</button>
+            </div>
+            <p class="form-hint" style="margin-top:12px">
+              完整备份可直接迁移连接凭据；脱敏备份会把所有 Token 留空，导入后需要重新填写。
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML("beforeend", choiceHtml);
+    const choiceOverlay = document.getElementById("profileExportModeModal");
+    requestAnimationFrame(() => choiceOverlay.classList.add("open"));
+
+    const closeChoice = () => closeModal(choiceOverlay);
+    choiceOverlay.querySelector(".modal-close").addEventListener("click", closeChoice);
+    choiceOverlay.addEventListener("click", event => {
+      if (event.target === choiceOverlay) closeChoice();
+    });
+
+    const exportBundle = includeSensitiveData => {
+      try {
+        const bundle = createProfilesExport({ includeSensitiveData });
+        const json = JSON.stringify(bundle, null, 2);
+        if (new TextEncoder().encode(json).byteLength > 1024 * 1024) {
+          showToast("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试", "error");
+          return;
+        }
+        const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        link.href = downloadUrl;
+        link.download = "xmrig-proxy-profiles-" + stamp + ".json";
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
+        showToast(
+          includeSensitiveData
+            ? "完整配置已导出。文件包含访问 Token，请妥善保管"
+            : "脱敏配置已导出。所有访问 Token 均已从备份中移除",
+          "success",
+        );
+      } catch (error) {
+        showToast(error?.message || "导出配置失败，请检查浏览器存储", "error");
       }
-      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      link.href = downloadUrl;
-      link.download = "xmrig-proxy-profiles-" + stamp + ".json";
-      link.hidden = true;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
-      showToast("配置已导出。请妥善保管可能包含访问 Token 的文件", "success");
-    } catch (error) {
-      showToast(error?.message || "导出配置失败，请检查浏览器存储", "error");
-    }
+    };
+
+    choiceOverlay.querySelectorAll("[data-export-sensitive]").forEach(button => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.exportSensitive;
+        closeChoice();
+        if (mode === "cancel") return;
+        exportBundle(mode === "yes");
+      });
+    });
   });
 
   const profileImportFile = document.getElementById("profileImportFile");
