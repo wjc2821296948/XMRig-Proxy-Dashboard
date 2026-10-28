@@ -1331,3 +1331,108 @@ header {
     -webkit-backdrop-filter: none;
   }
 }
+
+/* ==========================================================================
+   Header action layout — metadata first, actions grouped consistently
+   ========================================================================== */
+.subtitle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.5rem;
+}
+
+#workerId {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refresh-time {
+  white-space: nowrap;
+  padding-right: 0.35rem;
+}
+
+.subtitle > .btn,
+.subtitle > .edit-url {
+  min-height: 30px;
+  white-space: nowrap;
+  text-decoration: none;
+  border-radius: 999px;
+  padding-inline: 0.8rem;
+}
+
+#exportMetricsSnapshotButton {
+  order: 3;
+}
+
+#refreshDashboardButton {
+  order: 4;
+  border-color: color-mix(in srgb, var(--accent-copper) 45%, var(--border-color));
+}
+
+#editUrl {
+  order: 5;
+}
+
+#workerId {
+  order: 1;
+}
+
+.refresh-time {
+  order: 2;
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  #workerId {
+    grid-column: 1 / 2;
+  }
+
+  .refresh-time {
+    grid-column: 2 / 3;
+    padding-right: 0;
+  }
+
+  .subtitle > .btn,
+  .subtitle > .edit-url {
+    min-width: 0;
+  }
+
+  #exportMetricsSnapshotButton {
+    grid-column: 1 / 2;
+  }
+
+  #refreshDashboardButton {
+    grid-column: 2 / 3;
+  }
+
+  #editUrl {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .subtitle {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #workerId,
+  .refresh-time {
+    grid-column: 1 / -1;
+  }
+}
+
+@supports not (color: color-mix(in srgb, black 50%, white)) {
+  #refreshDashboardButton {
+    border-color: var(--accent-copper);
+  }
+}
+
