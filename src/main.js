@@ -1047,6 +1047,7 @@ function openSettingsModal(selectedProfileId = null) {
               <input type="file" class="input-field" id="sBackgroundFile" accept="image/png,image/jpeg,image/webp">
               <span class="input-hint">支持 PNG、JPG、WebP，原图最大 10 MB；上传后会自动缩放压缩并存储在当前浏览器 localStorage，不会上传到服务器。</span>
               <img id="backgroundPreview" class="background-preview ${backgroundImage ? "" : "hidden"}" src="${escapeHtml(backgroundImage)}" alt="背景图片预览">
+              <span id="backgroundImageStatus" class="input-hint">${backgroundImage.startsWith("data:image/") ? "当前使用已保存的本地图片。" : backgroundImage ? "当前使用已保存的图片链接。" : "未使用自定义背景。"}</span>
               <div class="background-url-row">
                 <button type="button" class="btn btn-secondary btn-sm" id="clearBackgroundImage">恢复默认背景</button>
               </div>
@@ -1112,16 +1113,23 @@ function openSettingsModal(selectedProfileId = null) {
   const backgroundInput = document.getElementById("sBackgroundImage");
   const backgroundFileInput = document.getElementById("sBackgroundFile");
   const backgroundPreview = document.getElementById("backgroundPreview");
-  let uploadedBackgroundImage = null;
+  const backgroundImageStatus = document.getElementById("backgroundImageStatus");
+  // Keep a persisted upload selected when opening settings, even though its
+  // data URL is intentionally not placed in the URL input.
+  let uploadedBackgroundImage = backgroundImage.startsWith("data:image/") ? backgroundImage : null;
 
   const updateBackgroundPreview = value => {
     const previewUrl = normalizeBackgroundImageUrl(value);
     if (previewUrl) {
       backgroundPreview.src = previewUrl;
       backgroundPreview.classList.remove("hidden");
+      backgroundImageStatus.textContent = previewUrl.startsWith("data:image/")
+        ? "已选择本地图片；保存后会保留在此浏览器。"
+        : "已填写图片链接；保存后应用。";
     } else {
       backgroundPreview.removeAttribute("src");
       backgroundPreview.classList.add("hidden");
+      backgroundImageStatus.textContent = "将恢复默认渐变背景；保存后生效。";
     }
   };
 
