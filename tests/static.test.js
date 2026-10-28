@@ -363,3 +363,21 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+test("profile export/import is local-only and exposes explicit credential warnings", () => {
+  const main = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.match(main, /id="exportProfiles"/);
+  assert.match(main, /id="importProfilesButton"/);
+  assert.match(main, /accept="application\/json,\.json"/);
+  assert.match(main, /导出文件会包含 Proxy 地址和 Access Token/);
+  assert.match(main, /导入将替换当前保存的全部 Proxy 配置/);
+  assert.match(main, /await file\.text\(\)/);
+  assert.match(main, /URL\.createObjectURL\(blob\)/);
+  assert.match(main, /URL\.revokeObjectURL\(url\)/);
+  assert.doesNotMatch(main, /fetch\([^\n]*(?:importProfiles|exportProfiles)/);
+  assert.match(storage, /export function importProfiles\(importedProfiles\)/);
+  assert.match(storage, /const previous = captureStorageEntries\(entries\)/);
+  assert.match(storage, /const restored = rollback\(\)/);
+});
