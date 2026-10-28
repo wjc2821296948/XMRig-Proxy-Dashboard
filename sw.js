@@ -4,6 +4,21 @@ const APP_SHELL = [
   "./index.html",
   "./styles.css",
   "./manifest.webmanifest",
+  "./app-icon.svg",
+  "./src/main.js",
+  "./src/api.js",
+  "./src/manual-refresh.js",
+  "./src/visibility-refresh.js",
+  "./src/visible-polling.js",
+  "./src/storage.js",
+  "./src/ui.js",
+  "./src/status.js",
+  "./src/escape-html.js",
+  "./src/load-average.js",
+  "./src/background-upload-guard.js",
+  "./src/snapshot-export.js",
+  "./src/theme-color.js",
+  "./src/pwa.js",
 ];
 
 self.addEventListener("install", event => {
@@ -44,11 +59,11 @@ self.addEventListener("fetch", event => {
         .then(response => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
+            caches.open(CACHE_NAME).then(cache => cache.put(new URL("./index.html", self.registration.scope).href, copy));
           }
           return response;
         })
-        .catch(async () => (await caches.match(request)) || (await caches.match("./index.html")))
+        .catch(async () => (await caches.match(request)) || (await caches.match(new URL("./index.html", self.registration.scope).href)))
     );
     return;
   }
