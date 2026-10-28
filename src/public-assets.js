@@ -9,11 +9,15 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "index.html",
   "styles.css",
   "panel.png",
+  "manifest.webmanifest",
+  "sw.js",
+  "app-icon.svg",
   "src/api.js",
   "src/main.js",
   "src/status.js",
   "src/storage.js",
   "src/theme-color.js",
+  "src/pwa.js",
   "src/ui.js",
 ]);
 
