@@ -1264,7 +1264,7 @@ async function init() {
   cleanupManualRefresh?.();
   cleanupManualRefresh = registerManualRefresh({
     documentRef: document,
-    container: document.querySelector(".subtitle"),
+    container: document.querySelector(".header-actions"),
     hasConfig: () => Boolean(getConfig()),
     shouldRefresh: () => activeDashboardMode === "readonly",
     refresh: fetchAndRender,
@@ -1342,7 +1342,7 @@ async function init() {
 document.addEventListener("DOMContentLoaded", () => {
   registerSnapshotExport({
     documentRef: document,
-    container: document.querySelector(".subtitle"),
+    container: document.querySelector(".header-actions"),
     getData: () => latestSummaryData,
     notify: showToast,
   });

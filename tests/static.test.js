@@ -313,13 +313,13 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
   assert.match(source, /const maxHr = Math\.max\(\.\.\.hashrates, 1\)/);
 });
 
-test("snapshot export is registered after DOMContentLoaded against the static subtitle container", () => {
+test("snapshot export is registered after DOMContentLoaded against the static header actions container", () => {
   const html = read("index.html");
   const main = read("src/main.js");
-  assert.match(html, /<div class="subtitle">/);
+  assert.match(html, /<div class="header-actions" aria-label="仪表盘操作">/);
   assert.match(
     main,
-    /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("\.subtitle"\)/,
+    /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("\.header-actions"\)/,
   );
 });
 

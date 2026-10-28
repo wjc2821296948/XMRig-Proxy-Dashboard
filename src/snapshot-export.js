@@ -101,7 +101,14 @@ export function registerSnapshotExport({
   button.textContent = "导出快照";
   button.setAttribute("aria-label", "导出当前监控指标为 JSON 文件");
   button.title = "下载当前指标快照；不包含 Proxy URL 或 Token";
-  container.appendChild(button);
+  const refreshButton = container.querySelector?.("#refreshDashboardButton");
+  const settingsButton = container.querySelector?.("#editUrl");
+  const anchor = refreshButton || settingsButton;
+  if (anchor && typeof container.insertBefore === "function") {
+    container.insertBefore(button, anchor);
+  } else {
+    container.appendChild(button);
+  }
 
   const onClick = () => {
     const data = getData();
