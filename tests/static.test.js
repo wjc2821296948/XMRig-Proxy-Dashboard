@@ -349,6 +349,10 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(html, /img-src 'self' data: https:/);
   assert.match(main, /id="sBackgroundImage"/);
   assert.match(main, /id="sBackgroundFile"/);
+  assert.match(main, /createBackgroundUploadGuard/);
+  assert.match(main, /const requestId = backgroundUploadGuard\.begin\(\)/);
+  assert.match(main, /if \(!backgroundUploadGuard\.isCurrent\(requestId\)\) return;/);
+  assert.match(main, /backgroundUploadGuard\.invalidate\(\)/);
   assert.match(main, /id="backgroundImageStatus"/);
   assert.match(main, /let uploadedBackgroundImage = backgroundImage\.startsWith\("data:image\/"\) \? backgroundImage : null;/);
   assert.match(main, /accept="image\/png,image\/jpeg,image\/webp"/);

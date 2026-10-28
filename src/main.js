@@ -35,6 +35,7 @@ import {
 } from "./status.js";
 import { escapeHtml } from "./escape-html.js";
 import { formatLoadAverage } from "./load-average.js";
+import { createBackgroundUploadGuard } from "./background-upload-guard.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
@@ -1114,6 +1115,7 @@ function openSettingsModal(selectedProfileId = null) {
   const backgroundFileInput = document.getElementById("sBackgroundFile");
   const backgroundPreview = document.getElementById("backgroundPreview");
   const backgroundImageStatus = document.getElementById("backgroundImageStatus");
+  const backgroundUploadGuard = createBackgroundUploadGuard();
   // Keep a persisted upload selected when opening settings, even though its
   // data URL is intentionally not placed in the URL input.
   let uploadedBackgroundImage = backgroundImage.startsWith("data:image/") ? backgroundImage : null;
@@ -1134,6 +1136,9 @@ function openSettingsModal(selectedProfileId = null) {
   };
 
   backgroundInput.addEventListener("input", () => {
+    // A user-edited link takes precedence over any unfinished local upload.
+    backgroundUploadGuard.invalidate();
+    backgroundFileInput.disabled = false;
     uploadedBackgroundImage = null;
     backgroundFileInput.value = "";
     updateBackgroundPreview(backgroundInput.value);
@@ -1143,22 +1148,34 @@ function openSettingsModal(selectedProfileId = null) {
     const file = backgroundFileInput.files?.[0];
     if (!file) return;
 
+    const requestId = backgroundUploadGuard.begin();
     backgroundFileInput.disabled = true;
     try {
-      uploadedBackgroundImage = await encodeBackgroundImageFile(file);
+      const encodedImage = await encodeBackgroundImageFile(file);
+      // Ignore stale work if the user cleared the image or chose a link while
+      // this async compression was still running.
+      if (!backgroundUploadGuard.isCurrent(requestId)) return;
+      uploadedBackgroundImage = encodedImage;
       backgroundInput.value = "";
       updateBackgroundPreview(uploadedBackgroundImage);
       showToast("图片已处理；点击“保存并切换”后应用", "success");
     } catch (err) {
+      if (!backgroundUploadGuard.isCurrent(requestId)) return;
       uploadedBackgroundImage = null;
       backgroundFileInput.value = "";
       showToast(err?.message || "处理图片失败，请重试", "error");
     } finally {
-      backgroundFileInput.disabled = false;
+      if (backgroundUploadGuard.isCurrent(requestId)) {
+        backgroundFileInput.disabled = false;
+      }
     }
   });
 
   document.getElementById("clearBackgroundImage").addEventListener("click", () => {
+    // Invalidate any image compression already in progress so it cannot
+    // re-apply the cleared image when its promise resolves.
+    backgroundUploadGuard.invalidate();
+    backgroundFileInput.disabled = false;
     backgroundInput.value = "";
     backgroundFileInput.value = "";
     uploadedBackgroundImage = null;
