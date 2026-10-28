@@ -962,6 +962,18 @@ a:focus-visible,
   margin-bottom: 0.5rem;
 }
 
+.profile-transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.profile-transfer-warning {
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
 .profile-list {
   display: flex;
   flex-direction: column;
@@ -1095,6 +1107,11 @@ a:focus-visible,
   }
   .profile-list-header {
     align-items: flex-start;
+    flex-direction: column;
+  }
+  .profile-transfer-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
   .profile-url {
     max-width: 48vw;
