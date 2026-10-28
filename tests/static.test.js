@@ -316,10 +316,11 @@ test("hashrate chart normalizes malformed samples and uses a nonzero scale floor
 test("snapshot export uses a dedicated static action slot", () => {
   const html = read("index.html");
   const main = read("src/main.js");
-  assert.match(html, /<span class="header-action-slot" id="snapshotExportSlot"><\/span>/);\n  assert.match(html, /<span class="header-action-slot" id="manualRefreshSlot"><\/span>/);
+  assert.match(html, /<span class="header-action-slot" id="snapshotExportSlot"><\/span>/);
+  assert.match(html, /<span class="header-action-slot" id="manualRefreshSlot"><\/span>/);
   assert.match(
     main,
-    /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("\.header-actions"\)/,
+    /document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?registerSnapshotExport\([\s\S]*?container: document\.querySelector\("#snapshotExportSlot"\)/,
   );
 });
 
