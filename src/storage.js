@@ -20,6 +20,7 @@
 
 const CONFIG_KEY    = "xmrig_proxy_config";
 const THEME_KEY     = "dashboard_theme";
+const BACKGROUND_IMAGE_KEY = "dashboard_background_image";
 const WRITE_KEY     = "dashboard_write_access";
 const PROFILES_KEY  = "xmrig_proxy_profiles";
 const ACTIVE_PROFILE_KEY = "xmrig_proxy_active_profile";
@@ -46,6 +47,7 @@ const MAX_CONFIG_SIZE = 100 * 1024;
 const MAX_TOKEN_LENGTH = 4096;
 const MAX_URL_LENGTH = 2048;
 const MAX_PROFILE_NAME_LENGTH = 128;
+const MAX_BACKGROUND_IMAGE_URL_LENGTH = 2048;
 
 /** Storage access can throw in privacy-restricted contexts or at quota. */
 function storageFor(kind) {
@@ -624,6 +626,43 @@ export function loadTheme() {
 export function clearTheme() {
   safeRemove("local", THEME_KEY);
 }
+
+/**
+ * Normalize a custom background image URL. HTTPS is required because the
+ * dashboard itself is deployed over HTTPS; embedded credentials and oversized
+ * values are rejected before the URL reaches CSS or localStorage.
+ *
+ * @param {unknown} value
+ * @returns {string|null} Empty string means the default background.
+ */
+export function normalizeBackgroundImageUrl(value) {
+  if (typeof value !== "string") return null;
+  const input = value.trim();
+  if (!input) return "";
+  if (input.length > MAX_BACKGROUND_IMAGE_URL_LENGTH) return null;
+
+  try {
+    const parsed = new URL(input);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+    return parsed.href.length <= MAX_BACKGROUND_IMAGE_URL_LENGTH ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a custom background URL independently of connection credentials. */
+export function saveBackgroundImage(value) {
+  const normalized = normalizeBackgroundImageUrl(value);
+  if (normalized === null) return false;
+  return safeSet("local", BACKGROUND_IMAGE_KEY, normalized);
+}
+
+/** @returns {string} A validated HTTPS URL, or an empty string for the default. */
+export function loadBackgroundImage() {
+  const raw = safeGet("local", BACKGROUND_IMAGE_KEY);
+  return normalizeBackgroundImageUrl(raw ?? "") ?? "";
+}
+
 
 /* --------------------------------------------------------------------------
    Write-access flag

@@ -17,7 +17,7 @@ import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
   loadActiveProfileId, getActiveProfile,
-  loadTheme, saveTheme,
+  loadTheme, saveTheme, loadBackgroundImage, saveBackgroundImage, normalizeBackgroundImageUrl,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
 } from "./storage.js";
 import {
@@ -143,8 +143,24 @@ function applyThemePreference(preference, { persist = false } = {}) {
   return themePreference;
 }
 
+function applyBackgroundImage(value) {
+  const backgroundImage = normalizeBackgroundImageUrl(value);
+  if (backgroundImage === null || !document.body) return false;
+
+  if (!backgroundImage) {
+    document.body.classList.remove("has-custom-background");
+    document.body.style.removeProperty("--custom-background-image");
+    return true;
+  }
+
+  document.body.style.setProperty("--custom-background-image", `url("${backgroundImage}")`);
+  document.body.classList.add("has-custom-background");
+  return true;
+}
+
 function initTheme() {
   applyThemePreference(loadTheme());
+  applyBackgroundImage(loadBackgroundImage());
 }
 
 function toggleTheme() {
@@ -916,6 +932,7 @@ function openSettingsModal(selectedProfileId = null) {
     refreshInterval: 10,
   };
   const themePreference = loadTheme();
+  const backgroundImage = loadBackgroundImage();
 
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -966,6 +983,14 @@ function openSettingsModal(selectedProfileId = null) {
                 <option value="light" ${themePreference === "light" ? "selected" : ""}>浅色模式</option>
               </select>
               <span class="input-hint">选择“跟随系统”后，面板会随设备的明暗外观自动切换。</span>
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="sBackgroundImage">自定义背景图片 URL</label>
+              <div class="background-url-row">
+                <input type="url" class="input-field" id="sBackgroundImage" value="${escapeHtml(backgroundImage)}" maxlength="2048" placeholder="https://example.com/background.jpg">
+                <button type="button" class="btn btn-secondary btn-sm" id="clearBackgroundImage">恢复默认</button>
+              </div>
+              <span class="input-hint">仅支持 HTTPS 图片链接。留空会恢复默认渐变背景；此设置保存在当前浏览器 localStorage，不会上传到服务器。</span>
             </div>
             <div class="config-actions">
               <button class="btn btn-secondary" id="cancelSettings">取消</button>
@@ -1024,6 +1049,11 @@ function openSettingsModal(selectedProfileId = null) {
   document.getElementById("newProfile").addEventListener("click", () => {
     closeModal(overlay);
     openSettingsModal("__new__");
+  });
+  document.getElementById("clearBackgroundImage").addEventListener("click", () => {
+    const input = document.getElementById("sBackgroundImage");
+    input.value = "";
+    input.focus();
   });
 
   overlay.querySelectorAll('[data-action="select-profile"]').forEach(button => {
@@ -1109,9 +1139,16 @@ function openSettingsModal(selectedProfileId = null) {
     const token = document.getElementById("sApiToken").value.trim();
     const remember = document.getElementById("sRemember").checked;
     const themePreference = document.getElementById("sTheme").value;
+    const backgroundInput = document.getElementById("sBackgroundImage");
+    const backgroundImage = normalizeBackgroundImageUrl(backgroundInput.value);
     const refreshInput = document.getElementById("sRefreshInterval");
     const refreshInterval = Number.isFinite(parseInt(refreshInput?.value, 10)) ? parseInt(refreshInput.value, 10) : 10;
 
+    if (backgroundImage === null) {
+      showToast("背景图片必须是有效的 HTTPS 图片链接，且不能包含用户名或密码", "error");
+      backgroundInput.focus();
+      return;
+    }
     if (!name) { showToast("请输入配置名称", "error"); return; }
     if (!url) { showToast("请输入 API URL", "error"); return; }
     const urlError = getApiUrlValidationError(url);
@@ -1146,6 +1183,12 @@ function openSettingsModal(selectedProfileId = null) {
     }
 
     try {
+      const backgroundSaved = saveBackgroundImage(backgroundImage);
+      if (backgroundSaved) {
+        applyBackgroundImage(backgroundImage);
+      } else {
+        showToast("Proxy 配置已保存，但背景设置保存失败；请检查浏览器 localStorage 空间或权限", "warning");
+      }
       applyThemePreference(themePreference, { persist: true });
       await reconnectProfile(profile);
     } catch (err) {

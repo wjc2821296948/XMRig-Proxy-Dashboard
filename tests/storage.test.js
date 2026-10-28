@@ -8,9 +8,12 @@ import {
   clearWriteAccess,
   loadConfig,
   loadTheme,
+  loadBackgroundImage,
+  normalizeBackgroundImageUrl,
   loadWriteAccess,
   saveConfig,
   saveTheme,
+  saveBackgroundImage,
   saveWriteAccess,
 } from "../src/storage.js";
 
@@ -1033,4 +1036,33 @@ test("profile lookup distinguishes a missing profile from unavailable storage", 
     clear: () => backing.clear(),
   };
   assert.equal(getProfileById("known-profile").status, "storage-unavailable");
+});
+
+test("custom background is stored in localStorage independently of connection settings", () => {
+  const url = "https://images.example/background.jpg";
+  assert.equal(saveBackgroundImage(url), true);
+  assert.equal(loadBackgroundImage(), url);
+  assert.equal(globalThis.localStorage.getItem("dashboard_background_image"), url);
+  assert.equal(globalThis.sessionStorage.getItem("dashboard_background_image"), null);
+
+  clearConfig();
+  assert.equal(loadBackgroundImage(), url, "logout must not remove the background preference");
+
+  assert.equal(saveBackgroundImage(""), true);
+  assert.equal(loadBackgroundImage(), "");
+});
+
+test("custom background accepts only bounded HTTPS URLs without embedded credentials", () => {
+  assert.equal(normalizeBackgroundImageUrl("  https://images.example/bg.jpg  "), "https://images.example/bg.jpg");
+  for (const invalid of [
+    "http://images.example/bg.jpg",
+    "javascript:alert(1)",
+    "data:image/png;base64,AA==",
+    "https://user:password@images.example/bg.jpg",
+    "https://images.example/" + "x".repeat(2048),
+    null,
+  ]) {
+    assert.equal(normalizeBackgroundImageUrl(invalid), null);
+    assert.equal(saveBackgroundImage(invalid), false);
+  }
 });
