@@ -184,9 +184,12 @@ export function saveConfig(cfg) {
 function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
   if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
-  if (typeof profile.apiToken === "string" && profile.apiToken.length > MAX_TOKEN_LENGTH) return null;
-  if (typeof profile.name === "string" && profile.name.length > MAX_PROFILE_NAME_LENGTH) return null;
-  const id = typeof profile.id === "string" && profile.id.trim() ? profile.id.trim() : null;
+  if (typeof profile.apiToken === "string"
+      && (profile.apiToken.length > MAX_TOKEN_LENGTH || /[\\u0000-\\u001F\\u007F]/.test(profile.apiToken))) return null;
+  if (typeof profile.name === "string"
+      && (profile.name.length > MAX_PROFILE_NAME_LENGTH || /[\\u0000-\\u001F\\u007F]/.test(profile.name))) return null;
+  const id = typeof profile.id === "string" && profile.id.trim()
+      && !/[\\u0000-\\u001F\\u007F]/.test(profile.id) ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
   const refreshInterval = Math.min(120, Math.max(1, Math.trunc(Number(profile.refreshInterval) || 10)));
@@ -1029,9 +1032,11 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       sessionTokenCleanupSkipped = incoming.some(
         profile => profile.remember && existingSessionOnlyIds.has(profile.id),
       );
-      // The persistent profile record contains its own credential and takes
-      // precedence over session tokens. Continue the import, but report that
-      // an inaccessible stale session token could not be removed.
+      if (sessionTokenCleanupSkipped) {
+        // Never report a successful import when a stale session credential
+        // for an ID being converted to persistent mode cannot be invalidated.
+        throw new Error("会话存储不可用，无法安全清理旧 Token；请恢复浏览器存储后重试");
+      }
     }
 
     const activeEntry = readStorageEntry("local", ACTIVE_PROFILE_KEY);
