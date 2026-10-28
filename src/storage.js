@@ -185,11 +185,11 @@ function normalizeProfile(profile) {
   if (!profile || typeof profile !== "object") return null;
   if (typeof profile.apiUrl !== "string" || profile.apiUrl.length > MAX_URL_LENGTH || !isValidApiUrl(profile.apiUrl)) return null;
   if (typeof profile.apiToken === "string"
-      && (profile.apiToken.length > MAX_TOKEN_LENGTH || /[\\u0000-\\u001F\\u007F]/.test(profile.apiToken))) return null;
+      && (profile.apiToken.length > MAX_TOKEN_LENGTH || /[\u0000-\u001F\u007F]/.test(profile.apiToken))) return null;
   if (typeof profile.name === "string"
-      && (profile.name.length > MAX_PROFILE_NAME_LENGTH || /[\\u0000-\\u001F\\u007F]/.test(profile.name))) return null;
+      && (profile.name.length > MAX_PROFILE_NAME_LENGTH || /[\u0000-\u001F\u007F]/.test(profile.name))) return null;
   const id = typeof profile.id === "string" && profile.id.trim()
-      && !/[\\u0000-\\u001F\\u007F]/.test(profile.id) ? profile.id.trim() : null;
+      && !/[\u0000-\u001F\u007F]/.test(profile.id) ? profile.id.trim() : null;
   if (!id) return null;
   const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Proxy";
   const refreshInterval = Math.min(120, Math.max(1, Math.trunc(Number(profile.refreshInterval) || 10)));
