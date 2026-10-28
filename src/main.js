@@ -16,6 +16,7 @@ import { registerVisiblePolling } from "./visible-polling.js";
 import {
   loadConfig, clearConfig, getConfig, consumeConfigCleanupWarning, consumeStorageRecoveryWarning,
   loadProfiles, getProfileById, saveProfile, deleteProfile, setActiveProfile,
+  createProfilesExport, parseProfilesImportJson, importProfiles,
   loadActiveProfileId, getActiveProfile,
   loadTheme, saveTheme, loadBackgroundImage, saveBackgroundImage, normalizeBackgroundImageUrl,
   saveWriteAccess, loadWriteAccess, clearWriteAccess,
@@ -624,6 +625,10 @@ async function handleConnect() {
   const token = document.getElementById("apiTokenInput").value.trim();
   const remember = document.getElementById("rememberMe").checked;
 
+  if (/[\u0000-\u001F\u007F]/.test(token)) {
+    showToast("Token 不能包含控制字符", "error");
+    return;
+  }
   if (!url) {
     showToast("请输入 API URL", "error");
     return;
@@ -1003,6 +1008,12 @@ function openSettingsModal(selectedProfileId = null) {
             <span class="input-label">已保存的 Proxy</span>
             <button class="btn btn-secondary btn-sm" id="newProfile">+ 新建 Proxy</button>
           </div>
+          <div class="profile-transfer-actions">
+            <button class="btn btn-secondary btn-sm" id="exportProfiles" type="button">导出配置</button>
+            <button class="btn btn-secondary btn-sm" id="importProfiles" type="button">导入配置</button>
+            <input id="profileImportFile" type="file" accept=".json,application/json" aria-label="选择要导入的 Proxy 配置 JSON 文件" hidden>
+          </div>
+          <p class="input-hint profile-transfer-warning">导出文件可能包含访问 Token；请妥善保管。导入会合并配置，同 ID 项目将被覆盖。文件只在本机处理，不会上传。</p>
           <div class="profile-list" id="profileList">
             ${profiles.length ? profiles.map(profile => profileRowHtml(profile, activeId)).join("") : '<p class="profile-empty">暂无保存的 Proxy 配置</p>'}
           </div>
@@ -1111,6 +1122,132 @@ function openSettingsModal(selectedProfileId = null) {
     closeModal(overlay);
     openSettingsModal("__new__");
   });
+  document.getElementById("exportProfiles").addEventListener("click", () => {
+    const existingChoice = document.getElementById("profileExportModeModal");
+    if (existingChoice) existingChoice.remove();
+
+    const choiceHtml = `
+      <div class="modal-overlay" id="profileExportModeModal" role="dialog" aria-modal="true" aria-labelledby="profile-export-mode-title">
+        <div class="modal" style="max-width: 560px">
+          <div class="modal-header">
+            <h2 id="profile-export-mode-title">选择备份内容</h2>
+            <button class="modal-close" type="button" aria-label="关闭">×</button>
+          </div>
+          <div class="modal-body">
+            <p>请选择是否把 Proxy 访问 Token 一并写入备份文件。文件只会在本机生成并下载，不会上传。</p>
+            <div class="form-actions" style="display:grid; gap:10px; margin-top:16px">
+              <button class="btn btn-danger" type="button" data-export-sensitive="yes">
+                完整备份（包含 Token）
+              </button>
+              <button class="btn" type="button" data-export-sensitive="no">
+                脱敏备份（不包含 Token）
+              </button>
+              <button class="btn btn-secondary" type="button" data-export-sensitive="cancel">取消</button>
+            </div>
+            <p class="form-hint" style="margin-top:12px">
+              完整备份可直接迁移连接凭据；脱敏备份会把所有 Token 留空，导入后需要重新填写。
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML("beforeend", choiceHtml);
+    const choiceOverlay = document.getElementById("profileExportModeModal");
+    requestAnimationFrame(() => choiceOverlay.classList.add("open"));
+
+    const closeChoice = () => closeModal(choiceOverlay);
+    choiceOverlay.querySelector(".modal-close").addEventListener("click", closeChoice);
+    choiceOverlay.addEventListener("click", event => {
+      if (event.target === choiceOverlay) closeChoice();
+    });
+
+    const exportBundle = includeSensitiveData => {
+      try {
+        const bundle = createProfilesExport({ includeSensitiveData });
+        const json = JSON.stringify(bundle, null, 2);
+        if (new TextEncoder().encode(json).byteLength > 1024 * 1024) {
+          showToast("导出文件超过 1 MB 限制，请减少配置数量或 Token 长度后重试", "error");
+          return;
+        }
+        const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        link.href = downloadUrl;
+        link.download = "xmrig-proxy-profiles-" + stamp + ".json";
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
+        showToast(
+          includeSensitiveData
+            ? "完整配置已导出。文件包含访问 Token，请妥善保管"
+            : "脱敏配置已导出。所有访问 Token 均已从备份中移除",
+          "success",
+        );
+      } catch (error) {
+        showToast(error?.message || "导出配置失败，请检查浏览器存储", "error");
+      }
+    };
+
+    choiceOverlay.querySelectorAll("[data-export-sensitive]").forEach(button => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.exportSensitive;
+        closeChoice();
+        if (mode === "cancel") return;
+        exportBundle(mode === "yes");
+      });
+    });
+  });
+
+  const profileImportFile = document.getElementById("profileImportFile");
+  document.getElementById("importProfiles").addEventListener("click", () => {
+    profileImportFile.click();
+  });
+  profileImportFile.addEventListener("change", async () => {
+    const file = profileImportFile.files?.[0];
+    if (!file) return;
+
+    try {
+      if (file.size > 1024 * 1024) {
+        throw new Error("导入文件超过 1 MB 限制");
+      }
+      const bundle = parseProfilesImportJson(await file.text());
+      const accepted = confirm(
+        "已验证 " + bundle.profiles.length + " 个配置。导入将按配置 ID 合并；相同 ID 的现有配置会被覆盖，其他配置保留。文件可能包含访问 Token，仅会写入本地浏览器存储。继续导入？",
+      );
+      if (!accepted) return;
+
+      let result;
+      try {
+        result = importProfiles(bundle.profiles);
+      } catch (error) {
+        if (error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED") throw error;
+        const allowFallback = confirm(
+          "检测到当前活动配置已失效。继续导入将自动选择第一个可用配置作为当前配置。是否继续？",
+        );
+        if (!allowFallback) return;
+        result = importProfiles(bundle.profiles, { allowActiveProfileFallback: true });
+      }
+      const fallbackNotice = result.activeProfileFallback
+        ? " 原活动配置已失效，已按你的确认自动选择第一个可用配置。"
+        : "";
+      const tokenCleanupNotice = result.sessionTokenCleanupSkipped
+        ? " 警告：会话存储不可用，旧会话 Token 暂时无法清理；当前配置仍使用导入文件中的持久化 Token。"
+        : "";
+      showToast(
+        "导入完成：新增 " + result.added + " 个，更新 " + result.updated + " 个。" + fallbackNotice + tokenCleanupNotice + " 请检查配置列表",
+        result.sessionTokenCleanupSkipped ? "warn" : "success",
+      );
+      replaceSettingsModal(overlay);
+    } catch (error) {
+      showToast(error?.message || "导入失败：文件无效或浏览器存储不可用", "error");
+    } finally {
+      profileImportFile.value = "";
+    }
+  });
+
   const backgroundInput = document.getElementById("sBackgroundImage");
   const backgroundFileInput = document.getElementById("sBackgroundFile");
   const backgroundPreview = document.getElementById("backgroundPreview");
@@ -1236,8 +1373,7 @@ function openSettingsModal(selectedProfileId = null) {
           return;
         }
       }
-      closeModal(overlay);
-      openSettingsModal();
+      replaceSettingsModal(overlay);
       showToast("已删除 " + profile.name, "info");
     });
   });
@@ -1292,6 +1428,10 @@ function openSettingsModal(selectedProfileId = null) {
       showToast("刷新间隔必须在 1-120 秒之间", "error");
       return;
     }
+    if (/[\u0000-\u001F\u007F]/.test(name) || /[\u0000-\u001F\u007F]/.test(token)) {
+      showToast("配置名称和 Token 不能包含控制字符", "error");
+      return;
+    }
 
     saveSettingsButton.disabled = true;
     saveSettingsButton.textContent = "保存中...";
@@ -1336,6 +1476,19 @@ function openSettingsModal(selectedProfileId = null) {
   document.addEventListener("keydown", escHandler);
   overlay._escHandler = escHandler;
 }
+
+function replaceSettingsModal(overlay, selectedProfileId = null) {
+  // This is a content replacement, not a user-requested animated close.
+  // Remove the old node synchronously to avoid duplicate modal IDs while
+  // the refreshed profile list is rendered.
+  if (overlay._escHandler) {
+    document.removeEventListener("keydown", overlay._escHandler);
+    overlay._escHandler = null;
+  }
+  if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  openSettingsModal(selectedProfileId);
+}
+
 
 function closeModal(overlay) {
   if (!overlay.parentNode) {
