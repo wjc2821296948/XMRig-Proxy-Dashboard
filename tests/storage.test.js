@@ -1381,15 +1381,15 @@ test("remembered connection config can be saved when sessionStorage is inaccessi
 test("saved profiles reject control characters so every saved profile remains exportable", async () => {
   const { saveProfile } = await import("../src/storage.js");
   assert.equal(saveProfile({
-    id: "invalid\\nid", name: "Valid", apiUrl: "https://safe.example",
+    id: "invalid\nid", name: "Valid", apiUrl: "https://safe.example",
     apiToken: "token", remember: true, refreshInterval: 10,
   }), null);
   assert.equal(saveProfile({
-    id: "valid-id", name: "invalid\\u0000name", apiUrl: "https://safe.example",
+    id: "valid-id", name: "invalid\u0000name", apiUrl: "https://safe.example",
     apiToken: "token", remember: true, refreshInterval: 10,
   }), null);
   assert.equal(saveProfile({
     id: "valid-id", name: "Valid", apiUrl: "https://safe.example",
-    apiToken: "invalid\\rtoken", remember: true, refreshInterval: 10,
+    apiToken: "invalid\rtoken", remember: true, refreshInterval: 10,
   }), null);
 });
