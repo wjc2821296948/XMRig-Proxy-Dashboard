@@ -14,3 +14,31 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
       });
   }, { once: true });
 }
+
+
+// Notify an already-open dashboard when a newly activated worker takes control.
+// The first installation is intentionally silent; only updates to an existing
+// controlled page need a reload prompt.
+if ("serviceWorker" in navigator) {
+  let hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) {
+      hadController = true;
+      return;
+    }
+
+    const notice = document.createElement("div");
+    notice.className = "pwa-update-notice";
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    const message = document.createElement("span");
+    message.textContent = "A dashboard update is ready.";
+    const reload = document.createElement("button");
+    reload.type = "button";
+    reload.className = "btn btn-secondary btn-sm";
+    reload.textContent = "Reload now";
+    reload.addEventListener("click", () => window.location.reload(), { once: true });
+    notice.append(message, reload);
+    document.querySelector(".container")?.prepend(notice);
+  });
+}
