@@ -318,8 +318,9 @@ export function importProfiles(importedProfiles) {
       return { ok: false, error: "invalid-profile" };
     }
     const profile = normalizeProfile(item);
-    if (!profile || (typeof item.apiToken === "string" && item.apiToken.length > MAX_TOKEN_LENGTH)
-        || ids.has(profile.id)) {
+    // Token type/length are checked above and normalizeProfile independently
+    // enforces the same bound; do not repeat a pre-normalization check here.
+    if (!profile || ids.has(profile.id)) {
       return { ok: false, error: "invalid-profile" };
     }
     ids.add(profile.id);
