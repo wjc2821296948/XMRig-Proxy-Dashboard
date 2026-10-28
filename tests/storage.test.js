@@ -1113,6 +1113,20 @@ test("profile import replaces profiles atomically and keeps non-remembered token
   assert.equal(loadConfig().apiUrl, "https://a.example:8080");
 });
 
+test("profile import rejects control characters in identifiers, names, and tokens", () => {
+  const profile = {
+    id: "safe-id", name: "Safe profile", apiUrl: "https://proxy.example:8080",
+    apiToken: "safe-token", remember: true, refreshInterval: 10,
+  };
+  for (const invalid of [
+    { ...profile, id: "bad\\nprofile" },
+    { ...profile, name: "bad\\u0000name" },
+    { ...profile, apiToken: "bad\\rtoken" },
+  ]) {
+    assert.deepEqual(importProfiles([invalid]), { ok: false, error: "invalid-profile" });
+  }
+});
+
 test("profile import rejects duplicate IDs and invalid refresh intervals", () => {
   const profile = { id: "dup", name: "Duplicate", apiUrl: "https://dup.example:8080", apiToken: "", remember: true, refreshInterval: 10 };
   assert.deepEqual(importProfiles([profile, { ...profile, name: "Duplicate 2" }]), { ok: false, error: "invalid-profile" });
