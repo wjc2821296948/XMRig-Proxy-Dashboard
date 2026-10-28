@@ -10,7 +10,7 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
     navigator.serviceWorker.register(serviceWorkerUrl, { scope: new URL("../", import.meta.url).pathname })
       .catch(error => {
         // Do not log URLs, credentials, or configuration when registration fails.
-        console.warn("Offline support could not be enabled.", error?.name || "Error");
+        console.warn("Offline support could not be enabled.", error?.name || "Error", error?.message || "");
       });
   }, { once: true });
 }
