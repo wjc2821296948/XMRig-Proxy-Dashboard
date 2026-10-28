@@ -15,6 +15,9 @@
   },
   "files": [
     "index.html",
+    "manifest.webmanifest",
+    "sw.js",
+    "app-icon.svg",
     "_headers",
     "styles.css",
     "panel.png",

@@ -363,3 +363,21 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+test("PWA manifest includes raster icons and the offline shell uses a canonical navigation cache key", () => {
+  const manifest = JSON.parse(read("manifest.webmanifest"));
+  const icons = manifest.icons.filter(icon => icon.type === "image/png");
+  assert.ok(icons.some(icon => icon.sizes === "192x192" && icon.src === "./app-icon-192.png"));
+  assert.ok(icons.some(icon => icon.sizes === "512x512" && icon.src === "./app-icon-512.png" && icon.purpose.includes("maskable")));
+
+  const worker = read("sw.js");
+  const assets = read("src/public-assets.js");
+  assert.match(worker, /caches\.match\(new URL\("\.\/index\.html", self\.registration\.scope\)\.href\)/);
+  assert.match(worker, /\.\/app-icon-192\.png/);
+  assert.match(worker, /\.\/app-icon-512\.png/);
+  assert.match(assets, /"app-icon-192\.png"/);
+  assert.match(assets, /"app-icon-512\.png"/);
+  assert.match(worker, /clients\.claim\(\)/);
+  assert.match(read("src/pwa.js"), /controllerchange/);
+});
