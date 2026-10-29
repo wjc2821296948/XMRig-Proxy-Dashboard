@@ -134,6 +134,10 @@ export async function request(path, options = {}) {
       method: options.method || "GET",
       headers,
       signal: requestSignals.signal,
+      // Do not follow redirects for authenticated API calls. A misconfigured or
+      // compromised endpoint must not be able to bounce a credential-bearing
+      // request to an unexpected destination.
+      redirect: "error",
     });
     if (!response.ok) {
       // 401 / 403 trigger a logout flow upstream.
