@@ -18,6 +18,8 @@
     "manifest.webmanifest",
     "sw.js",
     "app-icon.svg",
+    "app-icon-512.png",
+    "app-icon-192.png",
     "_headers",
     "styles.css",
     "panel.png",
