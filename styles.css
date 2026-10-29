@@ -1483,3 +1483,17 @@ body.has-custom-background {
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
 }
+
+
+/* Respect the operating system's reduced-motion preference. Keep state changes
+   immediate and readable for users who disable non-essential animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
