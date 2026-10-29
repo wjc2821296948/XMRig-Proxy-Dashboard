@@ -1,4 +1,4 @@
-const CACHE_NAME = "xmrig-dashboard-shell-v1";
+const CACHE_NAME = "xmrig-dashboard-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./app-icon.svg",
   "./app-icon-192.png",
   "./app-icon-512.png",
+  "./panel.png",
   "./src/main.js",
   "./src/api.js",
   "./src/manual-refresh.js",
@@ -23,10 +24,14 @@ const APP_SHELL = [
   "./src/pwa.js",
 ];
 
+const scopedUrl = path => new URL(path, self.registration.scope).href;
+const APP_SHELL_URLS = APP_SHELL.map(scopedUrl);
+const INDEX_URL = scopedUrl("./index.html");
+
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
+      .then(cache => cache.addAll(APP_SHELL_URLS))
       .then(() => self.skipWaiting())
   );
 });
@@ -43,7 +48,7 @@ self.addEventListener("activate", event => {
 
 function isCacheableStaticRequest(request, url) {
   if (request.method !== "GET" || url.origin !== self.location.origin) return false;
-  // Never cache Proxy API responses, or requests carrying credentials.
+  // Never cache Proxy API responses or requests carrying credentials.
   if (/^\/(?:\d+\/|api\/)/i.test(url.pathname) || request.headers.has("authorization")) return false;
   return /\.(?:css|js|mjs|png|svg|webp|woff2?|ttf|webmanifest)$/i.test(url.pathname)
     || url.pathname.endsWith("/index.html")
@@ -56,30 +61,41 @@ self.addEventListener("fetch", event => {
   if (!isCacheableStaticRequest(request, url)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(new URL("./index.html", self.registration.scope).href, copy));
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request);
+        if (response.ok) {
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(INDEX_URL, response.clone());
+          } catch {
+            // A cache quota or browser storage failure must not break navigation.
           }
-          return response;
-        })
-        .catch(async () => (await caches.match(new URL("./index.html", self.registration.scope).href)) || Response.error())
-    );
+        }
+        return response;
+      } catch {
+        return (await caches.match(INDEX_URL)) || Response.error();
+      }
+    })());
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) return cached;
-      return fetch(request).then(response => {
-        if (response.ok && response.type === "basic") {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+  event.respondWith((async () => {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    try {
+      const response = await fetch(request);
+      if (response.ok && response.type === "basic") {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(request, response.clone());
+        } catch {
+          // Return the network response even when caching is unavailable.
         }
-        return response;
-      });
-    })
-  );
+      }
+      return response;
+    } catch {
+      return Response.error();
+    }
+  })());
 });
