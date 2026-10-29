@@ -363,3 +363,10 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+test("document CSP blocks object and frame content", async () => {
+  const html = await readFile(join(root, "index.html"), "utf8");
+  assert.match(html, /object-src 'none'/);
+  assert.match(html, /frame-src 'none'/);
+});

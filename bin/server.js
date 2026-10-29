@@ -118,7 +118,7 @@ const server = createServer((req, res) => {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src http: https:; base-uri 'self'; form-action 'self'"
+    "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src http: https:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
   });
   res.end(req.method === "HEAD" ? undefined : asset.data);
 });
