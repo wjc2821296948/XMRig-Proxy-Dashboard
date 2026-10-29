@@ -1497,3 +1497,16 @@ body.has-custom-background {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Non-blocking connectivity notice; hidden when the browser is online. */
+.network-status-banner {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--accent-yellow);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+.network-status-banner[hidden] { display: none; }
