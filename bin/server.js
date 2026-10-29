@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { constants as fsConstants } from "node:fs";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { open, realpath } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -68,6 +69,9 @@ async function loadPublicAssets() {
     }
   }
 
+  for (const asset of assets.values()) {
+    asset.etag = `"${createHash("sha256").update(asset.data).digest("hex")}"`;
+  }
   return assets;
 }
 
@@ -111,7 +115,21 @@ const server = createServer((req, res) => {
     return;
   }
 
+  const ifNoneMatch = req.headers["if-none-match"];
+  if (typeof ifNoneMatch === "string" && ifNoneMatch.split(",").some(tag => tag.trim() === "*" || tag.trim() === asset.etag)) {
+    res.writeHead(304, {
+      "ETag": asset.etag,
+      "Cache-Control": "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+    });
+    res.end();
+    return;
+  }
+
   res.writeHead(200, {
+    "ETag": asset.etag,
     "Content-Type": asset.contentType,
     "Content-Length": String(asset.data.byteLength),
     "Cache-Control": "no-cache",
