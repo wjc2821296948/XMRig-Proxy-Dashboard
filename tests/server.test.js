@@ -123,6 +123,10 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.match(malformedResponse, /^HTTP\/1\.1 400 Bad Request/);
   assert.match(malformedResponse, /content-type: text\/plain; charset=utf-8/i);
 
+  const manifestResponse = await fetch(`${baseUrl}/manifest.webmanifest`);
+  assert.equal(manifestResponse.status, 200);
+  assert.match(manifestResponse.headers.get("content-type"), /application\/manifest\+json/i);
+
   const moduleResponse = await fetch(`${baseUrl}/src/main.js`);
   assert.equal(moduleResponse.status, 200);
   assert.match(moduleResponse.headers.get("content-type"), /javascript/);
