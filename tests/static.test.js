@@ -387,6 +387,8 @@ test("PWA manifest includes raster icons and the offline shell uses a canonical 
   const packageJson = JSON.parse(read("package.json"));
   assert.ok(packageJson.files.includes("app-icon-192.png"));
   assert.ok(packageJson.files.includes("app-icon-512.png"));
-  assert.match(worker, /await cache\.put\(request, response\.clone\(\)\)/);
+  assert.match(worker, /await cache\.put\(cacheKey, response\.clone\(\)\)/);
   assert.match(worker, /\.\/panel\.png/);
+  assert.ok(worker.includes("const cacheKey = cacheKeyFor(request, url);"));
+  assert.ok(worker.includes("avif|gif|ico|bmp|jpe?g"));
 });
