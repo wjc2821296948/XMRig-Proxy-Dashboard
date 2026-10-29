@@ -37,6 +37,7 @@ import { escapeHtml } from "./escape-html.js";
 import { formatLoadAverage } from "./load-average.js";
 import { createBackgroundUploadGuard } from "./background-upload-guard.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
+import { clearMetricHistory, recordMetricSample } from "./metrics-history.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -579,6 +580,7 @@ function renderConfigPlaceholder() {
    ========================================================================== */
 function renderConnectForm(prefill = {}) {
   latestSummaryData = null;
+  clearMetricHistory();
   const { apiUrl = "", apiToken = "", remember = true } = prefill;
   els.dashboard.innerHTML = `
     <div class="config-panel" role="dialog" aria-labelledby="connect-title">
@@ -716,11 +718,69 @@ async function handleConnect() {
   }
 }
 
+/**
+ * Render a small trend chart from the bounded session-local metric samples.
+ * All chart coordinates come from validated numeric samples.
+ */
+function renderSessionHashrateTrend(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return '<p class="history-empty">等待有效的算力采样…</p>';
+  }
+
+  const width = 840;
+  const height = 170;
+  const padding = 34;
+  const maxHashrate = Math.max(...samples.map(sample => sample.hashrate), 1);
+  const points = samples.map((sample, index) => ({
+    ...sample,
+    x: samples.length === 1
+      ? width / 2
+      : padding + (index / (samples.length - 1)) * (width - padding * 2),
+    y: height - padding - (sample.hashrate / maxHashrate) * (height - padding * 2),
+  }));
+  const line = points.map((point, index) =>
+    `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`
+  ).join(" ");
+  const first = points[0];
+  const last = points[points.length - 1];
+  const area = `${line} L ${last.x.toFixed(2)} ${height - padding} L ${first.x.toFixed(2)} ${height - padding} Z`;
+
+  return `
+    <svg class="session-hashrate-trend" viewBox="0 0 ${width} ${height}" role="img"
+         aria-label="最近 ${points.length} 次成功刷新的算力趋势">
+      <title>最近算力趋势（当前配置、本次页面会话）</title>
+      <defs>
+        <linearGradient id="sessionHashrateFill" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="var(--accent-copper)" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="var(--accent-copper)" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <g class="history-chart-grid">
+        <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}"/>
+        <line x1="${padding}" y1="${height / 2}" x2="${width - padding}" y2="${height / 2}"/>
+        <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}"/>
+      </g>
+      <path class="history-chart-area" d="${area}"/>
+      <path class="history-chart-line" d="${line}"/>
+      ${points.map((point, index) => `
+        <circle class="history-chart-point" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}"
+                r="${index === points.length - 1 ? 4.5 : 2.8}">
+          <title>${escapeHtml(formatHashrate(point.hashrate))} · ${escapeHtml(new Date(point.timestamp).toLocaleTimeString())}</title>
+        </circle>
+      `).join("")}
+      <text class="history-axis-label" x="${padding}" y="${height - 5}">较早</text>
+      <text class="history-axis-label" x="${width - padding}" y="${height - 5}" text-anchor="end">最近</text>
+    </svg>
+  `;
+}
+
 /* ==========================================================================
    Dashboard Rendering
    ========================================================================== */
 function renderDashboard(data) {
   latestSummaryData = data;
+  const historySamples = recordMetricSample(data, Date.now(), loadActiveProfileId() || "current");
+  const sessionHashrateTrend = renderSessionHashrateTrend(historySamples);
   // Header info
   const status = getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
@@ -856,6 +916,14 @@ function renderDashboard(data) {
         <div class="card-title">运行时间</div>
         <div class="card-value">${formatUptime(data.uptime || 0)}</div>
         <div class="card-label">自上次重启</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card large-card history-card">
+        <div class="card-title">会话算力趋势</div>
+        <div class="card-label">最近 30 次成功刷新 · 切换配置或重新连接后重置 · 仅保留在当前页面会话</div>
+        <div class="history-chart">${sessionHashrateTrend}</div>
       </div>
     </div>
 
