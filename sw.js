@@ -51,9 +51,17 @@ function isCacheableStaticRequest(request, url) {
   if (request.method !== "GET" || url.origin !== self.location.origin) return false;
   // Never cache Proxy API responses or requests carrying credentials.
   if (/^\/(?:\d+\/|api\/)/i.test(url.pathname) || request.headers.has("authorization")) return false;
-  return /\.(?:css|js|mjs|png|svg|webp|woff2?|ttf|webmanifest)$/i.test(url.pathname)
+  return /\.(?:css|js|mjs|png|svg|webp|avif|gif|ico|bmp|jpe?g|woff2?|ttf|webmanifest)$/i.test(url.pathname)
     || url.pathname.endsWith("/index.html")
     || url.pathname.endsWith("/");
+}
+
+function cacheKeyFor(request, url) {
+  const scopePath = new URL(self.registration.scope).pathname;
+  const indexPath = new URL(INDEX_URL).pathname;
+  // Root navigation and direct index.html requests share one canonical entry.
+  if (url.pathname === scopePath || url.pathname === indexPath) return INDEX_URL;
+  return request;
 }
 
 self.addEventListener("fetch", event => {
@@ -82,14 +90,15 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith((async () => {
-    const cached = await caches.match(request);
+    const cacheKey = cacheKeyFor(request, url);
+    const cached = await caches.match(cacheKey);
     if (cached) return cached;
     try {
       const response = await fetch(request);
       if (response.ok && response.type === "basic") {
         try {
           const cache = await caches.open(CACHE_NAME);
-          await cache.put(request, response.clone());
+          await cache.put(cacheKey, response.clone());
         } catch {
           // Return the network response even when caching is unavailable.
         }
