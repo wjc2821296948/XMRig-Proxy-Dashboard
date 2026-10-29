@@ -383,10 +383,10 @@ test("PWA manifest includes raster icons and the offline shell uses a canonical 
   assert.match(read("src/pwa.js"), /controllerchange/);
 
   const server = read("bin/server.js");
-  assert.match(server, /"\\.webmanifest": "application\\/manifest\\+json; charset=utf-8"/);
+  assert.match(server, /"\.webmanifest": "application\/manifest\+json; charset=utf-8"/);
   const packageJson = JSON.parse(read("package.json"));
   assert.ok(packageJson.files.includes("app-icon-192.png"));
   assert.ok(packageJson.files.includes("app-icon-512.png"));
-  assert.match(worker, /await cache\\.put\\(request, response\\.clone\\(\\)\\)/);
-  assert.match(worker, /"\\.\\/panel\\.png"/);
+  assert.match(worker, /await cache\.put\(request, response\.clone\(\)\)/);
+  assert.match(worker, /\.\/panel\.png/);
 });
