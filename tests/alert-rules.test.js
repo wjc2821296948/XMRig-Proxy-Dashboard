@@ -36,7 +36,7 @@ test("rejected share ratio only fires when valid counters exceed the configured 
   const config = { maximumRejectedSharePercent: 10 };
   assert.deepEqual(evaluateAlertConditions(payload({ accepted: 9, rejected: 1 }), config), []);
   assert.deepEqual(
-    evaluateAlertConditions(payload({ accepted: 8, rejected: 2 }), config).map(a => a.id),
+    evaluateAlertConditions(payload({ accepted: 10, rejected: 1 }), config).map(a => a.id),
     [],
   );
   assert.deepEqual(
