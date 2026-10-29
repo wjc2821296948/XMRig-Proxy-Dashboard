@@ -45,6 +45,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/status.js": "export const status = true;",
     "src/storage.js": "export const storage = true;",
     "src/theme-color.js": "trusted-theme-color-module",
+    "src/keyboard-shortcuts.js": "export const keyboardShortcuts = true;",
     "src/pwa.js": "export const pwa = true;",
     "manifest.webmanifest": "{}",
     "app-icon.svg": "<svg/>",
