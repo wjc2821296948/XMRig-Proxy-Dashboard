@@ -15,6 +15,7 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "src/storage.js",
   "src/theme-color.js",
   "src/keyboard-shortcuts.js",
+  "src/network-status.js",
   "src/ui.js",
 ]);
 

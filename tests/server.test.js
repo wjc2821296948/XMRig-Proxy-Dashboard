@@ -39,6 +39,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/storage.js": "export const storage = true;",
     "src/theme-color.js": "trusted-theme-color-module",
     "src/keyboard-shortcuts.js": "export const keyboardShortcuts = true;",
+    "src/network-status.js": "export const networkStatus = true;",
     "src/ui.js": "export const ui = true;",
     "package.json": "{ \"private\": true, \"type\": \"module\" }",
     "README.md": "private readme",
