@@ -21,6 +21,7 @@ const APP_SHELL = [
   "./src/background-upload-guard.js",
   "./src/snapshot-export.js",
   "./src/theme-color.js",
+  "./src/keyboard-shortcuts.js",
   "./src/pwa.js",
 ];
 
