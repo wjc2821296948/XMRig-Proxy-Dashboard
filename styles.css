@@ -1254,6 +1254,30 @@ a:focus-visible,
   }
 }
 
+/* Local profile transfer actions */
+.profile-transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+}
+
+.profile-transfer-warning {
+  margin: 0 0 1rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.profile-transfer-actions .btn {
+  min-height: 2.25rem;
+}
+
+@media (max-width: 480px) {
+  .profile-transfer-actions .btn {
+    flex: 1 1 8rem;
+  }
+}
+
 
 /* ==========================================================================
    Visual Refresh — layered depth, softer surfaces, stronger hierarchy
