@@ -62,22 +62,21 @@ function extractCssBlock(source, openingBraceIndex) {
 }
 
 function extractMediaBlock(source, query) {
-  const marker = `@media (${query})`;
+  const marker = "@media (" + query + ")";
   const mediaIndex = source.indexOf(marker);
-  assert.notEqual(mediaIndex, -1, `Missing media query: ${marker}`);
+  assert.notEqual(mediaIndex, -1, "Missing media query: " + marker);
 
   const openingBraceIndex = source.indexOf("{", mediaIndex + marker.length);
-  assert.notEqual(openingBraceIndex, -1, `Missing block for media query: ${marker}`);
+  assert.notEqual(openingBraceIndex, -1, "Missing block for media query: " + marker);
   return extractCssBlock(source, openingBraceIndex);
 }
 
 function extractRuleBody(source, selector) {
-  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const expression = new RegExp(`(?:^|\\n)\\s*${escapedSelector}\\s*\\{`);
-  const match = expression.exec(source);
-  assert.ok(match, `Missing CSS rule: ${selector}`);
+  const selectorIndex = source.indexOf(selector);
+  assert.notEqual(selectorIndex, -1, "Missing CSS rule: " + selector);
 
-  const openingBraceIndex = match.index + match[0].lastIndexOf("{");
+  const openingBraceIndex = source.indexOf("{", selectorIndex + selector.length);
+  assert.notEqual(openingBraceIndex, -1, "Missing block for CSS rule: " + selector);
   return extractCssBlock(source, openingBraceIndex);
 }
 
@@ -88,14 +87,14 @@ test("responsive dashboard grid uses tablet columns while preserving full-width 
 
   assert.match(
     tabletGrid,
-    /grid-template-columns:\\s*repeat\\(auto-fit, minmax\\(min\\(100%, 300px\\), 1fr\\)\\)/,
+    /grid-template-columns:\s*repeat\(auto-fit, minmax\(min\(100%, 300px\), 1fr\)\)/,
   );
-  assert.match(tabletLargeCard, /grid-column:\\s*1 \\/ -1;/);
+  assert.match(tabletLargeCard, /grid-column:\s*1\s*\/\s*-1;/);
 
   const phone = extractMediaBlock(css, "max-width: 480px");
   const phoneGrid = extractRuleBody(phone, ".grid");
   const phoneMetricsGrid = extractRuleBody(phone, ".metrics-grid");
 
-  assert.match(phoneGrid, /grid-template-columns:\\s*minmax\\(0, 1fr\\)/);
-  assert.match(phoneMetricsGrid, /grid-template-columns:\\s*repeat\\(2, minmax\\(0, 1fr\\)\\)/);
+  assert.match(phoneGrid, /grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(phoneMetricsGrid, /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
 });
