@@ -424,14 +424,34 @@ h1 {
    ========================================================================== */
 .stat-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0;
+  gap: 0.85rem;
+  padding: 0.6rem 0.55rem;
   border-bottom: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
 }
+.stat-row:hover { background-color: var(--bg-card-hover); }
 .stat-row:last-child { border-bottom: none; }
 
-.stat-label { color: var(--text-secondary); font-size: 0.75rem; }
-.stat-value { color: var(--text-primary); font-weight: 600; font-size: 0.75rem; font-family: var(--font-mono); }
+.stat-label {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.stat-value {
+  flex: 0 1 auto;
+  color: var(--text-primary);
+  font-weight: 650;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 
 /* ==========================================================================
    Progress Bar
