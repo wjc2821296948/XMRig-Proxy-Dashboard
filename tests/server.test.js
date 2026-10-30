@@ -39,6 +39,14 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/storage.js": "export const storage = true;",
     "src/theme-color.js": "trusted-theme-color-module",
     "src/keyboard-shortcuts.js": "export const keyboardShortcuts = true;",
+    "src/manual-refresh.js": "export const manualRefresh = true;",
+    "src/visibility-refresh.js": "export const visibilityRefresh = true;",
+    "src/visible-polling.js": "export const visiblePolling = true;",
+    "src/escape-html.js": "export const escapeHtml = true;",
+    "src/load-average.js": "export const loadAverage = true;",
+    "src/background-upload-guard.js": "export const uploadGuard = true;",
+    "src/snapshot-export.js": "export const snapshotExport = true;",
+    "src/metrics-history.js": "export const metricsHistory = true;",
     "src/ui.js": "export const ui = true;",
     "package.json": "{ \"private\": true, \"type\": \"module\" }",
     "README.md": "private readme",
@@ -88,6 +96,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(homepage.status, 200);
   assert.match(homepage.headers.get("content-security-policy"), /default-src 'self'/);
   assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.equal(homepage.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 
   const headResponse = await fetch(baseUrl, { method: "HEAD" });
