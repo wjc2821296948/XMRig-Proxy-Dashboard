@@ -31,7 +31,13 @@ export function recordMetricSample(data, timestamp = Date.now(), scope = "defaul
 
   const last = samples[samples.length - 1];
   // An older response must not roll the chart backward.
-  if (last && timestamp < last.timestamp) return getMetricHistory();
+  if (last && timestamp < last.timestamp) {
+    console.debug("Ignoring out-of-order metric sample.", {
+      timestamp,
+      lastTimestamp: last.timestamp,
+    });
+    return getMetricHistory();
+  }
 
   const sample = {
     timestamp,
