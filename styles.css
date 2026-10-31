@@ -429,14 +429,34 @@ h1 {
    ========================================================================== */
 .stat-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0;
+  gap: 0.85rem;
+  padding: 0.6rem 0.55rem;
   border-bottom: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
 }
+.stat-row:hover { background-color: var(--bg-card-hover); }
 .stat-row:last-child { border-bottom: none; }
 
-.stat-label { color: var(--text-secondary); font-size: 0.75rem; }
-.stat-value { color: var(--text-primary); font-weight: 600; font-size: 0.75rem; font-family: var(--font-mono); }
+.stat-label {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.stat-value {
+  flex: 0 1 auto;
+  color: var(--text-primary);
+  font-weight: 650;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 
 /* ==========================================================================
    Progress Bar
@@ -1204,17 +1224,23 @@ a:focus-visible,
 @media (max-width: 768px) {
   html { font-size: 13px; }
   body { padding: 0.75rem; }
-  .grid { grid-template-columns: 1fr; }
-  .large-card { grid-column: auto; }
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 0.8rem;
+  }
+  .large-card { grid-column: 1 / -1; }
   .subtitle { flex-direction: column; align-items: flex-start; }
   #toast-container { left: 1rem; right: 1rem; bottom: 1rem; }
   .toast { max-width: none; }
 }
 
 @media (max-width: 480px) {
-  .card { padding: 0.9rem; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .card { min-width: 0; padding: 0.9rem; }
+  .large-card { grid-column: 1; }
   .card-value { font-size: 1.3rem; }
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-item { min-width: 0; }
 }
 
 /* ==========================================================================
@@ -1507,4 +1533,48 @@ body.has-custom-background {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+
+/* Session-local historical hashrate trend chart. */
+.history-chart {
+  margin-top: 0.75rem;
+  min-height: 110px;
+}
+.session-hashrate-trend {
+  display: block;
+  width: 100%;
+  height: 160px;
+  overflow: visible;
+}
+.history-chart-grid {
+  fill: none;
+  stroke: var(--border-light);
+  stroke-width: 1;
+}
+.history-chart-area {
+  fill: url(#sessionHashrateFill);
+}
+.history-chart-line {
+  fill: none;
+  stroke: var(--accent-copper);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.history-chart-point {
+  fill: var(--accent-copper);
+  stroke: var(--bg-card);
+  stroke-width: 1.5;
+}
+.history-axis-label {
+  fill: var(--text-muted);
+  font-size: 12px;
+}
+.history-empty {
+  min-height: 100px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  text-align: center;
 }
