@@ -249,12 +249,16 @@ test("dashboard theme transitions respect reduced-motion preferences", () => {
 });
 
 
-test("aborted refreshes are checked before rendering stale data", () => {
+test("aborted refreshes are checked before caching or rendering stale data", () => {
   const source = read("src/main.js");
-  assert.match(
-    source,
-    /const data = await request\("\/1\/summary", \{ signal: controller\.signal \}\);\s*if \(controller\.signal\.aborted\) return(?: false|\s*\{\s*status:\s*"cancelled"\s*\})?;\s*renderDashboard\(data\);/,
-  );
+  const requestAt = source.indexOf('const data = await request("/1/summary", { signal: controller.signal });');
+  const abortedAt = source.indexOf('if (controller.signal.aborted) return { status: "cancelled" };', requestAt);
+  const cacheAt = source.indexOf('saveOfflineSnapshot(loadActiveProfileId() || "current", data);', requestAt);
+  const renderAt = source.indexOf("renderDashboard(data);", requestAt);
+
+  assert.ok(requestAt >= 0);
+  assert.ok(abortedAt > requestAt && abortedAt < cacheAt);
+  assert.ok(cacheAt < renderAt);
 });
 
 test("single hashrate point avoids dividing by zero when computing chart coordinates", () => {
