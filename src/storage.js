@@ -1077,15 +1077,14 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       throw new ProfileBundleValidationError("导入后配置总数不能超过 100 个");
     }
 
-    let sessionTokenCleanupSkipped = false;
     if (!session) {
       const existingSessionOnlyIds = new Set(
         existing.filter(profile => !profile.remember).map(profile => profile.id),
       );
-      sessionTokenCleanupSkipped = incoming.some(
+      const cleanupRequired = incoming.some(
         profile => profile.remember && existingSessionOnlyIds.has(profile.id),
       );
-      if (sessionTokenCleanupSkipped) {
+      if (cleanupRequired) {
         // Never report a successful import when a stale session credential
         // for an ID being converted to persistent mode cannot be invalidated.
         const error = new Error("会话存储不可用，无法安全清理旧 Token；请恢复浏览器存储后重试");
@@ -1140,7 +1139,6 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
       updated,
       total: merged.length,
       ...(activeProfileFallback ? { activeProfileFallback: true } : {}),
-      ...(sessionTokenCleanupSkipped ? { sessionTokenCleanupSkipped: true } : {}),
     };
   } catch (error) {
     const restored = snapshot ? restoreImportSnapshot(snapshot) : true;
