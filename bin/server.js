@@ -90,6 +90,37 @@ function findPublicAsset(pathname) {
   return publicAssets.get(publicPath) || null;
 }
 
+function splitEntityTagList(value) {
+  const tags = [];
+  let start = 0;
+  let quoted = false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '"') quoted = !quoted;
+    else if (value[index] === "," && !quoted) {
+      tags.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  tags.push(value.slice(start).trim());
+  return tags;
+}
+
+function opaqueEntityTag(value) {
+  const match = /^(?:W\\/)?"([\\x21\\x23-\\x7E\\x80-\\xFF]*)"$/.exec(value.trim());
+  return match ? match[1] : null;
+}
+
+function matchesIfNoneMatch(header, currentEtag) {
+  if (typeof header !== "string") return false;
+  const value = header.trim();
+  if (value === "*") return true;
+
+  const currentOpaqueTag = opaqueEntityTag(currentEtag);
+  if (currentOpaqueTag === null) return false;
+  return splitEntityTagList(value).some(candidate =>
+    opaqueEntityTag(candidate) === currentOpaqueTag);
+}
+
 const server = createServer((req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405, {
@@ -116,7 +147,7 @@ const server = createServer((req, res) => {
   }
 
   const ifNoneMatch = req.headers["if-none-match"];
-  if (typeof ifNoneMatch === "string" && ifNoneMatch.split(",").some(tag => tag.trim() === "*" || tag.trim() === asset.etag)) {
+  if (matchesIfNoneMatch(ifNoneMatch, asset.etag)) {
     res.writeHead(304, {
       "ETag": asset.etag,
       "Cache-Control": "no-cache",
