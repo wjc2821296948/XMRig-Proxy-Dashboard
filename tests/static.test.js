@@ -363,3 +363,11 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+test("browser offline notice does not claim Proxy reachability or promise an immediate refresh", () => {
+  const source = read("src/network-status.js");
+  assert.match(source, /Your browser reports that it is offline/);
+  assert.match(source, /does not indicate whether the Proxy API is reachable/);
+  assert.doesNotMatch(source, /Network connection lost|Dashboard data will refresh|Network connection restored/);
+});
