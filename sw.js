@@ -29,6 +29,15 @@ const scopedUrl = path => new URL(path, self.registration.scope).href;
 const APP_SHELL_URLS = APP_SHELL.map(scopedUrl);
 const INDEX_URL = scopedUrl("./index.html");
 
+async function matchCacheBestEffort(key) {
+  try {
+    return await caches.match(key);
+  } catch {
+    // CacheStorage is an optimization; a storage failure is a cache miss.
+    return undefined;
+  }
+}
+
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -83,7 +92,7 @@ self.addEventListener("fetch", event => {
         }
         return response;
       } catch {
-        return (await caches.match(INDEX_URL)) || Response.error();
+        return (await matchCacheBestEffort(INDEX_URL)) || Response.error();
       }
     })());
     return;
@@ -91,7 +100,7 @@ self.addEventListener("fetch", event => {
 
   event.respondWith((async () => {
     const cacheKey = cacheKeyFor(request, url);
-    const cached = await caches.match(cacheKey);
+    const cached = await matchCacheBestEffort(cacheKey);
     if (cached) return cached;
     try {
       const response = await fetch(request);
