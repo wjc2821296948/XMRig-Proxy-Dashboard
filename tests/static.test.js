@@ -363,3 +363,22 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+test("PWA manifest is installable and the service worker only caches the app shell", () => {
+  const manifest = JSON.parse(read("manifest.webmanifest"));
+  const worker = read("service-worker.js");
+  const main = read("src/main.js");
+
+  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.start_url, "./");
+  assert.equal(manifest.scope, "./");
+  assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-icon.svg"));
+  assert.match(worker, /cache\.addAll\(APP_SHELL\)/);
+  assert.match(worker, /appShellUrls\.has\(requestUrl\.href\)/);
+  assert.match(worker, /request\.mode === "navigate"/);
+  assert.doesNotMatch(worker, /\/1\/summary|Authorization/i);
+  assert.match(main, /navigator\.serviceWorker\.register\("\.\/service-worker\.js"/);
+  assert.match(main, /loadOfflineSnapshot/);
+  assert.match(main, /saveOfflineSnapshot/);
+});
