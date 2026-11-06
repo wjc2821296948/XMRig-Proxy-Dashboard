@@ -24,6 +24,7 @@ Built for users looking for an **XMRig Proxy web UI, monitoring dashboard, or li
 | **Local Auth** | Access Token stays in browser storage: `localStorage` persists across browser restarts, while `sessionStorage` is scoped to the current tab session |
 | **Remember Me** | Optional `localStorage` persistence, or `sessionStorage` for session-only |
 | **Modern UI** | Dark theme, responsive layout, Skeleton loading, Toast notifications, Loading animations |
+| **PWA Offline Support** | Installable on supported browsers; static app shell works offline and the last successful metrics snapshot is shown locally |
 | **Security First** | CSP restrictions, escaped dynamic values, sanitized token logs; anti-framing requires HTTP response headers |
 | **No Framework Deps** | Native ES Modules, < 50 KB gzip, instant load |
 
@@ -46,6 +47,12 @@ python3 -m http.server 8000
 ```
 
 You can also use the built-in server included in the npm package below.
+
+### Install as a PWA and use offline
+
+After the first online visit, the service worker caches the app shell. In supported browsers, choose **Install app** or **Add to Home Screen** from the browser menu. PWA installation requires a secure context (HTTPS or localhost).
+
+After a successful Proxy connection, the dashboard stores the latest metrics snapshot locally in this browser for up to 7 days. When reopened offline, it displays an **Offline cache** status and the snapshot timestamp; live data replaces it when connectivity returns. The snapshot is limited to fields displayed by the dashboard and never includes the Proxy URL, Access Token, or request headers. Snapshots are not shared between Proxy profiles.
 
 ### 2️⃣ npm / GitHub Packages
 
@@ -177,6 +184,7 @@ xmrig-proxy-dashboard/
 | **MITM** | Recommend Proxy enables HTTPS (self-signed needs browser trust) or access via VPN/tunnel |
 | **CSRF** | Pure GET + Bearer Token, no Cookies, naturally immune to CSRF |
 | **Config Injection** | URL validated via `new URL()`, Token only sent as Header |
+| **Offline Cache** | The service worker caches same-origin static assets only; a field-allowlisted metrics snapshot is stored locally, without API responses, URLs, or Tokens, and expires after 7 days |
 
 ---
 
@@ -202,7 +210,7 @@ A: Open "Settings" to manage Proxy profiles. Each profile stores its name, API U
 ## 📋 Roadmap
 
 - [X] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
-- [ ] **PWA Support** — Offline cache last data, "Add to Home Screen"
+- [x] **PWA Support** — Offline cache the latest metrics snapshot, "Add to Home Screen"
 - [x] **Theme Toggle** — Dark and light themes are supported
 - [ ] **More Chart Libraries** — Optional historical trends (Chart.js / uPlot, lazy-loaded)
 - [ ] **Optional Backend Proxy Mode** — Users may deploy stateless forwarder on own server, only forwards `/1/summary`, no logs, no Token storage
