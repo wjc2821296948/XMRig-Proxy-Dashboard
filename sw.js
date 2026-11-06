@@ -10,6 +10,7 @@ const APP_SHELL = [
   "./panel.png",
   "./src/main.js",
   "./src/api.js",
+  "./src/metrics-history.js",
   "./src/manual-refresh.js",
   "./src/visibility-refresh.js",
   "./src/visible-polling.js",
