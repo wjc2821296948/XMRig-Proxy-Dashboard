@@ -112,6 +112,14 @@ export function transitionAlertState(data, inputConfig = {}, previousState = {},
       ? previousState.activeIds.filter(id => ALERT_IDS.has(id))
       : [],
   );
+  // Older snapshots did not distinguish active alerts that were actually
+  // notified from alerts suppressed by cooldown. Treat their active IDs as
+  // notified for backward compatibility; new snapshots track this explicitly.
+  const previousNotifiedActive = new Set(
+    Array.isArray(previousState?.notifiedActiveIds)
+      ? previousState.notifiedActiveIds.filter(id => ALERT_IDS.has(id))
+      : previousActive,
+  );
 
   const lastNotifiedAt = {};
   const previousTimes = previousState?.lastNotifiedAt;
@@ -123,18 +131,21 @@ export function transitionAlertState(data, inputConfig = {}, previousState = {},
   }
 
   const notifications = currentAlerts.filter(alert => {
-    if (previousActive.has(alert.id)) return false;
+    if (previousNotifiedActive.has(alert.id)) return false;
     const previousTime = lastNotifiedAt[alert.id];
     return previousTime === undefined || timestamp - previousTime >= config.cooldownMs;
   });
 
   for (const alert of notifications) lastNotifiedAt[alert.id] = timestamp;
 
+  const notifiedThisRound = new Set(notifications.map(alert => alert.id));
+  const notifiedActiveIds = activeIds.filter(id =>
+    previousNotifiedActive.has(id) || notifiedThisRound.has(id));
   const recoveredIds = [...previousActive].filter(id => !activeSet.has(id));
   return {
     activeIds,
     notifications,
     recoveredIds,
-    nextState: { activeIds: [...activeIds], lastNotifiedAt },
+    nextState: { activeIds: [...activeIds], notifiedActiveIds, lastNotifiedAt },
   };
 }
