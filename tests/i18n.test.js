@@ -21,6 +21,8 @@ test("normalizes supported locale aliases and defaults unsupported values", () =
   assert.equal(normalizeLocale("EN-gb"), "en");
   assert.equal(normalizeLocale("zh"), "zh-CN");
   assert.equal(normalizeLocale("zh-Hans-CN"), "zh-CN");
+  assert.equal(normalizeLocale("en-AU"), "en");
+  assert.equal(normalizeLocale("zh-TW"), "zh-CN");
   assert.equal(normalizeLocale("fr"), DEFAULT_LOCALE);
   assert.equal(normalizeLocale(null), DEFAULT_LOCALE);
 });
@@ -31,6 +33,11 @@ test("persists only the locale preference and defaults to Chinese", () => {
   assert.equal(saveLocale("en", storage), true);
   assert.equal(storage.getItem(LOCALE_STORAGE_KEY), "en");
   assert.equal(getLocale(storage), "en");
+  assert.equal(saveLocale("en-AU", storage), true);
+  assert.equal(storage.getItem(LOCALE_STORAGE_KEY), "en");
+  assert.equal(saveLocale("zh-TW", storage), true);
+  assert.equal(storage.getItem(LOCALE_STORAGE_KEY), "zh-CN");
+  assert.equal(getLocale(storage), "zh-CN");
   assert.equal(saveLocale("fr", storage), false);
 });
 
@@ -54,4 +61,12 @@ test("interpolation substitutes only strings and finite numbers", () => {
   assert.equal(listTranslations("en")["refresh.now"], "Refresh now");
   assert.equal(translate("example {count} {name}", "en", { count: 3, name: "<operator>" }), "example 3 <operator>");
   assert.equal(translate("example {count}", "en", { count: Infinity }), "example {count}");
+});
+
+
+test("translation lookup treats prototype property names as unknown keys", () => {
+  for (const key of ["constructor", "toString", "__proto__"]) {
+    assert.equal(translate(key, "en"), key);
+    assert.equal(translate(key, "zh-CN"), key);
+  }
 });
