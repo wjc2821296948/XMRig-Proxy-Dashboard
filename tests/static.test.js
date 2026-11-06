@@ -365,8 +365,8 @@ test("custom background setting is persisted locally and restored at startup", (
 });
 
 
-test("document CSP blocks object and frame content", async () => {
-  const html = await readFile(join(root, "index.html"), "utf8");
+test("document CSP blocks object and frame content", () => {
+  const html = read("index.html");
   assert.match(html, /object-src 'none'/);
   assert.match(html, /frame-src 'none'/);
 });
