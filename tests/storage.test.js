@@ -1436,3 +1436,29 @@ test("uploaded custom background data URLs persist in localStorage", () => {
   assert.equal(normalizeBackgroundImageUrl("data:image/svg+xml;base64,PHN2Zz4="), null);
   assert.equal(normalizeBackgroundImageUrl("data:image/webp;base64," + "A".repeat(1_800_000)), null);
 });
+
+
+test("complete profile export rejects a readable session token map missing a profile ID", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, createProfilesExport } = await import("../src/storage.js");
+  saveProfile({
+    id: "missing-session-token-key",
+    name: "Missing Session Token",
+    apiUrl: "https://missing-token.example",
+    apiToken: "must-not-disappear",
+    remember: false,
+    refreshInterval: 10,
+  });
+
+  // Storage itself remains readable, but the token map has lost this profile's key.
+  globalThis.sessionStorage.setItem("xmrig_proxy_session_tokens", "{}");
+  assert.throws(
+    () => createProfilesExport({ includeSensitiveData: true }),
+    /完整备份缺少某个配置对应的会话 Token/,
+  );
+
+  const redacted = createProfilesExport({ includeSensitiveData: false });
+  assert.equal(redacted.includesSensitiveData, false);
+  assert.equal(redacted.profiles[0].apiToken, "");
+});
