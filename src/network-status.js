@@ -1,10 +1,10 @@
-/** Show an accessible, non-blocking notice when the browser loses network access. */
+/** Show an accessible notice for the browser's reported offline state only. */
 const banner = document.createElement("div");
 banner.className = "network-status-banner";
 banner.setAttribute("role", "status");
 banner.setAttribute("aria-live", "polite");
 banner.hidden = true;
-banner.textContent = "Network connection lost. Dashboard data will refresh after connectivity is restored.";
+banner.textContent = "Your browser reports that it is offline. This does not indicate whether the Proxy API is reachable.";
 
 function updateNetworkStatus() {
   const offline = navigator.onLine === false;
