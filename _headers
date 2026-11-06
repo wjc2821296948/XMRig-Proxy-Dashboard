@@ -4,3 +4,6 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Content-Security-Policy: frame-ancestors 'none'
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+/service-worker.js
+  Cache-Control: no-cache
