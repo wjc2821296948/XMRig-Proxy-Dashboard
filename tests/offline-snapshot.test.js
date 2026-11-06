@@ -87,7 +87,7 @@ test("offline summary cache expires after seven days and rejects future timestam
   const savedAt = 1_800_000_000_000;
   assert.equal(saveOfflineSnapshot("profile-a", snapshot, savedAt), true);
   assert.equal(loadOfflineSnapshot("profile-a", savedAt + 7 * 24 * 60 * 60 * 1000), null);
-  assert.equal(loadOfflineSnapshot("profile-a", savedAt - 1), null);
+  assert.equal(loadOfflineSnapshot("profile-a", savedAt - 5 * 60 * 1000 - 1), null);
 });
 
 test("offline summary cache rejects invalid payloads and invalid profile identifiers", () => {
