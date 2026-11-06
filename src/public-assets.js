@@ -15,6 +15,7 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "app-icon-192.png",
   "app-icon-512.png",
   "src/api.js",
+  "src/metrics-history.js",
   "src/manual-refresh.js",
   "src/visibility-refresh.js",
   "src/visible-polling.js",
