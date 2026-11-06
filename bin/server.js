@@ -106,7 +106,7 @@ function splitEntityTagList(value) {
 }
 
 function opaqueEntityTag(value) {
-  const match = /^(?:W\\/)?"([\\x21\\x23-\\x7E\\x80-\\xFF]*)"$/.exec(value.trim());
+  const match = /^(?:W\/)?"([\x21\x23-\x7E\x80-\xFF]*)"$/.exec(value.trim());
   return match ? match[1] : null;
 }
 
