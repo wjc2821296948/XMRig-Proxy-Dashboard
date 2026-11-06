@@ -392,3 +392,13 @@ test("PWA manifest includes raster icons and the offline shell uses a canonical 
   assert.ok(worker.includes("const cacheKey = cacheKeyFor(request, url);"));
   assert.ok(worker.includes("avif|gif|ico|bmp|jpe?g"));
 });
+
+
+test("PWA offline shell includes modules required by the current dashboard", () => {
+  const worker = read("sw.js");
+  const assets = read("src/public-assets.js");
+  for (const path of ["src/keyboard-shortcuts.js", "src/metrics-history.js"]) {
+    assert.ok(assets.includes(`"${path}"`), `${path} must be allowlisted`);
+    assert.ok(worker.includes(`./${path}`), `${path} must be precached`);
+  }
+});
