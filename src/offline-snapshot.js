@@ -134,7 +134,7 @@ export function loadOfflineSnapshot(profileId, now = Date.now()) {
       typeof cached.savedAt !== "number" ||
       !Number.isFinite(cached.savedAt) ||
       cached.savedAt > now + 5 * 60 * 1000 ||
-      now - cached.savedAt > MAX_CACHE_AGE_MS
+      now - cached.savedAt >= MAX_CACHE_AGE_MS
     ) return null;
 
     const data = sanitizeOfflineSummary(cached.data);
