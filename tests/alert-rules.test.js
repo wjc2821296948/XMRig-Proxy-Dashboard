@@ -96,3 +96,27 @@ test("cooldown suppresses a quick re-trigger but permits a later new transition"
   const allowed = transitionAlertState(payload({ hashrate: 20 }), config, recoveredAgain.nextState, 1110);
   assert.deepEqual(allowed.notifications.map(a => a.id), ["low-hashrate"]);
 });
+
+
+test("a cooldown-suppressed alert fires once when the same breach remains active past cooldown", () => {
+  const config = { minimumHashrateKhS: 50, cooldownMs: 100 };
+  const first = transitionAlertState(payload({ hashrate: 20 }), config, {}, 1000);
+  assert.deepEqual(first.notifications.map(alert => alert.id), ["low-hashrate"]);
+
+  const recovered = transitionAlertState(payload({ hashrate: 60 }), config, first.nextState, 1050);
+  assert.deepEqual(recovered.recoveredIds, ["low-hashrate"]);
+
+  const suppressed = transitionAlertState(payload({ hashrate: 20 }), config, recovered.nextState, 1060);
+  assert.deepEqual(suppressed.notifications, []);
+  assert.deepEqual(suppressed.nextState.notifiedActiveIds, []);
+
+  const stillSuppressed = transitionAlertState(payload({ hashrate: 20 }), config, suppressed.nextState, 1099);
+  assert.deepEqual(stillSuppressed.notifications, []);
+
+  const released = transitionAlertState(payload({ hashrate: 20 }), config, stillSuppressed.nextState, 1100);
+  assert.deepEqual(released.notifications.map(alert => alert.id), ["low-hashrate"]);
+  assert.deepEqual(released.nextState.notifiedActiveIds, ["low-hashrate"]);
+
+  const repeated = transitionAlertState(payload({ hashrate: 20 }), config, released.nextState, 1200);
+  assert.deepEqual(repeated.notifications, []);
+});
