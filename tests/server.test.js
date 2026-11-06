@@ -34,6 +34,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "styles.css": "body { color: black; }",
     "panel.png": "fake-png",
     "src/api.js": "export const api = true;",
+    "src/metrics-history.js": "export const metricsHistory = true;",
     "src/manual-refresh.js": "export const manualRefresh = true;",
     "src/visibility-refresh.js": "export const visibilityRefresh = true;",
     "src/visible-polling.js": "export const visiblePolling = true;",
