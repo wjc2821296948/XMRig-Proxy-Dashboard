@@ -893,6 +893,13 @@ function readProfileTokensForExport() {
   return tokens;
 }
 
+function requireSessionTokenForExport(sessionTokens, profileId) {
+  if (!sessionTokens || !Object.hasOwn(sessionTokens, profileId)) {
+    throw new Error("完整备份缺少某个配置对应的会话 Token，已取消导出以避免生成不完整的备份");
+  }
+  return sessionTokens[profileId];
+}
+
 /**
  * Build an export payload.
  * @param {{includeSensitiveData?: boolean}} [options]
@@ -917,7 +924,7 @@ export function createProfilesExport({ includeSensitiveData = true } = {}) {
     apiToken: includeSensitiveData
       ? (profile.remember
         ? (typeof profile.apiToken === "string" ? profile.apiToken : "")
-        : (Object.hasOwn(sessionTokens, profile.id) ? sessionTokens[profile.id] : ""))
+        : requireSessionTokenForExport(sessionTokens, profile.id))
       : "",
     remember: profile.remember === true,
     refreshInterval: profile.refreshInterval,
