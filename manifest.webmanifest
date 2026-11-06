@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "XMRig Proxy Dashboard",
+  "short_name": "XMRig Proxy",
+  "description": "A lightweight dashboard for monitoring your XMRig Proxy.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0e0f1a",
+  "theme_color": "#0e0f1a",
+  "icons": [
+    {
+      "src": "./icons/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
