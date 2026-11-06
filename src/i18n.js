@@ -63,9 +63,9 @@ export function getLocale(storage = defaultStorage()) {
 export function saveLocale(locale, storage = defaultStorage()) {
   if (typeof locale !== "string" || !storage) return false;
   const original = locale.trim().toLowerCase();
-  if (!["en", "en-us", "en-gb", "zh", "zh-cn", "zh-hans", "zh-hans-cn"].includes(original)) {
-    return false;
-  }
+  const recognized = original === "en" || original.startsWith("en-")
+    || original === "zh" || original.startsWith("zh-");
+  if (!recognized) return false;
   try {
     storage.setItem(LOCALE_STORAGE_KEY, normalizeLocale(locale));
     return true;
@@ -77,7 +77,11 @@ export function saveLocale(locale, storage = defaultStorage()) {
 export function translate(key, locale = getLocale(), values = {}) {
   const language = normalizeLocale(locale);
   const source = typeof key === "string" ? key : "";
-  const template = MESSAGES[language][source] ?? MESSAGES[DEFAULT_LOCALE][source] ?? source;
+  const languageMessages = MESSAGES[language];
+  const defaultMessages = MESSAGES[DEFAULT_LOCALE];
+  const template = (Object.hasOwn(languageMessages, source) ? languageMessages[source] : undefined)
+    ?? (Object.hasOwn(defaultMessages, source) ? defaultMessages[source] : undefined)
+    ?? source;
   if (!values || typeof values !== "object") return template;
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => {
     const value = values[name];
