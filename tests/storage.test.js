@@ -1462,3 +1462,24 @@ test("complete profile export rejects a readable session token map missing a pro
   assert.equal(redacted.includesSensitiveData, false);
   assert.equal(redacted.profiles[0].apiToken, "");
 });
+
+
+test("complete profile export works when every profile stores its token persistently", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, createProfilesExport } = await import("../src/storage.js");
+  saveProfile({
+    id: "persistent-only-export",
+    name: "Persistent only",
+    apiUrl: "https://persistent-only.example",
+    apiToken: "persistent-secret",
+    remember: true,
+    refreshInterval: 10,
+  });
+
+  const bundle = createProfilesExport({ includeSensitiveData: true });
+  assert.equal(bundle.includesSensitiveData, true);
+  assert.equal(bundle.profiles.length, 1);
+  assert.equal(bundle.profiles[0].apiToken, "persistent-secret");
+  assert.equal(bundle.profiles[0].remember, true);
+});
