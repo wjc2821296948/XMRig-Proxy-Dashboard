@@ -22,7 +22,8 @@
     "README.md",
     "README.en.md",
     "LICENSE",
-    "bin/"
+    "bin/",
+    "vendor/uplot/"
   ],
   "bin": {
     "xmrig-proxy-dashboard": "bin/server.js"
