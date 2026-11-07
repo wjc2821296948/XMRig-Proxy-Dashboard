@@ -98,8 +98,10 @@ export function evaluateAlertConditions(data, inputConfig = {}) {
 
 /**
  * Return transition-only notifications and an immutable state snapshot.
- * An alert that remains active is not emitted on every refresh. A recovered
- * alert may re-fire only after its cooldown has elapsed.
+ * An alert that has already been notified is not emitted on every refresh.
+ * Cooldown is measured from the last actual notification, not from recovery.
+ * A breach suppressed during cooldown remains pending and is emitted once the
+ * cooldown expires if the breach is still active.
  */
 export function transitionAlertState(data, inputConfig = {}, previousState = {}, now = Date.now()) {
   const config = normalizeAlertConfig(inputConfig);
