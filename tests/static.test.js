@@ -374,7 +374,7 @@ test("PWA manifest includes raster icons and the offline shell uses a canonical 
   const worker = read("sw.js");
   const assets = read("src/public-assets.js");
   assert.match(worker, /const INDEX_URL = scopedUrl\("\.\/index\.html"\)/);
-  assert.match(worker, /caches\.match\(INDEX_URL\)/);
+  assert.match(worker, /matchCacheBestEffort\(INDEX_URL\)/);
   assert.match(worker, /\.\/app-icon-192\.png/);
   assert.match(worker, /\.\/app-icon-512\.png/);
   assert.match(assets, /"app-icon-192\.png"/);
@@ -401,4 +401,15 @@ test("PWA offline shell includes modules required by the current dashboard", () 
     assert.ok(assets.includes(`"${path}"`), `${path} must be allowlisted`);
     assert.ok(worker.includes(`./${path}`), `${path} must be precached`);
   }
+});
+
+
+test("PWA cache reads fail open so CacheStorage errors do not block network requests", () => {
+  const worker = read("sw.js");
+  assert.match(
+    worker,
+    /async function matchCacheBestEffort\(key\)\s*\{[\s\S]*?try\s*\{[\s\S]*?await caches\.match\(key\)[\s\S]*?catch\s*\{[\s\S]*?return undefined/,
+  );
+  assert.match(worker, /const cached = await matchCacheBestEffort\(cacheKey\)/);
+  assert.match(worker, /matchCacheBestEffort\(INDEX_URL\)\) \|\| Response\.error\(\)/);
 });
