@@ -363,3 +363,23 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+test("uPlot chart assets are allowlisted and loaded only after an explicit opt-in", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+  const vendorScript = read("vendor/uplot/uPlot.iife.min.js");
+  const vendorCss = read("vendor/uplot/uPlot.min.css");
+
+  assert.ok(PUBLIC_ASSET_PATHS.includes("src/advanced-history-chart.js"));
+  assert.ok(PUBLIC_ASSET_PATHS.includes("vendor/uplot/uPlot.iife.min.js"));
+  assert.ok(PUBLIC_ASSET_PATHS.includes("vendor/uplot/uPlot.min.css"));
+  assert.match(main, /advancedHistoryChartModulePromise \?\?= import\("\.\/advanced-history-chart\.js"\)/);
+  assert.match(main, /toggleAdvancedHistoryChart/);
+  assert.match(chart, /new URL\("\.\.\/vendor\/uplot\/uPlot\.iife\.min\.js", import\.meta\.url\)/);
+  assert.match(chart, /new URL\("\.\.\/vendor\/uplot\/uPlot\.min\.css", import\.meta\.url\)/);
+  assert.doesNotMatch(chart, /https?:\/\//);
+  assert.match(vendorScript, /uPlot/);
+  assert.match(vendorCss, /\.uplot/);
+  assert.match(read("vendor/uplot/LICENSE"), /The MIT License/);
+});
