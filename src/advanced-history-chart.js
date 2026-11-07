@@ -1,0 +1,171 @@
+/**
+ * Optional interactive session-history chart backed by the locally bundled
+ * uPlot library. The vendor JS and CSS are fetched only after the user opts in.
+ */
+
+const SCRIPT_URL = new URL("../vendor/uplot/uPlot.iife.min.js", import.meta.url).href;
+const STYLESHEET_URL = new URL("../vendor/uplot/uPlot.min.css", import.meta.url).href;
+
+let assetsPromise = null;
+
+function loadScript() {
+  if (typeof window.uPlot === "function") return Promise.resolve(window.uPlot);
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = SCRIPT_URL;
+    script.async = true;
+    script.dataset.uplotScript = "true";
+    script.onload = () => {
+      if (typeof window.uPlot === "function") resolve(window.uPlot);
+      else reject(new Error("uPlot did not expose its browser constructor"));
+    };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Unable to load the local uPlot script"));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function loadStylesheet() {
+  return new Promise((resolve, reject) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = STYLESHEET_URL;
+    link.dataset.uplotStylesheet = "true";
+    link.onload = resolve;
+    link.onerror = () => {
+      link.remove();
+      reject(new Error("Unable to load the local uPlot stylesheet"));
+    };
+    document.head.appendChild(link);
+  });
+}
+
+async function loadUPlot() {
+  if (!assetsPromise) {
+    assetsPromise = Promise.all([loadScript(), loadStylesheet()])
+      .then(([UPlot]) => UPlot)
+      .catch(error => {
+        assetsPromise = null;
+        throw error;
+      });
+  }
+  return assetsPromise;
+}
+
+/**
+ * Convert session samples to uPlot's aligned [timestamps, values] format.
+ * Invalid readings are ignored, samples are sorted, and duplicate timestamps
+ * keep the newest occurrence. uPlot expects Unix timestamps in seconds.
+ */
+export function buildUPlotData(samples) {
+  if (!Array.isArray(samples)) return [[], []];
+
+  const ordered = samples
+    .filter(sample => (
+      sample &&
+      typeof sample.timestamp === "number" &&
+      Number.isFinite(sample.timestamp) &&
+      sample.timestamp >= 0 &&
+      typeof sample.hashrate === "number" &&
+      Number.isFinite(sample.hashrate) &&
+      sample.hashrate >= 0
+    ))
+    .map(sample => ({ timestamp: sample.timestamp, hashrate: sample.hashrate }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const unique = [];
+  for (const sample of ordered) {
+    const last = unique[unique.length - 1];
+    if (last && last.timestamp === sample.timestamp) unique[unique.length - 1] = sample;
+    else unique.push(sample);
+  }
+
+  return [
+    unique.map(sample => sample.timestamp / 1000),
+    unique.map(sample => sample.hashrate),
+  ];
+}
+
+/**
+ * Mount uPlot into a supplied container. Returns a cleanup callback which
+ * disconnects resize tracking and destroys the chart instance.
+ */
+export async function mountAdvancedHistoryChart(container, samples, formatHashrate) {
+  if (!container || typeof container.appendChild !== "function") {
+    throw new TypeError("A chart container is required");
+  }
+
+  const data = buildUPlotData(samples);
+  if (data[0].length < 2) {
+    container.innerHTML = '<p class="history-empty">至少需要两次成功刷新才能显示交互式趋势图</p>';
+    return () => {};
+  }
+
+  const UPlot = await loadUPlot();
+  const rootStyles = getComputedStyle(document.documentElement);
+  const accent = rootStyles.getPropertyValue("--accent-copper").trim() || "#c68b54";
+  const muted = rootStyles.getPropertyValue("--text-muted").trim() || "#8b8b9a";
+  const grid = rootStyles.getPropertyValue("--border-light").trim() || "rgba(128, 128, 128, 0.2)";
+  const formatValue = typeof formatHashrate === "function"
+    ? formatHashrate
+    : value => Number(value).toLocaleString();
+
+  const chartHeight = 190;
+  const chartWidth = Math.max(280, Math.floor(container.getBoundingClientRect().width || 720));
+  const plot = new UPlot({
+    width: chartWidth,
+    height: chartHeight,
+    legend: { show: true },
+    series: [
+      {},
+      {
+        label: "算力",
+        stroke: accent,
+        width: 2,
+        points: { show: true, size: 4 },
+        value: (_chart, value) => value == null ? "" : formatValue(value),
+      },
+    ],
+    axes: [
+      {
+        stroke: muted,
+        grid: { show: false },
+        ticks: { stroke: grid, width: 1 },
+      },
+      {
+        stroke: muted,
+        label: "算力",
+        values: (_chart, ticks) => ticks.map(value => formatValue(value)),
+        grid: { stroke: grid, width: 1 },
+        ticks: { stroke: grid, width: 1 },
+      },
+    ],
+  }, data, container);
+
+  const resizePlot = width => {
+    if (Number.isFinite(width) && width >= 260) {
+      plot.setSize({ width: Math.floor(width), height: chartHeight });
+    }
+  };
+
+  let observer = null;
+  let windowResizeHandler = null;
+  if (typeof window.ResizeObserver === "function") {
+    observer = new window.ResizeObserver(entries => {
+      resizePlot(entries[0]?.contentRect?.width);
+    });
+    observer.observe(container);
+  } else {
+    windowResizeHandler = () => resizePlot(container.getBoundingClientRect().width);
+    window.addEventListener("resize", windowResizeHandler);
+  }
+
+  return () => {
+    observer?.disconnect();
+    if (windowResizeHandler) window.removeEventListener("resize", windowResizeHandler);
+    plot.destroy();
+  };
+}
