@@ -684,7 +684,7 @@ async function handleConnect() {
 
   // Show loading skeleton
   disposeAdvancedHistoryChart();
-    renderSkeleton(els.dashboard, 6);
+  renderSkeleton(els.dashboard, 6);
   els.statusBadge.textContent = "连接中...";
   els.statusBadge.className = "status-badge status-warning";
 
@@ -806,7 +806,10 @@ async function showAdvancedHistoryChart(samples, fallbackMarkup) {
   status.textContent = "正在加载本地图表库…";
 
   try {
-    advancedHistoryChartModulePromise ??= import("./advanced-history-chart.js");
+    advancedHistoryChartModulePromise ??= import("./advanced-history-chart.js").catch(error => {
+      advancedHistoryChartModulePromise = null;
+      throw error;
+    });
     const chartModule = await advancedHistoryChartModulePromise;
     if (renderId !== advancedHistoryChartRenderId || !advancedHistoryChartEnabled) return;
 
@@ -820,7 +823,7 @@ async function showAdvancedHistoryChart(samples, fallbackMarkup) {
     status.textContent = samples.length < 2
       ? "至少需要两次成功刷新才能绘制交互式趋势图。"
       : "uPlot 交互式趋势图已启用；悬停可查看数据。";
-  } catch (error) {
+  } catch {
     if (renderId !== advancedHistoryChartRenderId) return;
     advancedHistoryChartEnabled = false;
     container.innerHTML = fallbackMarkup;
