@@ -363,3 +363,59 @@ test("custom background setting is persisted locally and restored at startup", (
   assert.match(storage, /dashboard_background_image/);
   assert.match(css, /body\.has-custom-background/);
 });
+
+
+
+test("profile transfer UI warns about tokens and processes files locally", () => {
+  const source = read("src/main.js");
+  assert.match(source, /id="exportProfiles"/);
+  assert.match(source, /id="importProfiles"/);
+  assert.match(source, /id="profileImportFile" type="file" accept="\.json,application\/json"/);
+  assert.match(source, /完整备份（包含 Token）/);
+  assert.match(source, /脱敏备份（不包含 Token）/);
+  assert.match(source, /createProfilesExport\(\{ includeSensitiveData \}\)/);
+  assert.match(source, /URL\.createObjectURL\(blob\)/);
+  assert.match(source, /parseProfilesImportJson\(await file\.text\(\)\)/);
+  assert.match(source, /importProfiles\(bundle\.profiles\)/);
+  assert.doesNotMatch(source, /fetch\(.*(?:profile|bundle|json)/i);
+});
+
+
+test("profile import refresh replaces the modal synchronously and requires fallback consent", () => {
+  const source = read("src/main.js");
+  assert.ok(source.includes("function replaceSettingsModal(overlay, selectedProfileId = null)"));
+  assert.ok(source.includes("replaceSettingsModal(overlay)"));
+  assert.doesNotMatch(source, /function closeModalAndReopenSettings/);
+  assert.ok(source.includes('error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED"'));
+  assert.ok(source.includes("importProfiles(bundle.profiles, { allowActiveProfileFallback: true })"));
+  assert.ok(source.includes("已按你的确认自动选择第一个可用配置"));
+});
+
+test("profile export measures the generated JSON in UTF-8 bytes", () => {
+  const source = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.ok(source.includes("new TextEncoder().encode(json).byteLength"));
+  assert.ok(storage.includes("utf8ByteLength(JSON.stringify(bundle, null, 2))"));
+  assert.ok(storage.includes("utf8ByteLength(raw) > MAX_PROFILE_BUNDLE_BYTES"));
+});
+
+
+test("profile transfer blocks control characters and restores configs through the safe helper", () => {
+  const source = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.ok(source.includes("配置名称和 Token 不能包含控制字符"));
+  assert.ok(storage.includes("entry.key === CONFIG_KEY"));
+  assert.ok(storage.includes("restoreStoredConfigEntry(entry.kind, entry.value)"));
+});
+
+
+test("initial connection form rejects control characters in access tokens", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf("async function handleConnect()");
+  const end = source.indexOf("\n}", start);
+  const handler = source.slice(start, end);
+  const slash = String.fromCharCode(92);
+  assert.ok(handler.includes(slash + "u0000-" + slash + "u001F" + slash + "u007F"));
+  assert.equal(handler.includes(slash + slash + "u0000"), false);
+  assert.match(handler, /Token 不能包含控制字符/);
+});
