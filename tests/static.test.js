@@ -442,6 +442,21 @@ test("uPlot chart assets are allowlisted and loaded only after an explicit opt-i
 
 
 
+test("interactive history chart waits for a measurable container width and supports cancellation", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+
+  assert.match(main, /let advancedHistoryChartMountController = null/);
+  assert.match(main, /advancedHistoryChartMountController\?\.abort\(\)/);
+  assert.match(main, /mountController\.signal/);
+  assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
+  assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
+  assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
+  assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
+});
+
 test("interactive history chart initializes after insertion and restores the cloned SVG fallback", () => {
   const main = read("src/main.js");
   const chart = read("src/advanced-history-chart.js");

@@ -8,6 +8,64 @@ const STYLESHEET_URL = new URL("../vendor/uplot/uPlot.min.css", import.meta.url)
 
 let assetsPromise = null;
 
+/**
+ * Wait until the chart container has a real width before constructing uPlot.
+ * This avoids painting a guessed-size chart while a parent is still hidden.
+ */
+function waitForContainerWidth(container, signal) {
+  const measureWidth = () => Math.floor(container.getBoundingClientRect().width);
+  const currentWidth = measureWidth();
+  if (currentWidth > 0) return Promise.resolve(currentWidth);
+
+  const abortError = () => {
+    const error = new Error("Chart mount was cancelled");
+    error.name = "AbortError";
+    return error;
+  };
+  if (signal?.aborted) return Promise.reject(abortError());
+
+  return new Promise((resolve, reject) => {
+    let observer = null;
+    let frameId = null;
+    let settled = false;
+
+    const cleanup = () => {
+      observer?.disconnect();
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const finish = width => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(width);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(abortError());
+    };
+    const checkWidth = () => {
+      const width = measureWidth();
+      if (width > 0) finish(width);
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (typeof window.ResizeObserver === "function") {
+      observer = new window.ResizeObserver(checkWidth);
+      observer.observe(container);
+      checkWidth();
+    } else {
+      const poll = () => {
+        checkWidth();
+        if (!settled) frameId = window.requestAnimationFrame(poll);
+      };
+      poll();
+    }
+  });
+}
+
 function loadScript() {
   if (typeof window.uPlot === "function") return Promise.resolve(window.uPlot);
 
@@ -93,7 +151,7 @@ export function buildUPlotData(samples) {
  * Mount uPlot into a supplied container. Returns a cleanup callback which
  * disconnects resize tracking and destroys the chart instance.
  */
-export async function mountAdvancedHistoryChart(container, samples, formatHashrate) {
+export async function mountAdvancedHistoryChart(container, samples, formatHashrate, signal) {
   if (!container || typeof container.appendChild !== "function") {
     throw new TypeError("A chart container is required");
   }
@@ -107,7 +165,16 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
     return () => {};
   }
 
+  // Do not create a guessed-width plot while the container is hidden.
+  await waitForContainerWidth(container, signal);
+  if (signal?.aborted) {
+    const error = new Error("Chart mount was cancelled");
+    error.name = "AbortError";
+    throw error;
+  }
+
   const UPlot = await loadUPlot();
+  const chartWidth = await waitForContainerWidth(container, signal);
   const rootStyles = getComputedStyle(document.documentElement);
   const accent = rootStyles.getPropertyValue("--accent-copper").trim() || "#c68b54";
   const muted = rootStyles.getPropertyValue("--text-muted").trim() || "#8b8b9a";
@@ -117,10 +184,6 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
     : value => Number(value).toLocaleString();
 
   const chartHeight = 190;
-  const measuredWidth = Math.floor(container.getBoundingClientRect().width);
-  // A hidden container has no measurable width yet. Start compactly and let
-  // ResizeObserver apply its real width when the container becomes visible.
-  const chartWidth = measuredWidth > 0 ? measuredWidth : 280;
   const plot = new UPlot({
     width: chartWidth,
     height: chartHeight,

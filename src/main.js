@@ -62,11 +62,14 @@ let connectPending = false;
 let advancedHistoryChartEnabled = false;
 let advancedHistoryChartModulePromise = null;
 let advancedHistoryChartCleanup = null;
+let advancedHistoryChartMountController = null;
 let advancedHistoryChartRenderId = 0;
 const statusTracker = createStatusTracker();
 
 function disposeAdvancedHistoryChart() {
   advancedHistoryChartRenderId += 1;
+  advancedHistoryChartMountController?.abort();
+  advancedHistoryChartMountController = null;
   if (advancedHistoryChartCleanup) {
     try {
       advancedHistoryChartCleanup();
@@ -811,6 +814,8 @@ async function showAdvancedHistoryChart(samples, fallbackNodes) {
   if (!container || !button || !status || !advancedHistoryChartEnabled) return;
 
   const renderId = ++advancedHistoryChartRenderId;
+  const mountController = new AbortController();
+  advancedHistoryChartMountController = mountController;
   button.disabled = true;
   status.textContent = "正在加载本地图表库…";
 
@@ -822,7 +827,9 @@ async function showAdvancedHistoryChart(samples, fallbackNodes) {
     const chartModule = await advancedHistoryChartModulePromise;
     if (renderId !== advancedHistoryChartRenderId || !advancedHistoryChartEnabled) return;
 
-    const cleanup = await chartModule.mountAdvancedHistoryChart(container, samples, formatHashrate);
+    const cleanup = await chartModule.mountAdvancedHistoryChart(
+      container, samples, formatHashrate, mountController.signal
+    );
     if (renderId !== advancedHistoryChartRenderId || !advancedHistoryChartEnabled) {
       cleanup();
       return;
@@ -841,6 +848,9 @@ async function showAdvancedHistoryChart(samples, fallbackNodes) {
     status.textContent = "增强图表加载失败，已恢复轻量图表。";
     showToast("交互式图表加载失败，默认图表仍可使用", "warn");
   } finally {
+    if (advancedHistoryChartMountController === mountController) {
+      advancedHistoryChartMountController = null;
+    }
     if (renderId === advancedHistoryChartRenderId) button.disabled = false;
   }
 }
