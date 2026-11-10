@@ -117,7 +117,10 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
     : value => Number(value).toLocaleString();
 
   const chartHeight = 190;
-  const chartWidth = Math.max(280, Math.floor(container.getBoundingClientRect().width || 720));
+  const measuredWidth = Math.floor(container.getBoundingClientRect().width);
+  // A hidden container has no measurable width yet. Start compactly and let
+  // ResizeObserver apply its real width when the container becomes visible.
+  const chartWidth = measuredWidth > 0 ? measuredWidth : 280;
   const plot = new UPlot({
     width: chartWidth,
     height: chartHeight,
@@ -149,8 +152,8 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
   }, data, container);
 
   const resizePlot = width => {
-    if (Number.isFinite(width) && width >= 260) {
-      plot.setSize({ width: Math.floor(width), height: chartHeight });
+    if (Number.isFinite(width) && width > 0) {
+      plot.setSize({ width: Math.max(1, Math.floor(width)), height: chartHeight });
     }
   };
 

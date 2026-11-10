@@ -440,3 +440,26 @@ test("uPlot chart assets are allowlisted and loaded only after an explicit opt-i
   assert.match(read("vendor/uplot/LICENSE"), /The MIT License/);
 });
 
+
+
+test("interactive history chart initializes after insertion and restores the cloned SVG fallback", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+  const renderStart = main.indexOf("function renderDashboard(data) {");
+  const renderEnd = main.indexOf("\n}\n", renderStart);
+  assert.ok(renderStart >= 0);
+  assert.ok(renderEnd > renderStart);
+  const render = main.slice(renderStart, renderEnd);
+
+  assert.ok(render.indexOf("disposeAdvancedHistoryChart();") < render.indexOf("const html = `"));
+  assert.ok(render.indexOf("els.dashboard.innerHTML = html;") < render.indexOf("initSessionHistoryChart(historySamples);"));
+  assert.doesNotMatch(render, /disposeAdvancedHistoryChart\(\);\s*<\\/div>/);
+  assert.match(main, /function restoreSessionHistoryFallback\(container, fallbackNodes\)/);
+  assert.match(main, /container\.replaceChildren\(\.\.\.fallbackNodes\.map\(node => node\.cloneNode\(true\)\)\)/);
+  assert.doesNotMatch(main, /container\.innerHTML\s*=\s*fallbackMarkup/);
+
+  assert.match(chart, /const measuredWidth = Math\.floor\(container\.getBoundingClientRect\(\)\.width\)/);
+  assert.match(chart, /const chartWidth = measuredWidth > 0 \? measuredWidth : 280/);
+  assert.match(chart, /Number\.isFinite\(width\) && width > 0/);
+  assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
+});

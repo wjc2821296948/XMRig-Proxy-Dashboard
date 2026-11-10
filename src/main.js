@@ -77,6 +77,10 @@ function disposeAdvancedHistoryChart() {
   }
 }
 
+function restoreSessionHistoryFallback(container, fallbackNodes) {
+  container.replaceChildren(...fallbackNodes.map(node => node.cloneNode(true)));
+}
+
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
 function getApiUrlValidationError(value) {
@@ -800,7 +804,7 @@ function renderSessionHashrateTrend(samples) {
 /* ==========================================================================
    Optional interactive session-history chart
    ========================================================================== */
-async function showAdvancedHistoryChart(samples, fallbackMarkup) {
+async function showAdvancedHistoryChart(samples, fallbackNodes) {
   const container = document.getElementById("sessionHistoryChart");
   const button = document.getElementById("toggleAdvancedHistoryChart");
   const status = document.getElementById("sessionHistoryChartStatus");
@@ -831,7 +835,7 @@ async function showAdvancedHistoryChart(samples, fallbackMarkup) {
   } catch {
     if (renderId !== advancedHistoryChartRenderId) return;
     advancedHistoryChartEnabled = false;
-    container.innerHTML = fallbackMarkup;
+    restoreSessionHistoryFallback(container, fallbackNodes);
     button.setAttribute("aria-pressed", "false");
     button.textContent = "重试交互式图表";
     status.textContent = "增强图表加载失败，已恢复轻量图表。";
@@ -841,11 +845,13 @@ async function showAdvancedHistoryChart(samples, fallbackMarkup) {
   }
 }
 
-function initSessionHistoryChart(samples, fallbackMarkup) {
+function initSessionHistoryChart(samples) {
   const container = document.getElementById("sessionHistoryChart");
   const button = document.getElementById("toggleAdvancedHistoryChart");
   const status = document.getElementById("sessionHistoryChartStatus");
   if (!container || !button || !status) return;
+
+  const fallbackNodes = Array.from(container.childNodes, node => node.cloneNode(true));
 
   button.textContent = advancedHistoryChartEnabled ? "切换到轻量图表" : "启用交互式图表";
   button.setAttribute("aria-pressed", String(advancedHistoryChartEnabled));
@@ -853,7 +859,7 @@ function initSessionHistoryChart(samples, fallbackMarkup) {
     if (advancedHistoryChartEnabled) {
       advancedHistoryChartEnabled = false;
       disposeAdvancedHistoryChart();
-      container.innerHTML = fallbackMarkup;
+      restoreSessionHistoryFallback(container, fallbackNodes);
       status.textContent = "当前使用轻量 SVG 图表。";
       button.textContent = "启用交互式图表";
       button.setAttribute("aria-pressed", "false");
@@ -863,11 +869,11 @@ function initSessionHistoryChart(samples, fallbackMarkup) {
     advancedHistoryChartEnabled = true;
     button.textContent = "切换到轻量图表";
     button.setAttribute("aria-pressed", "true");
-    void showAdvancedHistoryChart(samples, fallbackMarkup);
+    void showAdvancedHistoryChart(samples, fallbackNodes);
   });
 
   if (advancedHistoryChartEnabled) {
-    void showAdvancedHistoryChart(samples, fallbackMarkup);
+    void showAdvancedHistoryChart(samples, fallbackNodes);
   } else {
     status.textContent = "当前使用轻量 SVG 图表。";
   }
@@ -877,6 +883,7 @@ function initSessionHistoryChart(samples, fallbackMarkup) {
    Dashboard Rendering
    ========================================================================== */
 function renderDashboard(data) {
+  disposeAdvancedHistoryChart();
   latestSummaryData = data;
   const historySamples = recordMetricSample(data, Date.now(), loadActiveProfileId() || "current");
   const sessionHashrateTrend = renderSessionHashrateTrend(historySamples);
@@ -1081,13 +1088,12 @@ function renderDashboard(data) {
         <div class="stat-row" style="margin-top:1rem"><span class="stat-label">总哈希数</span><span class="stat-value">${formatNumber(data.results?.hashes_total || 0)}</span></div>
         <div class="stat-row"><span class="stat-label">平均提交时间</span><span class="stat-value">${data.results?.avg_time || 0} 秒</span></div>
       </div>
-  disposeAdvancedHistoryChart();
     </div>
   `;
-  initSessionHistoryChart(historySamples, sessionHashrateTrend);
 
   els.dashboard.innerHTML = html;
   els.dashboard.className = "";
+  initSessionHistoryChart(historySamples);
 
   // Initialize chart point tooltips (one delegated listener per chart,
   // instead of one per data point per render).
