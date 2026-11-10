@@ -105,6 +105,33 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(headResponse.headers.get("content-length"), homepage.headers.get("content-length"));
   assert.equal(await headResponse.text(), "");
 
+  const homepageEtag = homepage.headers.get("etag");
+  assert.ok(homepageEtag, "successful asset responses must expose an ETag");
+  const strongMatch = await fetch(baseUrl, { headers: { "If-None-Match": homepageEtag } });
+  assert.equal(strongMatch.status, 304);
+  assert.equal(await strongMatch.text(), "");
+
+  const weakMatch = await fetch(baseUrl, { headers: { "If-None-Match": `W/${homepageEtag}` } });
+  assert.equal(weakMatch.status, 304);
+  assert.equal(await weakMatch.text(), "");
+
+  const listMatch = await fetch(baseUrl, {
+    headers: { "If-None-Match": `"opaque,other-tag", W/${homepageEtag}` },
+  });
+  assert.equal(listMatch.status, 304);
+  assert.equal(await listMatch.text(), "");
+
+  const wildcardMatch = await fetch(baseUrl, { headers: { "If-None-Match": "*" } });
+  assert.equal(wildcardMatch.status, 304);
+  assert.equal(await wildcardMatch.text(), "");
+
+  const weakHeadMatch = await fetch(baseUrl, {
+    method: "HEAD",
+    headers: { "If-None-Match": `W/${homepageEtag}` },
+  });
+  assert.equal(weakHeadMatch.status, 304);
+  assert.equal(await weakHeadMatch.text(), "");
+
   // Send a raw HTTP request because fetch rejects malformed request targets
   // before they reach the server. The server must answer safely with 400.
   const malformedResponse = await new Promise((resolve, reject) => {
