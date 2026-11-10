@@ -453,7 +453,7 @@ test("interactive history chart initializes after insertion and restores the clo
 
   assert.ok(render.indexOf("disposeAdvancedHistoryChart();") < render.indexOf("const html = `"));
   assert.ok(render.indexOf("els.dashboard.innerHTML = html;") < render.indexOf("initSessionHistoryChart(historySamples);"));
-  assert.doesNotMatch(render, /disposeAdvancedHistoryChart\(\);\s*<\\/div>/);
+  assert.equal(render.includes("disposeAdvancedHistoryChart();\n    </div>"), false);
   assert.match(main, /function restoreSessionHistoryFallback\(container, fallbackNodes\)/);
   assert.match(main, /container\.replaceChildren\(\.\.\.fallbackNodes\.map\(node => node\.cloneNode\(true\)\)\)/);
   assert.doesNotMatch(main, /container\.innerHTML\s*=\s*fallbackMarkup/);
