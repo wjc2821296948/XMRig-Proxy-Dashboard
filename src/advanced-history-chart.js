@@ -8,22 +8,22 @@ const STYLESHEET_URL = new URL("../vendor/uplot/uPlot.min.css", import.meta.url)
 
 let assetsPromise = null;
 
+function createChartAbortError() {
+  const error = new Error("Chart mount was cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
 /**
  * Wait until the chart container has a real width before constructing uPlot.
  * This avoids painting a guessed-size chart while a parent is still hidden.
  */
 function waitForContainerWidth(container, signal) {
+  if (signal?.aborted) return Promise.reject(createChartAbortError());
+
   const measureWidth = () => Math.floor(container.getBoundingClientRect().width);
   const currentWidth = measureWidth();
   if (currentWidth > 0) return Promise.resolve(currentWidth);
-
-  const abortError = () => {
-    const error = new Error("Chart mount was cancelled");
-    error.name = "AbortError";
-    return error;
-  };
-  if (signal?.aborted) return Promise.reject(abortError());
-
   return new Promise((resolve, reject) => {
     let observer = null;
     let frameId = null;
@@ -44,7 +44,7 @@ function waitForContainerWidth(container, signal) {
       if (settled) return;
       settled = true;
       cleanup();
-      reject(abortError());
+      reject(createChartAbortError());
     };
     const checkWidth = () => {
       const width = measureWidth();
@@ -166,20 +166,10 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
   }
 
   // Do not create a guessed-width plot while the container is hidden.
-  await waitForContainerWidth(container, signal);
-  if (signal?.aborted) {
-    const error = new Error("Chart mount was cancelled");
-    error.name = "AbortError";
-    throw error;
-  }
-
-  const UPlot = await loadUPlot();
   const chartWidth = await waitForContainerWidth(container, signal);
-  if (signal?.aborted) {
-    const error = new Error("Chart mount was cancelled");
-    error.name = "AbortError";
-    throw error;
-  }
+  const UPlot = await loadUPlot();
+  // Asset loading is not cancellable; check the signal before creating the plot.
+  if (signal?.aborted) throw createChartAbortError();
   const rootStyles = getComputedStyle(document.documentElement);
   const accent = rootStyles.getPropertyValue("--accent-copper").trim() || "#c68b54";
   const muted = rootStyles.getPropertyValue("--text-muted").trim() || "#8b8b9a";

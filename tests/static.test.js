@@ -477,6 +477,8 @@ test("interactive history chart initializes after insertion and restores the clo
 
   assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
   assert.match(chart, /const chartWidth = await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /if \(signal\?\.aborted\) throw createChartAbortError\(\)/);
+  assert.equal((chart.match(/await waitForContainerWidth\(container, signal\)/g) || []).length, 1);
   assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
   assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
   assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
