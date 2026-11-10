@@ -175,6 +175,7 @@ xmrig-proxy-dashboard/
 |--------|------------|
 | **Token Leak** | Stored only in browser local storage, console logs sanitized `Bearer **********` |
 | **XSS** | Dynamic text in HTML templates is escaped with `escapeHtml()`, and CSP restricts script sources; dynamic rendering still needs ongoing review |
+| **Framing / Clickjacking** | Cloudflare Pages and the built-in server deny framing through HTTP CSP headers; `file://` or simple servers without these headers cannot provide this protection |
 | **MITM** | Recommend Proxy enables HTTPS (self-signed needs browser trust) or access via VPN/tunnel |
 | **CSRF** | Pure GET + Bearer Token, no Cookies, naturally immune to CSRF |
 | **Config Injection** | URL validated via `new URL()`, Token only sent as Header |

@@ -121,6 +121,14 @@ function matchesIfNoneMatch(header, currentEtag) {
     opaqueEntityTag(candidate) === currentOpaqueTag);
 }
 
+const SECURITY_HEADERS = Object.freeze({
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src http: https:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
+});
+
 const server = createServer((req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405, {
@@ -151,9 +159,7 @@ const server = createServer((req, res) => {
     res.writeHead(304, {
       "ETag": asset.etag,
       "Cache-Control": "no-cache",
-      "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "DENY",
-      "Referrer-Policy": "strict-origin-when-cross-origin",
+      ...SECURITY_HEADERS,
     });
     res.end();
     return;
@@ -166,9 +172,7 @@ const server = createServer((req, res) => {
     "Cache-Control": "no-cache",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src http: https:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
+    ...SECURITY_HEADERS
   });
   res.end(req.method === "HEAD" ? undefined : asset.data);
 });

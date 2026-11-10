@@ -175,6 +175,7 @@ xmrig-proxy-dashboard/
 |------|----------|
 | **Token 泄露** | 仅存在浏览器本地存储，控制台日志自动脱敏 `Bearer **********` |
 | **XSS** | HTML 模板中的动态文本使用 `escapeHtml()` 转义，CSP 限制脚本来源；仍需持续审查动态渲染路径 |
+| **页面嵌入/点击劫持** | Cloudflare Pages 或内置服务器通过 HTTP CSP 响应头禁止页面被嵌入；`file://` 直开或不发送这些响应头的简易服务器无法提供此项保护 |
 | **中间人攻击** | 建议 Proxy 开启 HTTPS（自签证书需浏览器信任）或通过 VPN/隧道访问 |
 | **CSRF** | 纯 GET 请求 + Bearer Token，无 Cookie，天然免疫 CSRF |
 | **配置注入** | URL 经 `new URL()` 校验，Token 仅作 Header 传输 |
