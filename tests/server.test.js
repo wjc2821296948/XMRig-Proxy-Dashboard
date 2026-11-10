@@ -47,6 +47,9 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/background-upload-guard.js": "export const uploadGuard = true;",
     "src/snapshot-export.js": "export const snapshotExport = true;",
     "src/metrics-history.js": "export const metricsHistory = true;",
+    "src/advanced-history-chart.js": "export const advancedHistoryChart = true;",
+    "vendor/uplot/uPlot.iife.min.js": "var uPlot = function () {};",
+    "vendor/uplot/uPlot.min.css": ".uplot { display: block; }",
     "src/ui.js": "export const ui = true;",
     "package.json": "{ \"private\": true, \"type\": \"module\" }",
     "README.md": "private readme",
@@ -151,6 +154,19 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(moduleResponse.status, 200);
   assert.match(moduleResponse.headers.get("content-type"), /javascript/);
   assert.equal(await moduleResponse.text(), "trusted-startup-module");
+
+  const advancedChartResponse = await fetch(`${baseUrl}/src/advanced-history-chart.js`);
+  assert.equal(advancedChartResponse.status, 200);
+  assert.match(advancedChartResponse.headers.get("content-type"), /javascript/);
+  assert.equal(await advancedChartResponse.text(), "export const advancedHistoryChart = true;");
+
+  const uPlotScriptResponse = await fetch(`${baseUrl}/vendor/uplot/uPlot.iife.min.js`);
+  assert.equal(uPlotScriptResponse.status, 200);
+  assert.match(uPlotScriptResponse.headers.get("content-type"), /javascript/);
+
+  const uPlotStylesResponse = await fetch(`${baseUrl}/vendor/uplot/uPlot.min.css`);
+  assert.equal(uPlotStylesResponse.status, 200);
+  assert.match(uPlotStylesResponse.headers.get("content-type"), /text\/css/);
 
   const themeColorResponse = await fetch(`${baseUrl}/src/theme-color.js`);
   assert.equal(themeColorResponse.status, 200);

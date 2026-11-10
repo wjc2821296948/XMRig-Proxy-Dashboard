@@ -59,7 +59,30 @@ let latestSummaryData = null;
 let cleanupVisibilityRefresh = null;
 let cleanupManualRefresh = null;
 let connectPending = false;
+let advancedHistoryChartEnabled = false;
+let advancedHistoryChartModulePromise = null;
+let advancedHistoryChartCleanup = null;
+let advancedHistoryChartMountController = null;
+let advancedHistoryChartRenderId = 0;
 const statusTracker = createStatusTracker();
+
+function disposeAdvancedHistoryChart() {
+  advancedHistoryChartRenderId += 1;
+  advancedHistoryChartMountController?.abort();
+  advancedHistoryChartMountController = null;
+  if (advancedHistoryChartCleanup) {
+    try {
+      advancedHistoryChartCleanup();
+    } catch {
+      // Chart cleanup must never block login, logout, or dashboard rendering.
+    }
+    advancedHistoryChartCleanup = null;
+  }
+}
+
+function restoreSessionHistoryFallback(container, fallbackNodes) {
+  container.replaceChildren(...fallbackNodes.map(node => node.cloneNode(true)));
+}
 
 
 /** Return a localized validation reason for a Proxy API URL, or null when valid. */
@@ -580,6 +603,7 @@ function renderConfigPlaceholder() {
    Connection Form Rendering
    ========================================================================== */
 function renderConnectForm(prefill = {}) {
+  disposeAdvancedHistoryChart();
   latestSummaryData = null;
   clearMetricHistory();
   const { apiUrl = "", apiToken = "", remember = true } = prefill;
@@ -671,6 +695,7 @@ async function handleConnect() {
   }
 
   // Show loading skeleton
+  disposeAdvancedHistoryChart();
   renderSkeleton(els.dashboard, 6);
   els.statusBadge.textContent = "连接中...";
   els.statusBadge.className = "status-badge status-warning";
@@ -780,9 +805,93 @@ function renderSessionHashrateTrend(samples) {
 }
 
 /* ==========================================================================
+   Optional interactive session-history chart
+   ========================================================================== */
+async function showAdvancedHistoryChart(samples, fallbackNodes) {
+  const container = document.getElementById("sessionHistoryChart");
+  const button = document.getElementById("toggleAdvancedHistoryChart");
+  const status = document.getElementById("sessionHistoryChartStatus");
+  if (!container || !button || !status || !advancedHistoryChartEnabled) return;
+
+  const renderId = ++advancedHistoryChartRenderId;
+  const mountController = new AbortController();
+  advancedHistoryChartMountController = mountController;
+  status.textContent = "正在加载本地图表库…";
+
+  try {
+    advancedHistoryChartModulePromise ??= import("./advanced-history-chart.js").catch(error => {
+      advancedHistoryChartModulePromise = null;
+      throw error;
+    });
+    const chartModule = await advancedHistoryChartModulePromise;
+    if (renderId !== advancedHistoryChartRenderId || !advancedHistoryChartEnabled) return;
+
+    const cleanup = await chartModule.mountAdvancedHistoryChart(
+      container, samples, formatHashrate, mountController.signal
+    );
+    if (renderId !== advancedHistoryChartRenderId || !advancedHistoryChartEnabled) {
+      cleanup();
+      return;
+    }
+
+    advancedHistoryChartCleanup = cleanup;
+    status.textContent = samples.length < 2
+      ? "至少需要两次成功刷新才能绘制交互式趋势图。"
+      : "uPlot 交互式趋势图已启用；悬停可查看数据。";
+  } catch {
+    if (renderId !== advancedHistoryChartRenderId) return;
+    advancedHistoryChartEnabled = false;
+    restoreSessionHistoryFallback(container, fallbackNodes);
+    button.setAttribute("aria-pressed", "false");
+    button.textContent = "重试交互式图表";
+    status.textContent = "增强图表加载失败，已恢复轻量图表。";
+    showToast("交互式图表加载失败，默认图表仍可使用", "warn");
+  } finally {
+    if (advancedHistoryChartMountController === mountController) {
+      advancedHistoryChartMountController = null;
+    }
+  }
+}
+
+function initSessionHistoryChart(samples) {
+  const container = document.getElementById("sessionHistoryChart");
+  const button = document.getElementById("toggleAdvancedHistoryChart");
+  const status = document.getElementById("sessionHistoryChartStatus");
+  if (!container || !button || !status) return;
+
+  const fallbackNodes = Array.from(container.childNodes, node => node.cloneNode(true));
+
+  button.textContent = advancedHistoryChartEnabled ? "切换到轻量图表" : "启用交互式图表";
+  button.setAttribute("aria-pressed", String(advancedHistoryChartEnabled));
+  button.addEventListener("click", () => {
+    if (advancedHistoryChartEnabled) {
+      advancedHistoryChartEnabled = false;
+      disposeAdvancedHistoryChart();
+      restoreSessionHistoryFallback(container, fallbackNodes);
+      status.textContent = "当前使用轻量 SVG 图表。";
+      button.textContent = "启用交互式图表";
+      button.setAttribute("aria-pressed", "false");
+      return;
+    }
+
+    advancedHistoryChartEnabled = true;
+    button.textContent = "切换到轻量图表";
+    button.setAttribute("aria-pressed", "true");
+    void showAdvancedHistoryChart(samples, fallbackNodes);
+  });
+
+  if (advancedHistoryChartEnabled) {
+    void showAdvancedHistoryChart(samples, fallbackNodes);
+  } else {
+    status.textContent = "当前使用轻量 SVG 图表。";
+  }
+}
+
+/* ==========================================================================
    Dashboard Rendering
    ========================================================================== */
 function renderDashboard(data) {
+  disposeAdvancedHistoryChart();
   latestSummaryData = data;
   const historySamples = recordMetricSample(data, Date.now(), loadActiveProfileId() || "current");
   const sessionHashrateTrend = renderSessionHashrateTrend(historySamples);
@@ -926,9 +1035,16 @@ function renderDashboard(data) {
 
     <div class="grid">
       <div class="card large-card history-card">
-        <div class="card-title">会话算力趋势</div>
-        <div class="card-label">最近 30 次成功刷新 · 切换配置或重新连接后重置 · 仅保留在当前页面会话</div>
-        <div class="history-chart">${sessionHashrateTrend}</div>
+        <div class="history-chart-toolbar">
+          <div>
+            <div class="card-title">会话算力趋势</div>
+            <div class="card-label">最近 30 次成功刷新 · 切换配置或重新连接后重置 · 仅保留在当前页面会话</div>
+          </div>
+          <button class="history-chart-toggle" id="toggleAdvancedHistoryChart" type="button"
+                  aria-pressed="false">启用交互式图表</button>
+        </div>
+        <div class="history-chart" id="sessionHistoryChart">${sessionHashrateTrend}</div>
+        <p class="history-chart-status" id="sessionHistoryChartStatus" role="status" aria-live="polite"></p>
       </div>
     </div>
 
@@ -985,6 +1101,7 @@ function renderDashboard(data) {
 
   els.dashboard.innerHTML = html;
   els.dashboard.className = "";
+  initSessionHistoryChart(historySamples);
 
   // Initialize chart point tooltips (one delegated listener per chart,
   // instead of one per data point per render).
@@ -1150,6 +1267,7 @@ function openSettingsModal(selectedProfileId = null) {
   const reconnectProfile = async profile => {
     // Stop the previous profile's polling/request before issuing requests with
     // the newly selected profile, so a late response cannot overwrite it.
+    disposeAdvancedHistoryChart();
     stopAutoRefresh();
     closeModal(overlay);
     showToast("正在连接 " + profile.name + "...", "info");
@@ -1554,7 +1672,6 @@ function replaceSettingsModal(overlay, selectedProfileId = null) {
   openSettingsModal(selectedProfileId);
 }
 
-
 function closeModal(overlay) {
   if (!overlay.parentNode) {
     // Already detached — still need to release the ESC handler, which
@@ -1714,6 +1831,7 @@ async function init() {
   const cfg = loadConfig();
   if (consumeConfigCleanupWarning()) {
     showToast("发现损坏的连接配置，但浏览器阻止清理；请清理此站点的浏览数据后重试", "warn");
+    disposeAdvancedHistoryChart();
   }
   if (cfg) {
     // Show skeleton while fetching
