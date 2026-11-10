@@ -473,8 +473,12 @@ test("interactive history chart initializes after insertion and restores the clo
   assert.match(main, /container\.replaceChildren\(\.\.\.fallbackNodes\.map\(node => node\.cloneNode\(true\)\)\)/);
   assert.doesNotMatch(main, /container\.innerHTML\s*=\s*fallbackMarkup/);
 
-  assert.match(chart, /const measuredWidth = Math\.floor\(container\.getBoundingClientRect\(\)\.width\)/);
-  assert.match(chart, /const chartWidth = measuredWidth > 0 \? measuredWidth : 280/);
+  assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /const chartWidth = await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
+  assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
+  assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
   assert.match(chart, /Number\.isFinite\(width\) && width > 0/);
+  assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
   assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
 });
