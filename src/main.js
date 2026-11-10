@@ -816,7 +816,6 @@ async function showAdvancedHistoryChart(samples, fallbackNodes) {
   const renderId = ++advancedHistoryChartRenderId;
   const mountController = new AbortController();
   advancedHistoryChartMountController = mountController;
-  button.disabled = true;
   status.textContent = "正在加载本地图表库…";
 
   try {
@@ -851,7 +850,6 @@ async function showAdvancedHistoryChart(samples, fallbackNodes) {
     if (advancedHistoryChartMountController === mountController) {
       advancedHistoryChartMountController = null;
     }
-    if (renderId === advancedHistoryChartRenderId) button.disabled = false;
   }
 }
 

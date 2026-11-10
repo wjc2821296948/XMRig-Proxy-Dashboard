@@ -449,6 +449,8 @@ test("interactive history chart waits for a measurable container width and suppo
   assert.match(main, /let advancedHistoryChartMountController = null/);
   assert.match(main, /advancedHistoryChartMountController\?\.abort\(\)/);
   assert.match(main, /mountController\.signal/);
+  assert.doesNotMatch(main, /button\.disabled = true/);
+  assert.doesNotMatch(main, /button\.disabled = false/);
   assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
   assert.match(chart, /await waitForContainerWidth\(container, signal\)/);
   assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
