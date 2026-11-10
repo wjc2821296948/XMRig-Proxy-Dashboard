@@ -100,7 +100,10 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
 
   const data = buildUPlotData(samples);
   if (data[0].length < 2) {
-    container.innerHTML = '<p class="history-empty">至少需要两次成功刷新才能显示交互式趋势图</p>';
+    const emptyState = document.createElement("p");
+    emptyState.className = "history-empty";
+    emptyState.textContent = "至少需要两次成功刷新才能显示交互式趋势图";
+    container.replaceChildren(emptyState);
     return () => {};
   }
 
