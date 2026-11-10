@@ -419,3 +419,70 @@ test("initial connection form rejects control characters in access tokens", () =
   assert.equal(handler.includes(slash + slash + "u0000"), false);
   assert.match(handler, /Token 不能包含控制字符/);
 });
+
+
+test("uPlot chart assets are allowlisted and loaded only after an explicit opt-in", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+  const vendorScript = read("vendor/uplot/uPlot.iife.min.js");
+  const vendorCss = read("vendor/uplot/uPlot.min.css");
+
+  assert.ok(PUBLIC_ASSET_PATHS.includes("src/advanced-history-chart.js"));
+  assert.ok(PUBLIC_ASSET_PATHS.includes("vendor/uplot/uPlot.iife.min.js"));
+  assert.ok(PUBLIC_ASSET_PATHS.includes("vendor/uplot/uPlot.min.css"));
+  assert.match(main, /advancedHistoryChartModulePromise \?\?= import\("\.\/advanced-history-chart\.js"\)/);
+  assert.match(main, /toggleAdvancedHistoryChart/);
+  assert.match(chart, /new URL\("\.\.\/vendor\/uplot\/uPlot\.iife\.min\.js", import\.meta\.url\)/);
+  assert.match(chart, /new URL\("\.\.\/vendor\/uplot\/uPlot\.min\.css", import\.meta\.url\)/);
+  assert.doesNotMatch(chart, /https?:\/\//);
+  assert.match(vendorScript, /uPlot/);
+  assert.match(vendorCss, /\.uplot/);
+  assert.match(read("vendor/uplot/LICENSE"), /The MIT License/);
+});
+
+
+
+test("interactive history chart waits for a measurable container width and supports cancellation", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+
+  assert.match(main, /let advancedHistoryChartMountController = null/);
+  assert.match(main, /advancedHistoryChartMountController\?\.abort\(\)/);
+  assert.match(main, /mountController\.signal/);
+  assert.doesNotMatch(main, /button\.disabled = true/);
+  assert.doesNotMatch(main, /button\.disabled = false/);
+  assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
+  assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
+  assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
+  assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
+});
+
+test("interactive history chart initializes after insertion and restores the cloned SVG fallback", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+  const renderStart = main.indexOf("function renderDashboard(data) {");
+  const renderEnd = main.indexOf("\n}\n", renderStart);
+  assert.ok(renderStart >= 0);
+  assert.ok(renderEnd > renderStart);
+  const render = main.slice(renderStart, renderEnd);
+
+  assert.ok(render.indexOf("disposeAdvancedHistoryChart();") < render.indexOf("const html = `"));
+  assert.ok(render.indexOf("els.dashboard.innerHTML = html;") < render.indexOf("initSessionHistoryChart(historySamples);"));
+  assert.equal(render.includes("disposeAdvancedHistoryChart();\n    </div>"), false);
+  assert.match(main, /function restoreSessionHistoryFallback\(container, fallbackNodes\)/);
+  assert.match(main, /container\.replaceChildren\(\.\.\.fallbackNodes\.map\(node => node\.cloneNode\(true\)\)\)/);
+  assert.doesNotMatch(main, /container\.innerHTML\s*=\s*fallbackMarkup/);
+
+  assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /const chartWidth = await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /if \(signal\?\.aborted\) throw createChartAbortError\(\)/);
+  assert.equal((chart.match(/await waitForContainerWidth\(container, signal\)/g) || []).length, 1);
+  assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
+  assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
+  assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
+  assert.match(chart, /Number\.isFinite\(width\) && width > 0/);
+  assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
+  assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
+});

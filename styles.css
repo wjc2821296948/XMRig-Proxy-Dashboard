@@ -1616,3 +1616,50 @@ body.has-custom-background {
   color: var(--text-muted);
   text-align: center;
 }
+
+
+/* Optional uPlot controls for the session-local history card. */
+.history-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.history-chart-toolbar .card-label {
+  margin-bottom: 0;
+}
+
+.history-chart-toggle {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.7rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.history-chart-toggle:hover:not(:disabled) {
+  border-color: var(--accent-copper);
+}
+
+.history-chart-toggle:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.history-chart-status {
+  min-height: 1.1rem;
+  margin: 0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.history-chart .uplot {
+  max-width: 100%;
+}
+
