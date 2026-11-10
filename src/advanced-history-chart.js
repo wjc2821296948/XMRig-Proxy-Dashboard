@@ -175,6 +175,11 @@ export async function mountAdvancedHistoryChart(container, samples, formatHashra
 
   const UPlot = await loadUPlot();
   const chartWidth = await waitForContainerWidth(container, signal);
+  if (signal?.aborted) {
+    const error = new Error("Chart mount was cancelled");
+    error.name = "AbortError";
+    throw error;
+  }
   const rootStyles = getComputedStyle(document.documentElement);
   const accent = rootStyles.getPropertyValue("--accent-copper").trim() || "#c68b54";
   const muted = rootStyles.getPropertyValue("--text-muted").trim() || "#8b8b9a";
