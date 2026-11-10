@@ -99,6 +99,8 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(homepage.status, 200);
   assert.match(homepage.headers.get("content-security-policy"), /default-src 'self'/);
   assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.match(homepage.headers.get("content-security-policy"), /object-src 'none'/);
+  assert.match(homepage.headers.get("content-security-policy"), /frame-src 'none'/);
   assert.equal(homepage.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 

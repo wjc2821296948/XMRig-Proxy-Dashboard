@@ -486,3 +486,8 @@ test("interactive history chart initializes after insertion and restores the clo
   assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
   assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
 });
+test("document CSP blocks object and frame content", () => {
+  const html = read("index.html");
+  assert.match(html, /object-src 'none'/);
+  assert.match(html, /frame-src 'none'/);
+});
