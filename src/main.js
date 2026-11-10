@@ -1595,10 +1595,10 @@ function openSettingsModal(selectedProfileId = null) {
     }
     if (refreshInterval < 1 || refreshInterval > 120) {
       showToast("刷新间隔必须在 1-120 秒之间", "error");
-    if (/[\u0000-\u001F\u007F]/.test(name) || /[\u0000-\u001F\u007F]/.test(token)) {
-      showToast("配置名称和 Token 不能包含控制字符", "error");
       return;
     }
+    if (/[\u0000-\u001F\u007F]/.test(name) || /[\u0000-\u001F\u007F]/.test(token)) {
+      showToast("配置名称和 Token 不能包含控制字符", "error");
       return;
     }
 
@@ -1644,6 +1644,8 @@ function openSettingsModal(selectedProfileId = null) {
   const escHandler = e => { if (e.key === "Escape" && overlay.parentNode) closeModal(overlay); };
   document.addEventListener("keydown", escHandler);
   overlay._escHandler = escHandler;
+}
+
 function replaceSettingsModal(overlay, selectedProfileId = null) {
   // This is a content replacement, not a user-requested animated close.
   // Remove the old node synchronously to avoid duplicate modal IDs while
@@ -1654,9 +1656,6 @@ function replaceSettingsModal(overlay, selectedProfileId = null) {
   }
   if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
   openSettingsModal(selectedProfileId);
-}
-
-
 }
 
 function closeModal(overlay) {
