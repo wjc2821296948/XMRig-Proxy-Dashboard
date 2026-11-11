@@ -1512,15 +1512,15 @@ test("failed profile import preserves its original error when snapshot rollback 
   let tokenWrites = 0;
   globalThis.sessionStorage = {
     getItem: key => workingSession.getItem(key),
-    removeItem: key => workingSession.removeItem(key),
+    removeItem(key) {
+      if (key === "xmrig_proxy_session_tokens" && tokenWrites > 0) {
+        throw new DOMException("token rollback denied", "QuotaExceededError");
+      }
+      workingSession.removeItem(key);
+    },
     clear: () => workingSession.clear(),
     setItem(key, value) {
-      if (key === "xmrig_proxy_session_tokens") {
-        tokenWrites += 1;
-        if (tokenWrites > 1) {
-          throw new DOMException("token rollback denied", "QuotaExceededError");
-        }
-      }
+      if (key === "xmrig_proxy_session_tokens") tokenWrites += 1;
       workingSession.setItem(key, value);
     },
   };
@@ -1545,6 +1545,6 @@ test("failed profile import preserves its original error when snapshot rollback 
   assert.ok(thrown instanceof Error, "the import must report its failed rollback");
   assert.match(thrown.message, /未能完整恢复原状态/);
   assert.equal(thrown.cause?.message, "无法保存导入的 Proxy 配置");
-  assert.equal(tokenWrites, 2, "one token write and one failed rollback write are expected");
+  assert.equal(tokenWrites, 1, "the import token write must succeed before rollback removal is blocked");
   assert.equal(consumeStorageRecoveryWarning(), true);
 });
