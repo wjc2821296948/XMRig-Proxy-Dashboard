@@ -491,3 +491,41 @@ test("document CSP blocks object and frame content", () => {
   assert.match(html, /object-src 'none'/);
   assert.match(html, /frame-src 'none'/);
 });
+
+
+test("CSP directives stay aligned across meta, Cloudflare Pages, and CLI responses", () => {
+  const html = read("index.html");
+  const headers = read("_headers");
+  const server = read("bin/server.js");
+  const metaMatch = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
+  const serverMatch = server.match(/"Content-Security-Policy": "([^"]+)"/);
+  const headersMatch = headers.match(/^\\s*Content-Security-Policy:\\s*(.+)$/m);
+
+  assert.ok(metaMatch, "index.html must declare a meta CSP");
+  assert.ok(serverMatch, "the CLI server must declare an HTTP CSP");
+  assert.ok(headersMatch, "Cloudflare Pages must declare an HTTP CSP");
+
+  const [metaCsp, serverCsp, pagesCsp] = [metaMatch[1], serverMatch[1], headersMatch[1]];
+  const sharedDirectives = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "img-src 'self' data: https:",
+    "connect-src http: https:",
+    "object-src 'none'",
+    "frame-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ];
+
+  for (const directive of sharedDirectives) {
+    assert.ok(metaCsp.includes(directive), `meta CSP must include ${directive}`);
+    assert.ok(serverCsp.includes(directive), `CLI CSP must include ${directive}`);
+    assert.ok(pagesCsp.includes(directive), `Pages CSP must include ${directive}`);
+  }
+
+  assert.match(serverCsp, /frame-ancestors 'none'/);
+  assert.match(pagesCsp, /frame-ancestors 'none'/);
+  assert.doesNotMatch(metaCsp, /frame-ancestors/);
+});
