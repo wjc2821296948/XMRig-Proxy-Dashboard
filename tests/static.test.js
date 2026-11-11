@@ -499,13 +499,15 @@ test("CSP directives stay aligned across meta, Cloudflare Pages, and CLI respons
   const server = read("bin/server.js");
   const metaMatch = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
   const serverMatch = server.match(/"Content-Security-Policy": "([^"]+)"/);
-  const headersMatch = headers.match(/^\\s*Content-Security-Policy:\\s*(.+)$/m);
+  const headersLine = headers.split(/\\r?\\n/).find(line =>
+    line.trimStart().startsWith("Content-Security-Policy:"));
 
   assert.ok(metaMatch, "index.html must declare a meta CSP");
   assert.ok(serverMatch, "the CLI server must declare an HTTP CSP");
-  assert.ok(headersMatch, "Cloudflare Pages must declare an HTTP CSP");
+  assert.ok(headersLine, "Cloudflare Pages must declare an HTTP CSP");
 
-  const [metaCsp, serverCsp, pagesCsp] = [metaMatch[1], serverMatch[1], headersMatch[1]];
+  const [metaCsp, serverCsp] = [metaMatch[1], serverMatch[1]];
+  const pagesCsp = headersLine.slice(headersLine.indexOf(":") + 1).trim();
   const sharedDirectives = [
     "default-src 'self'",
     "script-src 'self'",
