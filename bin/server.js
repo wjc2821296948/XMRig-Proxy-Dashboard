@@ -126,7 +126,7 @@ const SECURITY_HEADERS = Object.freeze({
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-  "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src http: https:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
+  "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src http: https:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
 });
 
 const server = createServer((req, res) => {
