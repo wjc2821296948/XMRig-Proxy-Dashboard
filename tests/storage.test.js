@@ -1483,3 +1483,68 @@ test("complete profile export works when every profile stores its token persiste
   assert.equal(bundle.profiles[0].apiToken, "persistent-secret");
   assert.equal(bundle.profiles[0].remember, true);
 });
+
+
+test("failed profile import preserves its original error when snapshot rollback is partial", async () => {
+  globalThis.localStorage = new MemoryStorage();
+  globalThis.sessionStorage = new MemoryStorage();
+  const { saveProfile, parseProfilesImportJson, importProfiles } = await import("../src/storage.js");
+
+  assert.ok(saveProfile({
+    id: "stable-before-import", name: "Stable", apiUrl: "https://stable.example",
+    apiToken: "stable-token", remember: true, refreshInterval: 10,
+  }));
+
+  const workingLocal = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: key => workingLocal.getItem(key),
+    removeItem: key => workingLocal.removeItem(key),
+    clear: () => workingLocal.clear(),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_profiles") {
+        throw new DOMException("profile write denied", "QuotaExceededError");
+      }
+      workingLocal.setItem(key, value);
+    },
+  };
+
+  const workingSession = globalThis.sessionStorage;
+  let tokenWrites = 0;
+  globalThis.sessionStorage = {
+    getItem: key => workingSession.getItem(key),
+    removeItem: key => workingSession.removeItem(key),
+    clear: () => workingSession.clear(),
+    setItem(key, value) {
+      if (key === "xmrig_proxy_session_tokens") {
+        tokenWrites += 1;
+        if (tokenWrites > 1) {
+          throw new DOMException("token rollback denied", "QuotaExceededError");
+        }
+      }
+      workingSession.setItem(key, value);
+    },
+  };
+
+  const bundle = parseProfilesImportJson(JSON.stringify({
+    format: "xmrig-proxy-dashboard-profile-bundle",
+    version: 1,
+    profiles: [{
+      id: "new-session-profile", name: "New session profile",
+      apiUrl: "https://new-session.example", apiToken: "new-token",
+      remember: false, refreshInterval: 10,
+    }],
+  }));
+
+  let thrown;
+  try {
+    importProfiles(bundle.profiles);
+  } catch (error) {
+    thrown = error;
+  }
+
+  assert.ok(thrown instanceof Error, "the import must report its failed rollback");
+  assert.match(thrown.message, /未能完整恢复原状态/);
+  assert.equal(thrown.cause?.message, "无法保存导入的 Proxy 配置");
+  assert.equal(tokenWrites, 2, "one token write and one failed rollback write are expected");
+  assert.equal(consumeStorageRecoveryWarning(), true);
+});
