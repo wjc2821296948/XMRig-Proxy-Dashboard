@@ -99,6 +99,8 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(homepage.status, 200);
   assert.match(homepage.headers.get("content-security-policy"), /default-src 'self'/);
   assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.match(homepage.headers.get("content-security-policy"), /object-src 'none'/);
+  assert.match(homepage.headers.get("content-security-policy"), /frame-src 'none'/);
   assert.equal(homepage.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 
@@ -112,6 +114,16 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.ok(homepageEtag, "successful asset responses must expose an ETag");
   const strongMatch = await fetch(baseUrl, { headers: { "If-None-Match": homepageEtag } });
   assert.equal(strongMatch.status, 304);
+  assert.equal(
+    strongMatch.headers.get("content-security-policy"),
+    homepage.headers.get("content-security-policy"),
+  );
+  assert.equal(
+    strongMatch.headers.get("permissions-policy"),
+    homepage.headers.get("permissions-policy"),
+  );
+  assert.match(strongMatch.headers.get("content-security-policy"), /object-src 'none'/);
+  assert.match(strongMatch.headers.get("content-security-policy"), /frame-src 'none'/);
   assert.equal(await strongMatch.text(), "");
 
   const weakMatch = await fetch(baseUrl, { headers: { "If-None-Match": `W/${homepageEtag}` } });

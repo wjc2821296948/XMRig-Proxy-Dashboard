@@ -1143,11 +1143,11 @@ export function importProfiles(importedProfiles, { allowActiveProfileFallback = 
   } catch (error) {
     const restored = snapshot ? restoreImportSnapshot(snapshot) : true;
     if (!restored) {
-      throw new Error("导入失败，且浏览器存储未能完整恢复原状态。请清理此站点的浏览数据后检查配置");
+      throw new Error("导入失败，且浏览器存储未能完整恢复原状态。请清理此站点的浏览数据后检查配置", { cause: error });
     }
     if (error instanceof ProfileBundleValidationError
         || error?.code === "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED"
         || error?.code === "SESSION_TOKEN_CLEANUP_REQUIRED") throw error;
-    throw new Error("导入失败，现有配置已尽力恢复。请检查浏览器存储空间后重试");
+    throw new Error("导入失败，现有配置已尽力恢复。请检查浏览器存储空间后重试", { cause: error });
   }
 }
