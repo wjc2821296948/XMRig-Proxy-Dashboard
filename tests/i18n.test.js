@@ -89,3 +89,13 @@ test("network status translations describe browser-reported connectivity accurat
     "浏览器报告网络连接已恢复。",
   );
 });
+
+test("interpolation ignores inherited values but accepts own properties", () => {
+  const values = Object.create({ count: 42 });
+  values.name = "Ada";
+
+  assert.equal(
+    translate("example {count} {name}", "en", values),
+    "example {count} Ada",
+  );
+});

@@ -84,7 +84,7 @@ export function translate(key, locale = getLocale(), values = {}) {
     ?? source;
   if (!values || typeof values !== "object") return template;
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => {
-    const value = values[name];
+    const value = Object.hasOwn(values, name) ? values[name] : undefined;
     return typeof value === "string" || (typeof value === "number" && Number.isFinite(value))
       ? String(value)
       : match;
