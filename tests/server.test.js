@@ -31,6 +31,9 @@ test("static server restricts public assets and serves a startup snapshot", { ti
 
   const fixtureFiles = {
     "index.html": "<!doctype html><title>XMRig Proxy Dashboard</title>",
+    "manifest.webmanifest": "{ \"name\": \"XMRig Proxy Dashboard\", \"display\": \"standalone\" }",
+    "service-worker.js": "self.addEventListener(\"install\", () => {});",
+    "icons/pwa-icon.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
     "styles.css": "body { color: black; }",
     "panel.png": "fake-png",
     "src/api.js": "export const api = true;",
@@ -49,6 +52,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/background-upload-guard.js": "export const uploadGuard = true;",
     "src/snapshot-export.js": "export const snapshotExport = true;",
     "src/metrics-history.js": "export const metricsHistory = true;",
+    "src/offline-snapshot.js": "export const offlineSnapshot = true;",
     "src/advanced-history-chart.js": "export const advancedHistoryChart = true;",
     "vendor/uplot/uPlot.iife.min.js": "var uPlot = function () {};",
     "vendor/uplot/uPlot.min.css": ".uplot { display: block; }",
@@ -169,6 +173,24 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(moduleResponse.status, 200);
   assert.match(moduleResponse.headers.get("content-type"), /javascript/);
   assert.equal(await moduleResponse.text(), "trusted-startup-module");
+
+  const manifestResponse = await fetch(`${baseUrl}/manifest.webmanifest`);
+  assert.equal(manifestResponse.status, 200);
+  assert.match(manifestResponse.headers.get("content-type"), /application\/manifest\+json/);
+  const manifestBody = await manifestResponse.json();
+  assert.equal(manifestBody.display, "standalone");
+
+  const workerResponse = await fetch(`${baseUrl}/service-worker.js`);
+  assert.equal(workerResponse.status, 200);
+  assert.match(workerResponse.headers.get("content-type"), /javascript/);
+
+  const iconResponse = await fetch(`${baseUrl}/icons/pwa-icon.svg`);
+  assert.equal(iconResponse.status, 200);
+  assert.match(iconResponse.headers.get("content-type"), /image\/svg\+xml/);
+
+  const offlineModuleResponse = await fetch(`${baseUrl}/src/offline-snapshot.js`);
+  assert.equal(offlineModuleResponse.status, 200);
+  assert.match(offlineModuleResponse.headers.get("content-type"), /javascript/);
 
   const advancedChartResponse = await fetch(`${baseUrl}/src/advanced-history-chart.js`);
   assert.equal(advancedChartResponse.status, 200);

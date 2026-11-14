@@ -1,4 +1,4 @@
-﻿/**
+/**
  * main.js – Application bootstrap and core logic.
  *
  * Responsibilities:
@@ -38,7 +38,8 @@ import { escapeHtml } from "./escape-html.js";
 import { formatLoadAverage } from "./load-average.js";
 import { createBackgroundUploadGuard } from "./background-upload-guard.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
-import { clearMetricHistory, recordMetricSample } from "./metrics-history.js";
+import { clearMetricHistory, getMetricHistory, recordMetricSample } from "./metrics-history.js";
+import { loadOfflineSnapshot, saveOfflineSnapshot } from "./offline-snapshot.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -890,17 +891,23 @@ function initSessionHistoryChart(samples) {
 /* ==========================================================================
    Dashboard Rendering
    ========================================================================== */
-function renderDashboard(data) {
+function renderDashboard(data, { stale = false, cachedAt = null } = {}) {
   disposeAdvancedHistoryChart();
   latestSummaryData = data;
-  const historySamples = recordMetricSample(data, Date.now(), loadActiveProfileId() || "current");
+  const historySamples = stale
+    ? getMetricHistory()
+    : recordMetricSample(data, Date.now(), loadActiveProfileId() || "current");
   const sessionHashrateTrend = renderSessionHashrateTrend(historySamples);
   // Header info
-  const status = getStatusInfo(data, statusTracker);
+  const status = stale
+    ? { cls: "status-warning", text: "离线缓存" }
+    : getStatusInfo(data, statusTracker);
   els.statusBadge.textContent = status.text;
   els.statusBadge.className = `status-badge ${status.cls}`;
   els.workerId.textContent = `Worker: ${data.worker_id || "未知"} | 版本: ${data.version || "未知"}`;
-  els.lastUpdate.textContent = new Date().toLocaleTimeString();
+  els.lastUpdate.textContent = stale
+    ? `缓存时间: ${new Date(cachedAt).toLocaleString()}`
+    : new Date().toLocaleTimeString();
 
   // Re-sync the view-mode ribbon on every render. Defensive against any
   // race where initTheme() ran before this element existed in the DOM.
@@ -909,7 +916,7 @@ function renderDashboard(data) {
   // live proxy — paint the ribbon green now (handleConnect also does this,
   // but a successful auto-refresh re-confirms it for any caller that
   // reached renderDashboard through fetchAndRender).
-  setRibbonConnectState("connected");
+  setRibbonConnectState(stale ? "disconnected" : "connected");
 
   // Hashrate data
   const rawHashrates = data.hashrate?.total;
@@ -1702,6 +1709,13 @@ function closeModal(overlay) {
 /* ==========================================================================
    Auto-refresh Management
    ========================================================================== */
+function renderCachedSummary(profileId = loadActiveProfileId() || "current") {
+  const cached = loadOfflineSnapshot(profileId);
+  if (!cached) return false;
+  renderDashboard(cached.data, { stale: true, cachedAt: cached.savedAt });
+  return true;
+}
+
 async function fetchAndRender() {
   // Abort older requests so slow responses cannot overwrite newer dashboard data.
   if (fetchAbortController) fetchAbortController.abort();
@@ -1711,6 +1725,7 @@ async function fetchAndRender() {
   try {
     const data = await request("/1/summary", { signal: controller.signal });
     if (controller.signal.aborted) return { status: "cancelled" };
+    saveOfflineSnapshot(loadActiveProfileId() || "current", data);
     renderDashboard(data);
     return true;
   } catch (err) {
@@ -1728,6 +1743,10 @@ async function fetchAndRender() {
       renderConnectForm();
       stopAutoRefresh();
     } else {
+      const cached = loadOfflineSnapshot(loadActiveProfileId() || "current");
+      if (cached) {
+        renderDashboard(cached.data, { stale: true, cachedAt: cached.savedAt });
+      }
       showToast(`刷新失败: ${err.message}`, "error");
     }
     return { status: "failed", notified: true };
@@ -1834,8 +1853,11 @@ async function init() {
     disposeAdvancedHistoryChart();
   }
   if (cfg) {
-    // Show skeleton while fetching
-    renderSkeleton(els.dashboard, 6);
+    // Show the last local snapshot immediately when available; a live API
+    // response below replaces it. Without a snapshot, keep the skeleton.
+    if (!renderCachedSummary(loadActiveProfileId() || "current")) {
+      renderSkeleton(els.dashboard, 6);
+    }
     await fetchAndRender();
     // fetchAndRender handles errors internally. On an authentication
     // failure it clears the saved connection, so don't restart polling
@@ -1850,7 +1872,15 @@ async function init() {
 /* ==========================================================================
    Bootstrap
    ========================================================================== */
+function registerServiceWorker() {
+  if (!window.isSecureContext || !("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("./service-worker.js", { scope: "./" }).catch(error => {
+    console.warn("PWA service worker registration failed:", error?.message || "unknown error");
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  registerServiceWorker();
   registerSnapshotExport({
     documentRef: document,
     container: document.querySelector("#snapshotExportSlot"),

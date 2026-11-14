@@ -40,12 +40,16 @@ jobs:
             "README.md",
             "README.en.md",
             "index.html",
+            "manifest.webmanifest",
+            "service-worker.js",
+            "icons/pwa-icon.svg",
             "_headers",
             "styles.css",
             "panel.png",
             "bin/server.js",
             "src/api.js",
             "src/main.js",
+            "src/offline-snapshot.js",
             "src/advanced-history-chart.js",
             "src/public-assets.js",
             "vendor/uplot/uPlot.iife.min.js",
@@ -129,6 +133,10 @@ jobs:
 
           curl --fail --silent "$base/" | grep -q "XMRig Proxy Dashboard"
           curl --fail --silent --head "$base/src/main.js" | grep -qi "^content-type: text/javascript"
+          curl --fail --silent --head "$base/manifest.webmanifest" | grep -qi "^content-type: application/manifest+json"
+          curl --fail --silent "$base/manifest.webmanifest" | grep -q \"standalone\"
+          curl --fail --silent --head "$base/service-worker.js" | grep -qi "^content-type: text/javascript"
+          curl --fail --silent --head "$base/icons/pwa-icon.svg" | grep -qi "^content-type: image/svg+xml"
 
           headers="$(curl --fail --silent --head "$base/")"
           grep -qi "^x-content-type-options: nosniff" <<<"$headers"

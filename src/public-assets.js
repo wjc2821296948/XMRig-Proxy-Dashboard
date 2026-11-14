@@ -7,6 +7,9 @@
  */
 export const PUBLIC_ASSET_PATHS = Object.freeze([
   "index.html",
+  "manifest.webmanifest",
+  "service-worker.js",
+  "icons/pwa-icon.svg",
   "styles.css",
   "panel.png",
   "src/api.js",
@@ -25,6 +28,7 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "src/background-upload-guard.js",
   "src/snapshot-export.js",
   "src/metrics-history.js",
+  "src/offline-snapshot.js",
   "src/advanced-history-chart.js",
   "vendor/uplot/uPlot.iife.min.js",
   "vendor/uplot/uPlot.min.css",
