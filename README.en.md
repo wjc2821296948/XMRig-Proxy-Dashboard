@@ -25,6 +25,7 @@ Built for users looking for an **XMRig Proxy web UI, monitoring dashboard, or li
 | **Remember Me** | Optional `localStorage` persistence, or `sessionStorage` for session-only |
 | **Modern UI** | Dark theme, responsive layout, Skeleton loading, Toast notifications, Loading animations |
 | **PWA Offline Support** | Installable on supported browsers; static app shell works offline and the last successful metrics snapshot is shown locally |
+| **Optional Interactive Charts** | uPlot is bundled locally and loaded on demand; the lightweight SVG chart remains the default, with a time axis and hover values available on request |
 | **Security First** | CSP restrictions, escaped dynamic values, sanitized token logs; anti-framing requires HTTP response headers |
 | **No Framework Deps** | Native ES Modules, < 50 KB gzip, instant load |
 
@@ -181,6 +182,7 @@ xmrig-proxy-dashboard/
 |--------|------------|
 | **Token Leak** | Stored only in browser local storage, console logs sanitized `Bearer **********` |
 | **XSS** | Dynamic text in HTML templates is escaped with `escapeHtml()`, and CSP restricts script sources; dynamic rendering still needs ongoing review |
+| **Framing / Clickjacking** | Cloudflare Pages and the built-in server deny framing through HTTP CSP headers; `file://` or simple servers without these headers cannot provide this protection |
 | **MITM** | Recommend Proxy enables HTTPS (self-signed needs browser trust) or access via VPN/tunnel |
 | **CSRF** | Pure GET + Bearer Token, no Cookies, naturally immune to CSRF |
 | **Config Injection** | URL validated via `new URL()`, Token only sent as Header |
@@ -207,12 +209,16 @@ A: Open "Settings" to manage Proxy profiles. Each profile stores its name, API U
 
 ---
 
+### Interactive history chart
+
+The session hashrate trend uses a lightweight SVG by default. Select **Enable interactive chart** to load the locally bundled uPlot 1.6.32 (MIT) on demand. It does not contact a third-party CDN or add a chart script to the initial page load. The chart uses the current Proxy profile’s last 30 successful refresh samples and resets when you switch profiles or reconnect. You can switch back to the lightweight chart at any time.
+
 ## 📋 Roadmap
 
 - [X] **Multi-Proxy Config List** — Save multiple Proxy configs, switch with one click
 - [x] **PWA Support** — Offline cache the latest metrics snapshot, "Add to Home Screen"
 - [x] **Theme Toggle** — Dark and light themes are supported
-- [ ] **More Chart Libraries** — Optional historical trends (Chart.js / uPlot, lazy-loaded)
+- [x] **More Chart Libraries** — Optional uPlot session hashrate chart, loaded on demand with the lightweight SVG kept as default
 - [ ] **Optional Backend Proxy Mode** — Users may deploy stateless forwarder on own server, only forwards `/1/summary`, no logs, no Token storage
 - [ ] **Alert/Notification System** — Hashrate anomalies, miner offline thresholds (browser notifications / Webhook)
 - [ ] **Multi-language Support** — i18n framework reserved, Chinese/English priority
