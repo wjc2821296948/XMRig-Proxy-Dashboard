@@ -365,10 +365,10 @@ test("custom background setting is persisted locally and restored at startup", (
 });
 
 
-test("browser offline notice does not claim Proxy reachability or promise an immediate refresh", () => {
+test("browser offline notice uses the centralized localized message", () => {
   const source = read("src/network-status.js");
-  assert.match(source, /Your browser reports that it is offline/);
-  assert.match(source, /does not indicate whether the Proxy API is reachable/);
+  assert.match(source, /import\s+\{\s*translate\s*\}\s+from\s+["']\.\/i18n\.js["']/);
+  assert.match(source, /banner\.textContent\s*=\s*translate\(["']network\.offline["']\)/);
   assert.doesNotMatch(source, /Network connection lost|Dashboard data will refresh|Network connection restored/);
 });
 
