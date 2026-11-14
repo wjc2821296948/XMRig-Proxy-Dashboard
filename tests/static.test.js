@@ -365,6 +365,12 @@ test("custom background setting is persisted locally and restored at startup", (
 });
 
 
+test("browser offline notice uses the centralized localized message", () => {
+  const source = read("src/network-status.js");
+  assert.match(source, /import\s+\{\s*translate\s*\}\s+from\s+["']\.\/i18n\.js["']/);
+  assert.match(source, /banner\.textContent\s*=\s*translate\(["']network\.offline["']\)/);
+  assert.doesNotMatch(source, /Network connection lost|Dashboard data will refresh|Network connection restored/);
+});
 
 test("profile transfer UI warns about tokens and processes files locally", () => {
   const source = read("src/main.js");
