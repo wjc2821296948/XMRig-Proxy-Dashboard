@@ -11,8 +11,8 @@ export const LOCALE_STORAGE_KEY = "dashboard_locale";
 const MESSAGES = Object.freeze({
   "zh-CN": Object.freeze({
     "app.title": "XMRig Proxy Dashboard",
-    "network.offline": "网络连接已断开。网络恢复后，仪表盘数据将继续更新。",
-    "network.online": "网络连接已恢复。",
+    "network.offline": "浏览器报告当前处于离线状态；这并不能说明 Proxy API 是否可达。",
+    "network.online": "浏览器报告网络连接已恢复。",
     "refresh.now": "立即刷新",
     "refresh.loading": "刷新中…",
     "refresh.failed": "监控数据刷新失败。",
@@ -23,8 +23,8 @@ const MESSAGES = Object.freeze({
   }),
   en: Object.freeze({
     "app.title": "XMRig Proxy Dashboard",
-    "network.offline": "Network connection lost. Dashboard data will refresh after connectivity is restored.",
-    "network.online": "Network connection restored.",
+    "network.offline": "Your browser reports that it is offline. This does not indicate whether the Proxy API is reachable.",
+    "network.online": "Your browser reports that it is back online.",
     "refresh.now": "Refresh now",
     "refresh.loading": "Refreshing…",
     "refresh.failed": "Unable to refresh dashboard data.",

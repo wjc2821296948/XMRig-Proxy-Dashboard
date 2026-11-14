@@ -70,3 +70,22 @@ test("translation lookup treats prototype property names as unknown keys", () =>
     assert.equal(translate(key, "zh-CN"), key);
   }
 });
+
+test("network status translations describe browser-reported connectivity accurately", () => {
+  assert.equal(
+    translate("network.offline", "en"),
+    "Your browser reports that it is offline. This does not indicate whether the Proxy API is reachable.",
+  );
+  assert.equal(
+    translate("network.online", "en"),
+    "Your browser reports that it is back online.",
+  );
+  assert.equal(
+    translate("network.offline", "zh-CN"),
+    "浏览器报告当前处于离线状态；这并不能说明 Proxy API 是否可达。",
+  );
+  assert.equal(
+    translate("network.online", "zh-CN"),
+    "浏览器报告网络连接已恢复。",
+  );
+});
