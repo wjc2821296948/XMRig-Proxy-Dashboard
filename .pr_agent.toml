@@ -1,6 +1,10 @@
 [config]
-model = "openai/nvidia/nemotron-3-ultra-550b-a55b"
-fallback_models = ["minimax-m3.1-flash"]
+model = "openai/glm-5.3-flash"
+fallback_models = [
+    "openai/minimax-m3.1-flash",
+    "openai/nvidia/nemotron-3-ultra-550b-a55b",
+    "openai/glm-4.7-flash"
+]
 custom_model_max_tokens = 131072
 repo_context_files = ["CLAUDE.md"]
 persistent_inline_comments = true
