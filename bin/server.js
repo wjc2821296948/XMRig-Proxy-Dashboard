@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { constants as fsConstants } from "node:fs";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { open, realpath } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -68,6 +69,9 @@ async function loadPublicAssets() {
     }
   }
 
+  for (const asset of assets.values()) {
+    asset.etag = `"${createHash("sha256").update(asset.data).digest("hex")}"`;
+  }
   return assets;
 }
 
@@ -85,6 +89,45 @@ function findPublicAsset(pathname) {
   const publicPath = decodedPath === "/" ? "/index.html" : decodedPath;
   return publicAssets.get(publicPath) || null;
 }
+
+function splitEntityTagList(value) {
+  const tags = [];
+  let start = 0;
+  let quoted = false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '"') quoted = !quoted;
+    else if (value[index] === "," && !quoted) {
+      tags.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  tags.push(value.slice(start).trim());
+  return tags;
+}
+
+function opaqueEntityTag(value) {
+  const match = /^(?:W\/)?"([\x21\x23-\x7E\x80-\xFF]*)"$/.exec(value.trim());
+  return match ? match[1] : null;
+}
+
+function matchesIfNoneMatch(header, currentEtag) {
+  if (typeof header !== "string") return false;
+  const value = header.trim();
+  if (value === "*") return true;
+
+  const currentOpaqueTag = opaqueEntityTag(currentEtag);
+  if (currentOpaqueTag === null) return false;
+  return splitEntityTagList(value).some(candidate =>
+    opaqueEntityTag(candidate) === currentOpaqueTag);
+}
+
+const SECURITY_HEADERS = Object.freeze({
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src http: https:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
+});
 
 const server = createServer((req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -111,14 +154,25 @@ const server = createServer((req, res) => {
     return;
   }
 
+  const ifNoneMatch = req.headers["if-none-match"];
+  if (matchesIfNoneMatch(ifNoneMatch, asset.etag)) {
+    res.writeHead(304, {
+      "ETag": asset.etag,
+      "Cache-Control": "no-cache",
+      ...SECURITY_HEADERS,
+    });
+    res.end();
+    return;
+  }
+
   res.writeHead(200, {
+    "ETag": asset.etag,
     "Content-Type": asset.contentType,
     "Content-Length": String(asset.data.byteLength),
     "Cache-Control": "no-cache",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Content-Security-Policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src http: https:; base-uri 'self'; form-action 'self'"
+    ...SECURITY_HEADERS
   });
   res.end(req.method === "HEAD" ? undefined : asset.data);
 });

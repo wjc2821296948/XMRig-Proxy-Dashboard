@@ -26,7 +26,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Run unit tests
-        run: node --experimental-default-type=module --test tests/status.test.js tests/api.test.js tests/storage.test.js tests/ui.test.js tests/server.test.js
+        run: npm test
 
   static-security:
     name: Static security and structure checks
