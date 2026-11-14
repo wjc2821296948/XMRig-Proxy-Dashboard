@@ -6,7 +6,7 @@ banner.className = "network-status-banner";
 banner.setAttribute("role", "status");
 banner.setAttribute("aria-live", "polite");
 banner.hidden = true;
-banner.textContent = "Your browser reports that it is offline. This does not indicate whether the Proxy API is reachable.";
+banner.textContent = translate("network.offline");
 
 function updateNetworkStatus() {
   const offline = navigator.onLine === false;
