@@ -18,6 +18,8 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "src/storage.js",
   "src/theme-color.js",
   "src/keyboard-shortcuts.js",
+  "src/i18n.js",
+  "src/network-status.js",
   "src/manual-refresh.js",
   "src/visibility-refresh.js",
   "src/visible-polling.js",
