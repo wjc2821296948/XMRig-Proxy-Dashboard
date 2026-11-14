@@ -1,3 +1,5 @@
+import { translate } from "./i18n.js";
+
 /** Show an accessible notice for the browser's reported offline state only. */
 const banner = document.createElement("div");
 banner.className = "network-status-banner";
