@@ -78,8 +78,20 @@ test("request builds the URL, injects auth, and exposes an abort signal", async 
   assert.equal(received.options.method, "GET");
   assert.equal(received.options.headers.get("Authorization"), "Bearer super-secret-token");
   assert.equal(received.options.headers.get("X-Test"), "enabled");
+  assert.equal(received.options.redirect, "error");
   assert.ok(received.options.signal instanceof AbortSignal);
   assert.equal(received.options.signal.aborted, false);
+});
+
+test("request forces redirects to error even if a caller asks fetch to follow them", async () => {
+  let received;
+  globalThis.fetch = async (url, options) => {
+    received = { url, options };
+    return { ok: true, status: 200, async json() { return {}; } };
+  };
+
+  await request("/1/summary", { redirect: "follow" });
+  assert.equal(received.options.redirect, "error");
 });
 
 test("request refuses URLs outside the configured proxy origin before sending credentials", async () => {

@@ -413,3 +413,169 @@ test("PWA cache reads fail open so CacheStorage errors do not block network requ
   assert.match(worker, /const cached = await matchCacheBestEffort\(cacheKey\)/);
   assert.match(worker, /matchCacheBestEffort\(INDEX_URL\)\) \|\| Response\.error\(\)/);
 });
+
+test("profile transfer UI warns about tokens and processes files locally", () => {
+  const source = read("src/main.js");
+  assert.match(source, /id="exportProfiles"/);
+  assert.match(source, /id="importProfiles"/);
+  assert.match(source, /id="profileImportFile" type="file" accept="\.json,application\/json"/);
+  assert.match(source, /完整备份（包含 Token）/);
+  assert.match(source, /脱敏备份（不包含 Token）/);
+  assert.match(source, /createProfilesExport\(\{ includeSensitiveData \}\)/);
+  assert.match(source, /URL\.createObjectURL\(blob\)/);
+  assert.match(source, /parseProfilesImportJson\(await file\.text\(\)\)/);
+  assert.match(source, /importProfiles\(bundle\.profiles\)/);
+  assert.doesNotMatch(source, /fetch\(.*(?:profile|bundle|json)/i);
+});
+
+
+test("profile import refresh replaces the modal synchronously and requires fallback consent", () => {
+  const source = read("src/main.js");
+  assert.ok(source.includes("function replaceSettingsModal(overlay, selectedProfileId = null)"));
+  assert.ok(source.includes("replaceSettingsModal(overlay)"));
+  assert.doesNotMatch(source, /function closeModalAndReopenSettings/);
+  assert.ok(source.includes('error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED"'));
+  assert.ok(source.includes("importProfiles(bundle.profiles, { allowActiveProfileFallback: true })"));
+  assert.ok(source.includes("已按你的确认自动选择第一个可用配置"));
+});
+
+test("profile export measures the generated JSON in UTF-8 bytes", () => {
+  const source = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.ok(source.includes("new TextEncoder().encode(json).byteLength"));
+  assert.ok(storage.includes("utf8ByteLength(JSON.stringify(bundle, null, 2))"));
+  assert.ok(storage.includes("utf8ByteLength(raw) > MAX_PROFILE_BUNDLE_BYTES"));
+});
+
+
+test("profile transfer blocks control characters and restores configs through the safe helper", () => {
+  const source = read("src/main.js");
+  const storage = read("src/storage.js");
+  assert.ok(source.includes("配置名称和 Token 不能包含控制字符"));
+  assert.ok(storage.includes("entry.key === CONFIG_KEY"));
+  assert.ok(storage.includes("restoreStoredConfigEntry(entry.kind, entry.value)"));
+});
+
+
+test("initial connection form rejects control characters in access tokens", () => {
+  const source = read("src/main.js");
+  const start = source.indexOf("async function handleConnect()");
+  const end = source.indexOf("\n}", start);
+  const handler = source.slice(start, end);
+  const slash = String.fromCharCode(92);
+  assert.ok(handler.includes(slash + "u0000-" + slash + "u001F" + slash + "u007F"));
+  assert.equal(handler.includes(slash + slash + "u0000"), false);
+  assert.match(handler, /Token 不能包含控制字符/);
+});
+
+
+test("uPlot chart assets are allowlisted and loaded only after an explicit opt-in", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+  const vendorScript = read("vendor/uplot/uPlot.iife.min.js");
+  const vendorCss = read("vendor/uplot/uPlot.min.css");
+
+  assert.ok(PUBLIC_ASSET_PATHS.includes("src/advanced-history-chart.js"));
+  assert.ok(PUBLIC_ASSET_PATHS.includes("vendor/uplot/uPlot.iife.min.js"));
+  assert.ok(PUBLIC_ASSET_PATHS.includes("vendor/uplot/uPlot.min.css"));
+  assert.match(main, /advancedHistoryChartModulePromise \?\?= import\("\.\/advanced-history-chart\.js"\)/);
+  assert.match(main, /toggleAdvancedHistoryChart/);
+  assert.match(chart, /new URL\("\.\.\/vendor\/uplot\/uPlot\.iife\.min\.js", import\.meta\.url\)/);
+  assert.match(chart, /new URL\("\.\.\/vendor\/uplot\/uPlot\.min\.css", import\.meta\.url\)/);
+  assert.doesNotMatch(chart, /https?:\/\//);
+  assert.match(vendorScript, /uPlot/);
+  assert.match(vendorCss, /\.uplot/);
+  assert.match(read("vendor/uplot/LICENSE"), /The MIT License/);
+});
+
+
+
+test("interactive history chart waits for a measurable container width and supports cancellation", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+
+  assert.match(main, /let advancedHistoryChartMountController = null/);
+  assert.match(main, /advancedHistoryChartMountController\?\.abort\(\)/);
+  assert.match(main, /mountController\.signal/);
+  assert.doesNotMatch(main, /button\.disabled = true/);
+  assert.doesNotMatch(main, /button\.disabled = false/);
+  assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
+  assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
+  assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
+  assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
+});
+
+test("interactive history chart initializes after insertion and restores the cloned SVG fallback", () => {
+  const main = read("src/main.js");
+  const chart = read("src/advanced-history-chart.js");
+  const renderStart = main.indexOf("function renderDashboard(data) {");
+  const renderEnd = main.indexOf("\n}\n", renderStart);
+  assert.ok(renderStart >= 0);
+  assert.ok(renderEnd > renderStart);
+  const render = main.slice(renderStart, renderEnd);
+
+  assert.ok(render.indexOf("disposeAdvancedHistoryChart();") < render.indexOf("const html = `"));
+  assert.ok(render.indexOf("els.dashboard.innerHTML = html;") < render.indexOf("initSessionHistoryChart(historySamples);"));
+  assert.equal(render.includes("disposeAdvancedHistoryChart();\n    </div>"), false);
+  assert.match(main, /function restoreSessionHistoryFallback\(container, fallbackNodes\)/);
+  assert.match(main, /container\.replaceChildren\(\.\.\.fallbackNodes\.map\(node => node\.cloneNode\(true\)\)\)/);
+  assert.doesNotMatch(main, /container\.innerHTML\s*=\s*fallbackMarkup/);
+
+  assert.match(chart, /function waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /const chartWidth = await waitForContainerWidth\(container, signal\)/);
+  assert.match(chart, /if \(signal\?\.aborted\) throw createChartAbortError\(\)/);
+  assert.equal((chart.match(/await waitForContainerWidth\(container, signal\)/g) || []).length, 1);
+  assert.match(chart, /new window\.ResizeObserver\(checkWidth\)/);
+  assert.match(chart, /window\.requestAnimationFrame\(poll\)/);
+  assert.match(chart, /signal\?\.addEventListener\("abort", onAbort/);
+  assert.match(chart, /Number\.isFinite\(width\) && width > 0/);
+  assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
+  assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
+});
+test("document CSP blocks object and frame content", () => {
+  const html = read("index.html");
+  assert.match(html, /object-src 'none'/);
+  assert.match(html, /frame-src 'none'/);
+});
+
+
+test("CSP directives stay aligned across meta, Cloudflare Pages, and CLI responses", () => {
+  const html = read("index.html");
+  const headers = read("_headers");
+  const server = read("bin/server.js");
+  const metaMatch = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
+  const serverMatch = server.match(/"Content-Security-Policy": "([^"]+)"/);
+  const headersLine = headers.split(String.fromCharCode(10)).find(line =>
+    line.trimStart().startsWith("Content-Security-Policy:"));
+
+  assert.ok(metaMatch, "index.html must declare a meta CSP");
+  assert.ok(serverMatch, "the CLI server must declare an HTTP CSP");
+  assert.ok(headersLine, "Cloudflare Pages must declare an HTTP CSP");
+
+  const [metaCsp, serverCsp] = [metaMatch[1], serverMatch[1]];
+  const pagesCsp = headersLine.slice(headersLine.indexOf(":") + 1).trim();
+  const sharedDirectives = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "img-src 'self' data: https:",
+    "connect-src http: https:",
+    "object-src 'none'",
+    "frame-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ];
+
+  for (const directive of sharedDirectives) {
+    assert.ok(metaCsp.includes(directive), `meta CSP must include ${directive}`);
+    assert.ok(serverCsp.includes(directive), `CLI CSP must include ${directive}`);
+    assert.ok(pagesCsp.includes(directive), `Pages CSP must include ${directive}`);
+  }
+
+  assert.match(serverCsp, /frame-ancestors 'none'/);
+  assert.match(pagesCsp, /frame-ancestors 'none'/);
+  assert.doesNotMatch(metaCsp, /frame-ancestors/);
+});

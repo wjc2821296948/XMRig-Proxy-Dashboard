@@ -29,6 +29,17 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "src/theme-color.js",
   "src/keyboard-shortcuts.js",
   "src/pwa.js",
+  "src/manual-refresh.js",
+  "src/visibility-refresh.js",
+  "src/visible-polling.js",
+  "src/escape-html.js",
+  "src/load-average.js",
+  "src/background-upload-guard.js",
+  "src/snapshot-export.js",
+  "src/metrics-history.js",
+  "src/advanced-history-chart.js",
+  "vendor/uplot/uPlot.iife.min.js",
+  "vendor/uplot/uPlot.min.css",
   "src/ui.js",
 ]);
 

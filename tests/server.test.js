@@ -53,6 +53,18 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "app-icon-192.png": "fake-png-192",
     "app-icon-512.png": "fake-png-512",
     "sw.js": "self.addEventListener('install', () => {});",
+    "src/manual-refresh.js": "export const manualRefresh = true;",
+    "src/visibility-refresh.js": "export const visibilityRefresh = true;",
+    "src/visible-polling.js": "export const visiblePolling = true;",
+    "src/escape-html.js": "export const escapeHtml = true;",
+    "src/load-average.js": "export const loadAverage = true;",
+    "src/background-upload-guard.js": "export const uploadGuard = true;",
+    "src/snapshot-export.js": "export const snapshotExport = true;",
+    "src/metrics-history.js": "export const metricsHistory = true;",
+    "src/advanced-history-chart.js": "export const advancedHistoryChart = true;",
+    "vendor/uplot/uPlot.iife.min.js": "var uPlot = function () {};",
+    "vendor/uplot/uPlot.min.css": ".uplot { display: block; }",
+    "vendor/uplot/LICENSE": "The MIT License",
     "src/ui.js": "export const ui = true;",
     "package.json": "{ \"private\": true, \"type\": \"module\" }",
     "README.md": "private readme",
@@ -102,6 +114,9 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(homepage.status, 200);
   assert.match(homepage.headers.get("content-security-policy"), /default-src 'self'/);
   assert.match(homepage.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.match(homepage.headers.get("content-security-policy"), /object-src 'none'/);
+  assert.match(homepage.headers.get("content-security-policy"), /frame-src 'none'/);
+  assert.equal(homepage.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
   assert.match(await homepage.text(), /XMRig Proxy Dashboard/);
 
   const headResponse = await fetch(baseUrl, { method: "HEAD" });
@@ -109,6 +124,43 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(headResponse.headers.get("content-type"), homepage.headers.get("content-type"));
   assert.equal(headResponse.headers.get("content-length"), homepage.headers.get("content-length"));
   assert.equal(await headResponse.text(), "");
+
+  const homepageEtag = homepage.headers.get("etag");
+  assert.ok(homepageEtag, "successful asset responses must expose an ETag");
+  const strongMatch = await fetch(baseUrl, { headers: { "If-None-Match": homepageEtag } });
+  assert.equal(strongMatch.status, 304);
+  assert.equal(
+    strongMatch.headers.get("content-security-policy"),
+    homepage.headers.get("content-security-policy"),
+  );
+  assert.equal(
+    strongMatch.headers.get("permissions-policy"),
+    homepage.headers.get("permissions-policy"),
+  );
+  assert.match(strongMatch.headers.get("content-security-policy"), /object-src 'none'/);
+  assert.match(strongMatch.headers.get("content-security-policy"), /frame-src 'none'/);
+  assert.equal(await strongMatch.text(), "");
+
+  const weakMatch = await fetch(baseUrl, { headers: { "If-None-Match": `W/${homepageEtag}` } });
+  assert.equal(weakMatch.status, 304);
+  assert.equal(await weakMatch.text(), "");
+
+  const listMatch = await fetch(baseUrl, {
+    headers: { "If-None-Match": `"opaque,other-tag", W/${homepageEtag}` },
+  });
+  assert.equal(listMatch.status, 304);
+  assert.equal(await listMatch.text(), "");
+
+  const wildcardMatch = await fetch(baseUrl, { headers: { "If-None-Match": "*" } });
+  assert.equal(wildcardMatch.status, 304);
+  assert.equal(await wildcardMatch.text(), "");
+
+  const weakHeadMatch = await fetch(baseUrl, {
+    method: "HEAD",
+    headers: { "If-None-Match": `W/${homepageEtag}` },
+  });
+  assert.equal(weakHeadMatch.status, 304);
+  assert.equal(await weakHeadMatch.text(), "");
 
   // Send a raw HTTP request because fetch rejects malformed request targets
   // before they reach the server. The server must answer safely with 400.
@@ -133,6 +185,19 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   assert.equal(moduleResponse.status, 200);
   assert.match(moduleResponse.headers.get("content-type"), /javascript/);
   assert.equal(await moduleResponse.text(), "trusted-startup-module");
+
+  const advancedChartResponse = await fetch(`${baseUrl}/src/advanced-history-chart.js`);
+  assert.equal(advancedChartResponse.status, 200);
+  assert.match(advancedChartResponse.headers.get("content-type"), /javascript/);
+  assert.equal(await advancedChartResponse.text(), "export const advancedHistoryChart = true;");
+
+  const uPlotScriptResponse = await fetch(`${baseUrl}/vendor/uplot/uPlot.iife.min.js`);
+  assert.equal(uPlotScriptResponse.status, 200);
+  assert.match(uPlotScriptResponse.headers.get("content-type"), /javascript/);
+
+  const uPlotStylesResponse = await fetch(`${baseUrl}/vendor/uplot/uPlot.min.css`);
+  assert.equal(uPlotStylesResponse.status, 200);
+  assert.match(uPlotStylesResponse.headers.get("content-type"), /text\/css/);
 
   const themeColorResponse = await fetch(`${baseUrl}/src/theme-color.js`);
   assert.equal(themeColorResponse.status, 200);
