@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "xmrig-proxy-dashboard-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,6 +17,7 @@ const APP_SHELL = [
   "./src/theme-color.js",
   "./src/keyboard-shortcuts.js",
   "./src/i18n.js",
+  "./src/i18n-ui.js",
   "./src/network-status.js",
   "./src/manual-refresh.js",
   "./src/visibility-refresh.js",
