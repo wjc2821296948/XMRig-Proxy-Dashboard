@@ -1662,3 +1662,25 @@ body.has-custom-background {
 .history-chart .uplot {
   max-width: 100%;
 }
+
+
+/* Language selector in the header actions. */
+.locale-selector {
+  min-height: 30px;
+  max-width: 8.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.locale-selector:focus-visible {
+  outline: 2px solid var(--accent-copper);
+  outline-offset: 2px;
+}
+@media (max-width: 768px) {
+  .header-actions .locale-selector { width: 100%; max-width: none; }
+}
