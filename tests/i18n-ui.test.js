@@ -18,6 +18,7 @@ test("translates dynamic dashboard labels while preserving their values", () => 
   assert.equal(translateUiText("比率: 4.5 矿工/上游", "en"), "Ratio: 4.5 miners/upstream");
   assert.equal(translateUiText("连接失败: Network error", "en"), "Connection failed: Network error");
   assert.equal(translateUiText("  缓存时间: same same  ", "en"), "  Cached at: same same  ");
+  assert.equal(translateUiText("  连接失败: Network error Network error  ", "en"), "  Connection failed: Network error Network error  ");
 });
 
 test("unknown and non-string values remain unchanged", () => {

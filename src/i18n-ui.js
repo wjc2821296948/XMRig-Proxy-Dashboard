@@ -168,11 +168,12 @@ export function translateUiText(value, locale = activeLocale) {
     [/^已切换到 (.+)$/, "Switched to $1"],
     [/^导入完成：新增 (\d+) 个，更新 (\d+) 个。$/, "Import complete: $1 added, $2 updated."],
   ];
+  const leadingWhitespace = value.match(/^\s*/)?.[0] ?? "";
+  const trailingWhitespace = value.match(/\s*$/)?.[0] ?? "";
+  const content = value.slice(leadingWhitespace.length, value.length - trailingWhitespace.length);
   for (const [pattern, replacement] of dynamicPatterns) {
-    const match = trimmed.match(pattern);
-    if (match) {
-      const start = value.indexOf(trimmed);
-      return value.slice(0, start) + trimmed.replace(pattern, replacement) + value.slice(start + trimmed.length);
+    if (pattern.test(content)) {
+      return leadingWhitespace + content.replace(pattern, replacement) + trailingWhitespace;
     }
   }
   const translated = ZH_TO_EN[trimmed];
