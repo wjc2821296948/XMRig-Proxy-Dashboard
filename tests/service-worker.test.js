@@ -11,13 +11,14 @@ const SCOPE = "https://dashboard.example.test/app/";
 const CACHE_PREFIX = "xmrig-proxy-dashboard-shell-";
 const RESPONSE_ERROR = { type: "error", body: null };
 
-function makeResponse(body, { ok = true, type = "basic" } = {}) {
+function makeResponse(body, { ok = true, status = 200, type = "basic" } = {}) {
   return {
     body,
     ok,
+    status,
     type,
     clone() {
-      return makeResponse(body, { ok, type });
+      return makeResponse(body, { ok, status, type });
     },
   };
 }
@@ -173,6 +174,46 @@ test("offline navigation falls back to the cached index document", async () => {
 
   assert.equal(result.intercepted, true);
   assert.equal(result.response, cachedIndex);
+});
+
+test("navigation falls back to the cached app shell for server-side 5xx responses", async () => {
+  const cachedIndex = makeResponse("cached-index");
+  const harness = createHarness({
+    fetch: async () => makeResponse("server-error", { ok: false, status: 503 }),
+  });
+  harness.entries.set(new URL("./index.html", SCOPE).href, cachedIndex);
+
+  const result = await harness.runFetch({
+    method: "GET",
+    mode: "navigate",
+    url: new URL("./", SCOPE).href,
+  });
+
+  assert.equal(result.intercepted, true);
+  assert.equal(result.response, cachedIndex);
+});
+
+test("navigation preserves client-side 4xx responses instead of masking them with cache", async t => {
+  for (const status of [403, 404]) {
+    await t.test(String(status), async () => {
+      const clientError = makeResponse(`http-${status}`, { ok: false, status });
+      const harness = createHarness({ fetch: async () => clientError });
+      harness.entries.set(
+        new URL("./index.html", SCOPE).href,
+        makeResponse("cached-index"),
+      );
+
+      const result = await harness.runFetch({
+        method: "GET",
+        mode: "navigate",
+        url: new URL("./", SCOPE).href,
+      });
+
+      assert.equal(result.intercepted, true);
+      assert.equal(result.response, clientError);
+      assert.equal(harness.calls.match.length, 0);
+    });
+  }
 });
 
 test("an app-shell cache miss fetches from the network and stores a successful response", async () => {

@@ -100,13 +100,18 @@ self.addEventListener("fetch", event => {
   ) {
     event.respondWith((async () => {
       try {
-        return await fetch(request);
+        const response = await fetch(request);
+        // A server-side failure may be temporary; keep explicit client errors
+        // such as 403 and 404 visible instead of masking them with stale HTML.
+        if (response.status < 500 || response.status > 599) return response;
       } catch {
-        const cachedIndex = await matchCacheBestEffort(indexUrl.href);
-        if (cachedIndex) return cachedIndex;
-        const cachedRoot = await matchCacheBestEffort(rootUrl.href);
-        return cachedRoot || Response.error();
+        // Fall back to the app shell when the network request itself fails.
       }
+
+      const cachedIndex = await matchCacheBestEffort(indexUrl.href);
+      if (cachedIndex) return cachedIndex;
+      const cachedRoot = await matchCacheBestEffort(rootUrl.href);
+      return cachedRoot || Response.error();
     })());
     return;
   }
