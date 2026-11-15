@@ -34,6 +34,9 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "manifest.webmanifest": "{ \"name\": \"XMRig Proxy Dashboard\", \"display\": \"standalone\" }",
     "service-worker.js": "self.addEventListener(\"install\", () => {});",
     "icons/pwa-icon.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
+    "icons/pwa-192.png": "fake-png-192",
+    "icons/pwa-512.png": "fake-png-512",
+    "icons/apple-touch-icon-180.png": "fake-apple-touch-icon",
     "styles.css": "body { color: black; }",
     "panel.png": "fake-png",
     "src/api.js": "export const api = true;",
@@ -187,6 +190,16 @@ test("static server restricts public assets and serves a startup snapshot", { ti
   const iconResponse = await fetch(`${baseUrl}/icons/pwa-icon.svg`);
   assert.equal(iconResponse.status, 200);
   assert.match(iconResponse.headers.get("content-type"), /image\/svg\+xml/);
+
+  for (const iconPath of [
+    "/icons/pwa-192.png",
+    "/icons/pwa-512.png",
+    "/icons/apple-touch-icon-180.png",
+  ]) {
+    const pngResponse = await fetch(`${baseUrl}${iconPath}`);
+    assert.equal(pngResponse.status, 200, `${iconPath} must be publicly served`);
+    assert.match(pngResponse.headers.get("content-type"), /image\/png/);
+  }
 
   const offlineModuleResponse = await fetch(`${baseUrl}/src/offline-snapshot.js`);
   assert.equal(offlineModuleResponse.status, 200);

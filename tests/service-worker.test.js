@@ -150,7 +150,10 @@ test("install precaches every existing app-shell asset, including i18n and netwo
   assert.ok(harness.calls.addAll.includes("./src/offline-snapshot.js"));
   assert.ok(harness.calls.addAll.includes("./index.html"));
   assert.equal(harness.flags.skipWaiting, true);
-  assert.ok(harness.calls.open.every(name => name === `${CACHE_PREFIX}v2`));
+  assert.ok(harness.calls.open.every(name => name === `${CACHE_PREFIX}v3`));
+  assert.ok(harness.calls.addAll.includes("./icons/pwa-192.png"));
+  assert.ok(harness.calls.addAll.includes("./icons/pwa-512.png"));
+  assert.ok(harness.calls.addAll.includes("./icons/apple-touch-icon-180.png"));
 });
 
 test("installation fails rather than activating a partial app shell", async () => {
@@ -299,6 +302,9 @@ test("activation deletes only obsolete dashboard shell caches and claims clients
   const harness = createHarness();
   await harness.runLifecycle("activate");
 
-  assert.deepEqual(harness.calls.deleted, [`${CACHE_PREFIX}v1`]);
+  assert.deepEqual(harness.calls.deleted, [
+    `${CACHE_PREFIX}v1`,
+    `${CACHE_PREFIX}v2`,
+  ]);
   assert.equal(harness.flags.claimed, true);
 });

@@ -378,6 +378,18 @@ test("PWA manifest is installable and the service worker only caches the app she
   assert.equal(manifest.start_url, "./");
   assert.equal(manifest.scope, "./");
   assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-icon.svg"));
+  assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-192.png" && icon.sizes === "192x192"));
+  assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-512.png" && icon.sizes === "512x512"));
+  assert.equal(manifest.icons.filter(icon => icon.type === "image/png").length, 2);
+  assert.match(read("index.html"), /<link rel="apple-touch-icon" href="\.\/icons\/apple-touch-icon-180\.png">/);
+  for (const iconPath of [
+    "icons/pwa-192.png",
+    "icons/pwa-512.png",
+    "icons/apple-touch-icon-180.png",
+  ]) {
+    assert.ok(PUBLIC_ASSET_PATHS.includes(iconPath), `${iconPath} must be allowlisted`);
+    assert.ok(worker.includes(`./${iconPath}`), `${iconPath} must be precached`);
+  }
   assert.match(worker, /cache\.addAll\(APP_SHELL\)/);
   assert.match(worker, /appShellUrls\.has\(requestUrl\.href\)/);
   assert.match(worker, /request\.mode === "navigate"/);
