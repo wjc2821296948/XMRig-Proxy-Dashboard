@@ -99,3 +99,18 @@ test("interpolation ignores inherited values but accepts own properties", () => 
     "example {count} Ada",
   );
 });
+
+
+test("unknown persisted locale values fall back to Simplified Chinese", () => {
+  const storage = new MemoryStorage();
+  storage.setItem(LOCALE_STORAGE_KEY, "fr-FR");
+  assert.equal(getLocale(storage), DEFAULT_LOCALE);
+  storage.setItem(LOCALE_STORAGE_KEY, "not-a-locale");
+  assert.equal(getLocale(storage), DEFAULT_LOCALE);
+});
+
+test("sessionStorage is not required for locale persistence", () => {
+  const storage = new MemoryStorage();
+  assert.equal(saveLocale("en", storage), true);
+  assert.equal(getLocale(storage), "en");
+});

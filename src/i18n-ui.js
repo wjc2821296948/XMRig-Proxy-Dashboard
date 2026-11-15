@@ -1,6 +1,8 @@
 import { getLocale, saveLocale } from "./i18n.js";
 
 const ZH_TO_EN = Object.freeze({
+  "XMRig Proxy 仪表盘": "XMRig Proxy Dashboard",
+  "语言": "Language",
   "加载中…": "Loading…",
   "只读视图": "Read-only view",
   "初始化…": "Initializing…",
@@ -166,7 +168,11 @@ export function translateUiText(value, locale = activeLocale) {
     [/^导入完成：新增 (\d+) 个，更新 (\d+) 个。$/, "Import complete: $1 added, $2 updated."],
   ];
   for (const [pattern, replacement] of dynamicPatterns) {
-    if (pattern.test(trimmed)) return value.replace(trimmed, trimmed.replace(pattern, replacement));
+    const match = trimmed.match(pattern);
+    if (match) {
+      const start = value.indexOf(trimmed);
+      return value.slice(0, start) + trimmed.replace(pattern, replacement) + value.slice(start + trimmed.length);
+    }
   }
   const translated = ZH_TO_EN[trimmed];
   return translated === undefined ? value : value.replace(trimmed, translated);
@@ -229,7 +235,7 @@ export function applyLocale(locale = getLocale()) {
   activeLocale = locale === "en" ? "en" : "zh-CN";
   if (typeof document === "undefined") return activeLocale;
   document.documentElement.lang = activeLocale;
-  document.title = "XMRig Proxy Dashboard";
+  document.title = translateUiText("XMRig Proxy 仪表盘", activeLocale);
   const selector = document.getElementById("localeSelector");
   if (selector) selector.value = activeLocale;
   translateSubtree(document.body);
@@ -260,6 +266,8 @@ function initializeLocaleUi() {
       }
     }
   });
+  // Modals and toast notifications are appended directly to body, outside
+  // .container, so body remains the smallest complete observation root.
   observer.observe(document.body, {
     subtree: true,
     childList: true,
@@ -267,6 +275,10 @@ function initializeLocaleUi() {
     attributes: true,
     attributeFilter: ["aria-label", "placeholder", "title", "alt"],
   });
+  window.addEventListener("pagehide", () => {
+    observer?.disconnect();
+    observer = null;
+  }, { once: true });
 }
 
 if (typeof document !== "undefined") {
