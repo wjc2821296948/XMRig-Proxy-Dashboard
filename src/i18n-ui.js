@@ -3,6 +3,7 @@ import { getLocale, saveLocale } from "./i18n.js";
 const ZH_TO_EN = Object.freeze({
   "XMRig Proxy 仪表盘": "XMRig Proxy Dashboard",
   "语言": "Language",
+  "简体中文": "Simplified Chinese",
   "加载中…": "Loading…",
   "只读视图": "Read-only view",
   "初始化…": "Initializing…",

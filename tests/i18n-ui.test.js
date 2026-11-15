@@ -7,6 +7,7 @@ test("translates common dashboard and settings labels without changing Chinese m
   assert.equal(translateUiText("当前算力", "zh-CN"), "当前算力");
   assert.equal(translateUiText("XMRig Proxy 仪表盘", "en"), "XMRig Proxy Dashboard");
   assert.equal(translateUiText("语言", "en"), "Language");
+  assert.equal(translateUiText("简体中文", "en"), "Simplified Chinese");
   assert.equal(translateUiText("  设置  ", "en"), "  Settings  ");
 });
 

@@ -114,3 +114,22 @@ test("sessionStorage is not required for locale persistence", () => {
   assert.equal(saveLocale("en", storage), true);
   assert.equal(getLocale(storage), "en");
 });
+
+
+test("defaults safely when localStorage and sessionStorage are inaccessible", () => {
+  const originalLocal = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const originalSession = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const inaccessible = () => { throw new Error("storage access denied"); };
+
+  try {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get: inaccessible });
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: inaccessible });
+    assert.equal(getLocale(), DEFAULT_LOCALE);
+    assert.equal(saveLocale("en"), false);
+  } finally {
+    if (originalLocal) Object.defineProperty(globalThis, "localStorage", originalLocal);
+    else delete globalThis.localStorage;
+    if (originalSession) Object.defineProperty(globalThis, "sessionStorage", originalSession);
+    else delete globalThis.sessionStorage;
+  }
+});
