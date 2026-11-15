@@ -1872,11 +1872,16 @@ async function init() {
 /* ==========================================================================
    Bootstrap
    ========================================================================== */
+let serviceWorkerRegistrationPromise;
+
 function registerServiceWorker() {
   if (!window.isSecureContext || !("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("./service-worker.js", { scope: "./" }).catch(error => {
-    console.warn("PWA service worker registration failed:", error?.message || "unknown error");
-  });
+  serviceWorkerRegistrationPromise ??= navigator.serviceWorker
+    .register("./service-worker.js", { scope: "./" })
+    .catch(error => {
+      console.warn("PWA service worker registration failed:", error?.message || "unknown error");
+    });
+  return serviceWorkerRegistrationPromise;
 }
 
 document.addEventListener("DOMContentLoaded", () => {

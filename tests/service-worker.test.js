@@ -179,6 +179,21 @@ test("offline navigation falls back to the cached index document", async () => {
   assert.equal(result.response, cachedIndex);
 });
 
+test("offline navigation with a query string still falls back to the cached index document", async () => {
+  const harness = createHarness({ fetchError: new Error("offline") });
+  const cachedIndex = makeResponse("cached-index");
+  harness.entries.set(new URL("./index.html", SCOPE).href, cachedIndex);
+
+  const result = await harness.runFetch({
+    method: "GET",
+    mode: "navigate",
+    url: new URL("./index.html?foo=bar", SCOPE).href,
+  });
+
+  assert.equal(result.intercepted, true);
+  assert.equal(result.response, cachedIndex);
+});
+
 test("navigation falls back to the cached app shell for server-side 5xx responses", async () => {
   const cachedIndex = makeResponse("cached-index");
   const harness = createHarness({

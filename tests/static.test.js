@@ -394,7 +394,8 @@ test("PWA manifest is installable and the service worker only caches the app she
   assert.match(worker, /appShellUrls\.has\(requestUrl\.href\)/);
   assert.match(worker, /request\.mode === "navigate"/);
   assert.doesNotMatch(worker, /\/1\/summary|Authorization/i);
-  assert.match(main, /navigator\.serviceWorker\.register\("\.\/service-worker\.js"/);
+  assert.match(main, /\.register\("\.\/service-worker\.js"/);
+  assert.match(main, /serviceWorkerRegistrationPromise \?\?=/);
   assert.match(main, /loadOfflineSnapshot/);
   assert.match(main, /saveOfflineSnapshot/);
 });
