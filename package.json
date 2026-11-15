@@ -15,6 +15,9 @@
   },
   "files": [
     "index.html",
+    "manifest.webmanifest",
+    "service-worker.js",
+    "icons/",
     "_headers",
     "styles.css",
     "panel.png",

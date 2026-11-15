@@ -249,12 +249,16 @@ test("dashboard theme transitions respect reduced-motion preferences", () => {
 });
 
 
-test("aborted refreshes are checked before rendering stale data", () => {
+test("aborted refreshes are checked before caching or rendering stale data", () => {
   const source = read("src/main.js");
-  assert.match(
-    source,
-    /const data = await request\("\/1\/summary", \{ signal: controller\.signal \}\);\s*if \(controller\.signal\.aborted\) return(?: false|\s*\{\s*status:\s*"cancelled"\s*\})?;\s*renderDashboard\(data\);/,
-  );
+  const requestAt = source.indexOf('const data = await request("/1/summary", { signal: controller.signal });');
+  const abortedAt = source.indexOf('if (controller.signal.aborted) return { status: "cancelled" };', requestAt);
+  const cacheAt = source.indexOf('saveOfflineSnapshot(loadActiveProfileId() || "current", data);', requestAt);
+  const renderAt = source.indexOf("renderDashboard(data);", requestAt);
+
+  assert.ok(requestAt >= 0);
+  assert.ok(abortedAt > requestAt && abortedAt < cacheAt);
+  assert.ok(cacheAt < renderAt);
 });
 
 test("single hashrate point avoids dividing by zero when computing chart coordinates", () => {
@@ -365,6 +369,37 @@ test("custom background setting is persisted locally and restored at startup", (
 });
 
 
+test("PWA manifest is installable and the service worker only caches the app shell", () => {
+  const manifest = JSON.parse(read("manifest.webmanifest"));
+  const worker = read("service-worker.js");
+  const main = read("src/main.js");
+
+  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.start_url, "./");
+  assert.equal(manifest.scope, "./");
+  assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-icon.svg"));
+  assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-192.png" && icon.sizes === "192x192"));
+  assert.ok(manifest.icons.some(icon => icon.src === "./icons/pwa-512.png" && icon.sizes === "512x512"));
+  assert.equal(manifest.icons.filter(icon => icon.type === "image/png").length, 2);
+  assert.match(read("index.html"), /<link rel="apple-touch-icon" href="\.\/icons\/apple-touch-icon-180\.png">/);
+  for (const iconPath of [
+    "icons/pwa-192.png",
+    "icons/pwa-512.png",
+    "icons/apple-touch-icon-180.png",
+  ]) {
+    assert.ok(PUBLIC_ASSET_PATHS.includes(iconPath), `${iconPath} must be allowlisted`);
+    assert.ok(worker.includes(`./${iconPath}`), `${iconPath} must be precached`);
+  }
+  assert.match(worker, /cache\.addAll\(APP_SHELL\)/);
+  assert.match(worker, /appShellUrls\.has\(requestUrl\.href\)/);
+  assert.match(worker, /request\.mode === "navigate"/);
+  assert.doesNotMatch(worker, /\/1\/summary|Authorization/i);
+  assert.match(main, /\.register\("\.\/service-worker\.js"/);
+  assert.match(main, /serviceWorkerRegistrationPromise \?\?=/);
+  assert.match(main, /loadOfflineSnapshot/);
+  assert.match(main, /saveOfflineSnapshot/);
+});
+
 test("browser offline notice uses the centralized localized message", () => {
   const source = read("src/network-status.js");
   assert.match(source, /import\s+\{\s*translate\s*\}\s+from\s+["']\.\/i18n\.js["']/);
@@ -468,7 +503,7 @@ test("interactive history chart waits for a measurable container width and suppo
 test("interactive history chart initializes after insertion and restores the cloned SVG fallback", () => {
   const main = read("src/main.js");
   const chart = read("src/advanced-history-chart.js");
-  const renderStart = main.indexOf("function renderDashboard(data) {");
+  const renderStart = main.indexOf("function renderDashboard(data, { stale = false, cachedAt = null } = {}) {");
   const renderEnd = main.indexOf("\n}\n", renderStart);
   assert.ok(renderStart >= 0);
   assert.ok(renderEnd > renderStart);
