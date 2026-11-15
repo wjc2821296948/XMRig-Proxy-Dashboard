@@ -147,6 +147,7 @@ test("install precaches every existing app-shell asset, including i18n and netwo
 
   assert.ok(harness.calls.addAll.includes("./src/i18n.js"));
   assert.ok(harness.calls.addAll.includes("./src/i18n-ui.js"));
+  assert.ok(harness.calls.addAll.includes("./src/locale-bootstrap.js"));
   assert.ok(harness.calls.addAll.includes("./src/network-status.js"));
   assert.ok(harness.calls.addAll.includes("./src/offline-snapshot.js"));
   assert.ok(harness.calls.addAll.includes("./index.html"));

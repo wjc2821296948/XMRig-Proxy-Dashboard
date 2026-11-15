@@ -23,6 +23,7 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "src/keyboard-shortcuts.js",
   "src/i18n.js",
   "src/i18n-ui.js",
+  "src/locale-bootstrap.js",
   "src/network-status.js",
   "src/manual-refresh.js",
   "src/visibility-refresh.js",

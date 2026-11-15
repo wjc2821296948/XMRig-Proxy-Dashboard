@@ -47,6 +47,7 @@ test("static server restricts public assets and serves a startup snapshot", { ti
     "src/keyboard-shortcuts.js": "export const keyboardShortcuts = true;",
     "src/i18n.js": "export const i18n = true;",
     "src/i18n-ui.js": "export const i18nUi = true;",
+    "src/locale-bootstrap.js": "document.documentElement.dataset.locale = \"zh-CN\";",
     "src/network-status.js": "export const networkStatus = true;",
     "src/manual-refresh.js": "export const manualRefresh = true;",
     "src/visibility-refresh.js": "export const visibilityRefresh = true;",

@@ -1,3 +1,8 @@
+/* Prevent an English-preference page from flashing untranslated Chinese before the localization module runs. */
+html[data-locale="en"]:not([data-locale-ready="true"]) body {
+  visibility: hidden;
+}
+
 /* ==========================================================================
    CSS Variables – Theme & Spacing
    ========================================================================== */

@@ -241,6 +241,7 @@ export function applyLocale(locale = getLocale()) {
   const selector = document.getElementById("localeSelector");
   if (selector) selector.value = activeLocale;
   translateSubtree(document.body);
+  document.documentElement.dataset.localeReady = "true";
   return activeLocale;
 }
 
