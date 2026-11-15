@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">XMRig Proxy Dashboard</title>
+  <desc id="desc">A white mining pickaxe over a server rack with green hashrate bars, on a blue gradient rounded-square background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="55" y1="28" x2="455" y2="490" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset=".48" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="90" y1="55" x2="370" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity=".23"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="green" x1="300" y1="285" x2="425" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BEF264"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+    <filter id="shadow" x="70" y="90" width="390" height="360" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M112 0h288c62 0 112 50 112 112v84C390 293 257 380 0 364V112C0 50 50 0 112 0Z" fill="url(#shine)"/>
+  <path d="M118 410c56-13 106-18 151-14 59 5 111 1 160-21" fill="none" stroke="#93C5FD" stroke-opacity=".2" stroke-width="5" stroke-linecap="round"/>
+  <!-- server rack -->
+  <g filter="url(#shadow)" opacity=".34">
+    <rect x="111" y="214" width="245" height="218" rx="25" fill="#020617"/>
+  </g>
+  <g>
+    <rect x="104" y="205" width="246" height="220" rx="25" fill="#0F2F69" stroke="#BFDBFE" stroke-opacity=".8" stroke-width="7"/>
+    <rect x="124" y="226" width="206" height="51" rx="12" fill="#174A91" stroke="#93C5FD" stroke-opacity=".65" stroke-width="4"/>
+    <rect x="124" y="290" width="206" height="51" rx="12" fill="#174A91" stroke="#93C5FD" stroke-opacity=".65" stroke-width="4"/>
+    <rect x="124" y="354" width="206" height="50" rx="12" fill="#174A91" stroke="#93C5FD" stroke-opacity=".65" stroke-width="4"/>
+    <g fill="#DFF4FF">
+      <circle cx="148" cy="251" r="6"/><circle cx="168" cy="251" r="6"/>
+      <circle cx="148" cy="315" r="6"/><circle cx="168" cy="315" r="6"/>
+      <circle cx="148" cy="379" r="6"/><circle cx="168" cy="379" r="6"/>
+    </g>
+    <g fill="#60A5FA" opacity=".9">
+      <rect x="190" y="243" width="112" height="15" rx="7.5"/>
+      <rect x="190" y="307" width="112" height="15" rx="7.5"/>
+      <rect x="190" y="371" width="112" height="15" rx="7.5"/>
+    </g>
+  </g>
+  <!-- hashrate bars -->
+  <g>
+    <path d="M305 330h35v80h-35z" fill="url(#green)"/>
+    <path d="M354 294h35v116h-35z" fill="url(#green)"/>
+    <path d="M403 252h35v158h-35z" fill="url(#green)"/>
+    <path d="M299 416h145" stroke="#ECFCCB" stroke-width="9" stroke-linecap="round"/>
+    <path d="m313 315 52-40 48-34 28-23" fill="none" stroke="#ECFCCB" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m423 218 20-5-5 21" fill="none" stroke="#ECFCCB" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- pickaxe: bold, simple silhouette -->
+  <g transform="rotate(-34 238 176)">
+    <path d="M232 146h28v180c0 10-6 17-14 17s-14-7-14-17V146Z" fill="#EAF6FF" stroke="#164E9A" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M119 146c23-42 65-66 117-66s94 24 117 66l-27 24c-21-27-50-41-90-41s-69 14-90 41l-27-24Z" fill="#FFFFFF" stroke="#164E9A" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M119 146h234" stroke="#DCEEFF" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <circle cx="390" cy="113" r="9" fill="#D9F99D" opacity=".95"/>
+  <circle cx="420" cy="145" r="5" fill="#BFDBFE" opacity=".8"/>
+</svg>
