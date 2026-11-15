@@ -151,9 +151,23 @@ let observer = null;
 let applying = false;
 
 export function translateUiText(value, locale = activeLocale) {
-  if (typeof value !== "string") return value;
-  if (locale !== "en") return value;
+  if (typeof value !== "string" || locale !== "en") return value;
   const trimmed = value.trim();
+  const dynamicPatterns = [
+    [/^Worker: (.+) \\| 版本: (.+)$/, "Worker: $1 | Version: $2"],
+    [/^缓存时间: (.+)$/, "Cached at: $1"],
+    [/^峰值: (.+) 矿工$/, "Peak: $1 miners"],
+    [/^比率: (.+) 矿工\\/上游$/, "Ratio: $1 miners/upstream"],
+    [/^最近 (\\d+) 次成功刷新的算力趋势$/, "Hashrate trend from the last $1 successful refreshes"],
+    [/^连接失败: (.+)$/, "Connection failed: $1"],
+    [/^刷新失败: (.+)$/, "Refresh failed: $1"],
+    [/^正在连接 (.+)\\.\\.\\.$/, "Connecting to $1…"],
+    [/^已切换到 (.+)$/, "Switched to $1"],
+    [/^导入完成：新增 (\\d+) 个，更新 (\\d+) 个。$/, "Import complete: $1 added, $2 updated."],
+  ];
+  for (const [pattern, replacement] of dynamicPatterns) {
+    if (pattern.test(trimmed)) return value.replace(trimmed, trimmed.replace(pattern, replacement));
+  }
   const translated = ZH_TO_EN[trimmed];
   return translated === undefined ? value : value.replace(trimmed, translated);
 }
