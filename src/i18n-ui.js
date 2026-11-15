@@ -173,6 +173,8 @@ export function translateUiText(value, locale = activeLocale) {
 }
 
 function translateTextNode(node) {
+  // Profile names and URLs are user data, not interface copy.
+  if (node.parentElement?.closest(".profile-name, .profile-url, [data-user-content]")) return;
   const current = node.nodeValue;
   const previousRendered = textRendered.get(node);
   const original = previousRendered === current ? textOriginals.get(node) : current;
