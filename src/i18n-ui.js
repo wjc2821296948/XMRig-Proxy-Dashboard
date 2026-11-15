@@ -177,7 +177,7 @@ export function translateUiText(value, locale = activeLocale) {
     }
   }
   const translated = ZH_TO_EN[trimmed];
-  return translated === undefined ? value : value.replace(trimmed, translated);
+  return translated === undefined ? value : leadingWhitespace + translated + trailingWhitespace;
 }
 
 function translateTextNode(node) {

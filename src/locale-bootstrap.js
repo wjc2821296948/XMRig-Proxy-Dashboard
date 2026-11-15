@@ -2,14 +2,19 @@
  * dependency-free and compatible with the document's self-only script CSP. */
 (() => {
   let locale = "zh-CN";
-  try {
-    const stored = globalThis.localStorage?.getItem("dashboard_locale");
-    if (typeof stored === "string") {
+  for (const storageName of ["localStorage", "sessionStorage"]) {
+    try {
+      const storage = globalThis[storageName];
+      const stored = storage?.getItem("dashboard_locale");
+      if (typeof stored !== "string") continue;
       const normalized = stored.trim().toLowerCase();
       if (normalized === "en" || normalized.startsWith("en-")) locale = "en";
+      else if (normalized === "zh" || normalized.startsWith("zh-")) locale = "zh-CN";
+      else continue;
+      break;
+    } catch {
+      // Try the other storage area when this one is unavailable.
     }
-  } catch {
-    // Storage may be disabled; use the default Chinese locale.
   }
   const root = document.documentElement;
   root.lang = locale;

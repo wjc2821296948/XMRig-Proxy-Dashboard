@@ -9,6 +9,7 @@ test("translates common dashboard and settings labels without changing Chinese m
   assert.equal(translateUiText("语言", "en"), "Language");
   assert.equal(translateUiText("简体中文", "en"), "Simplified Chinese");
   assert.equal(translateUiText("  设置  ", "en"), "  Settings  ");
+  assert.equal(translateUiText("设置 设置", "en"), "设置 设置");
 });
 
 test("translates dynamic dashboard labels while preserving their values", () => {
