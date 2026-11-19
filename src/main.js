@@ -1248,8 +1248,12 @@ function openSettingsModal(selectedProfileId = null) {
             <div class="input-group">
               <label class="input-label" for="sBackgroundImage">背景图片链接（可选）</label>
               <input type="url" class="input-field" id="sBackgroundImage" value="${escapeHtml(backgroundImageUrl)}" maxlength="2048" placeholder="https://example.com/background.jpg">
-              <label class="input-label" for="sBackgroundFile">或上传本地图片</label>
-              <input type="file" class="input-field" id="sBackgroundFile" accept="image/png,image/jpeg,image/webp">
+              <span class="input-label">或上传本地图片</span>
+              <div class="background-file-picker">
+                <button type="button" class="btn btn-secondary btn-sm" id="chooseBackgroundFile">选择文件</button>
+                <span id="backgroundFileName" class="background-file-name" aria-live="polite">未选择任何文件</span>
+              </div>
+              <input type="file" class="sr-only" id="sBackgroundFile" accept="image/png,image/jpeg,image/webp" aria-label="选择背景图片文件">
               <span class="input-hint">支持 PNG、JPG、WebP，原图最大 10 MB；上传后会自动缩放压缩并存储在当前浏览器 localStorage，不会上传到服务器。</span>
               <img id="backgroundPreview" class="background-preview ${backgroundImage ? "" : "hidden"}" src="${escapeHtml(backgroundImage)}" alt="背景图片预览">
               <span id="backgroundImageStatus" class="input-hint">${backgroundImage.startsWith("data:image/") ? "当前使用已保存的本地图片。" : backgroundImage ? "当前使用已保存的图片链接。" : "未使用自定义背景。"}</span>
@@ -1445,6 +1449,8 @@ function openSettingsModal(selectedProfileId = null) {
 
   const backgroundInput = document.getElementById("sBackgroundImage");
   const backgroundFileInput = document.getElementById("sBackgroundFile");
+  const backgroundFileButton = document.getElementById("chooseBackgroundFile");
+  const backgroundFileName = document.getElementById("backgroundFileName");
   const backgroundPreview = document.getElementById("backgroundPreview");
   const backgroundImageStatus = document.getElementById("backgroundImageStatus");
   const backgroundUploadGuard = createBackgroundUploadGuard();
@@ -1452,6 +1458,10 @@ function openSettingsModal(selectedProfileId = null) {
   // data URL is intentionally not placed in the URL input.
   let uploadedBackgroundImage = backgroundImage.startsWith("data:image/") ? backgroundImage : null;
 
+  const resetBackgroundFileName = () => {
+    backgroundFileName.removeAttribute("data-user-content");
+    backgroundFileName.textContent = "未选择任何文件";
+  };
   const updateBackgroundPreview = value => {
     const previewUrl = normalizeBackgroundImageUrl(value);
     if (previewUrl) {
@@ -1471,17 +1481,26 @@ function openSettingsModal(selectedProfileId = null) {
     // A user-edited link takes precedence over any unfinished local upload.
     backgroundUploadGuard.invalidate();
     backgroundFileInput.disabled = false;
+    backgroundFileButton.disabled = false;
     uploadedBackgroundImage = null;
     backgroundFileInput.value = "";
+    resetBackgroundFileName();
     updateBackgroundPreview(backgroundInput.value);
+  });
+
+  backgroundFileButton.addEventListener("click", () => {
+    if (!backgroundFileButton.disabled) backgroundFileInput.click();
   });
 
   backgroundFileInput.addEventListener("change", async () => {
     const file = backgroundFileInput.files?.[0];
     if (!file) return;
 
+    backgroundFileName.dataset.userContent = "true";
+    backgroundFileName.textContent = file.name;
     const requestId = backgroundUploadGuard.begin();
     backgroundFileInput.disabled = true;
+    backgroundFileButton.disabled = true;
     try {
       const encodedImage = await encodeBackgroundImageFile(file);
       // Ignore stale work if the user cleared the image or chose a link while
@@ -1495,10 +1514,12 @@ function openSettingsModal(selectedProfileId = null) {
       if (!backgroundUploadGuard.isCurrent(requestId)) return;
       uploadedBackgroundImage = null;
       backgroundFileInput.value = "";
+      resetBackgroundFileName();
       showToast(err?.message || "处理图片失败，请重试", "error");
     } finally {
       if (backgroundUploadGuard.isCurrent(requestId)) {
         backgroundFileInput.disabled = false;
+        backgroundFileButton.disabled = false;
       }
     }
   });
@@ -1508,8 +1529,10 @@ function openSettingsModal(selectedProfileId = null) {
     // re-apply the cleared image when its promise resolves.
     backgroundUploadGuard.invalidate();
     backgroundFileInput.disabled = false;
+    backgroundFileButton.disabled = false;
     backgroundInput.value = "";
     backgroundFileInput.value = "";
+    resetBackgroundFileName();
     uploadedBackgroundImage = null;
     updateBackgroundPreview("");
     backgroundInput.focus();

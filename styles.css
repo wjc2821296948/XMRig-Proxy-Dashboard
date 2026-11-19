@@ -1515,6 +1515,25 @@ header {
 /* ==========================================================================
    Custom background image
    ========================================================================== */
+.background-file-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.background-file-picker .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.background-file-name {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
 .background-url-row {
   display: flex;
   align-items: stretch;

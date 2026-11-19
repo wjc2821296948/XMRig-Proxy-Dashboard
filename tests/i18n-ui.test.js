@@ -80,3 +80,20 @@ test("translates dynamic profile accessibility labels and import confirmation pr
     "Validated 3 profiles. Import merges by profile ID, replacing matching profiles and keeping the others. The file may contain access tokens and will only be stored locally in this browser. Continue?",
   );
 });
+
+
+test("translates the custom background file picker and its helper text", () => {
+  const cases = [
+    ["或上传本地图片", "Or upload a local image"],
+    ["选择文件", "Choose file"],
+    ["未选择任何文件", "No file selected"],
+    ["选择背景图片文件", "Choose a background image file"],
+    ["支持 PNG、JPG、WebP，原图最大 10 MB；上传后会自动缩放压缩并存储在当前浏览器 localStorage，不会上传到服务器。", "PNG, JPG, and WebP images. Maximum source file size: 10 MB. Images are automatically resized and compressed, then stored in this browser's localStorage. Files are never uploaded to the server."],
+    ["请选择 PNG、JPG 或 WebP 图片", "Choose a PNG, JPG, or WebP image."],
+    ["原始图片不能超过 10 MB", "The original image must not exceed 10 MB."],
+    ["当前浏览器不支持本地图片处理，请改用 HTTPS 图片链接", "This browser does not support local image processing. Use an HTTPS image URL instead."],
+  ];
+  for (const [source, expected] of cases) {
+    assert.equal(translateUiText(source, "en"), expected, source);
+  }
+});
