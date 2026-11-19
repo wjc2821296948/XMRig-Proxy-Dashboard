@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { translateUiText } from "../src/i18n-ui.js";
+import { applyLocale, setLocalizedText, translateUiText } from "../src/i18n-ui.js";
 
 test("translates common dashboard and settings labels without changing Chinese mode", () => {
   assert.equal(translateUiText("当前算力", "en"), "Current hashrate");
@@ -95,5 +95,98 @@ test("translates the custom background file picker and its helper text", () => {
   ];
   for (const [source, expected] of cases) {
     assert.equal(translateUiText(source, "en"), expected, source);
+  }
+});
+
+
+test("localizes background image picker updates after user interaction", () => {
+  const cases = [
+    ["未选择任何文件", "No file selected"],
+    ["已选择本地图片；保存后会保留在此浏览器。", "Local image selected; it will remain in this browser after saving."],
+    ["已填写图片链接；保存后应用。", "Image URL entered; it will be applied after saving."],
+    ["将恢复默认渐变背景；保存后生效。", "The default gradient background will be restored after saving."],
+    ["图片已处理；点击“保存并切换”后应用", "Image processed; click Save and switch to apply it."],
+    ["处理图片失败，请重试", "Image processing failed. Try again."],
+  ];
+  for (const [source, expected] of cases) {
+    assert.equal(translateUiText(source, "en"), expected, source);
+  }
+});
+
+test("preserves profile names containing punctuation in dynamic translations", () => {
+  const profileNames = [
+    "Worker-01",
+    "GPU「west」」？backup",
+    "rig.*$[east]",
+    "trailing 」？",
+  ];
+  for (const profileName of profileNames) {
+    assert.equal(
+      translateUiText(`确定删除「${profileName}」？`, "en"),
+      `Delete “${profileName}”?`,
+    );
+    assert.equal(translateUiText(`删除 ${profileName}`, "en"), `Delete ${profileName}`);
+    assert.equal(translateUiText(`已删除 ${profileName}`, "en"), `Deleted ${profileName}`);
+  }
+});
+
+
+test("localized dynamic text retains its source when switching languages", () => {
+  const previousDocument = globalThis.document;
+  const previousNode = globalThis.Node;
+  const previousNodeFilter = globalThis.NodeFilter;
+  const textNode = { nodeType: 3, nodeValue: "", parentElement: null };
+  const element = {
+    nodeType: 1,
+    firstChild: null,
+    closest: () => null,
+    getAttribute: () => null,
+    set textContent(value) {
+      textNode.nodeValue = value;
+      textNode.parentElement = this;
+      this.firstChild = textNode;
+    },
+    get textContent() {
+      return this.firstChild?.nodeValue ?? "";
+    },
+  };
+  const body = { nodeType: 1, getAttribute: () => null, querySelectorAll: () => [] };
+  globalThis.document = {
+    title: "",
+    documentElement: { dataset: {} },
+    body,
+    getElementById: () => null,
+    createTreeWalker(root) {
+      let visited = false;
+      return {
+        nextNode() {
+          if (root === body && element.firstChild && !visited) {
+            visited = true;
+            return textNode;
+          }
+          return null;
+        },
+      };
+    },
+  };
+  globalThis.Node = { ELEMENT_NODE: 1 };
+  globalThis.NodeFilter = { SHOW_TEXT: 4 };
+
+  try {
+    applyLocale("en");
+    setLocalizedText(element, "未选择任何文件");
+    assert.equal(element.textContent, "No file selected");
+    applyLocale("zh-CN");
+    assert.equal(element.textContent, "未选择任何文件");
+    applyLocale("en");
+    assert.equal(element.textContent, "No file selected");
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousNode === undefined) delete globalThis.Node;
+    else globalThis.Node = previousNode;
+    if (previousNodeFilter === undefined) delete globalThis.NodeFilter;
+    else globalThis.NodeFilter = previousNodeFilter;
+    applyLocale("zh-CN");
   }
 });

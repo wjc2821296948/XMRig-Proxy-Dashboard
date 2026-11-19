@@ -40,7 +40,7 @@ import { createBackgroundUploadGuard } from "./background-upload-guard.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
 import { clearMetricHistory, getMetricHistory, recordMetricSample } from "./metrics-history.js";
 import { loadOfflineSnapshot, saveOfflineSnapshot } from "./offline-snapshot.js";
-import { applyLocale, translateUiText } from "./i18n-ui.js";
+import { applyLocale, setLocalizedText, translateUiText } from "./i18n-ui.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -1460,20 +1460,23 @@ function openSettingsModal(selectedProfileId = null) {
 
   const resetBackgroundFileName = () => {
     backgroundFileName.removeAttribute("data-user-content");
-    backgroundFileName.textContent = "未选择任何文件";
+    setLocalizedText(backgroundFileName, "未选择任何文件");
   };
   const updateBackgroundPreview = value => {
     const previewUrl = normalizeBackgroundImageUrl(value);
     if (previewUrl) {
       backgroundPreview.src = previewUrl;
       backgroundPreview.classList.remove("hidden");
-      backgroundImageStatus.textContent = previewUrl.startsWith("data:image/")
-        ? "已选择本地图片；保存后会保留在此浏览器。"
-        : "已填写图片链接；保存后应用。";
+      setLocalizedText(
+        backgroundImageStatus,
+        previewUrl.startsWith("data:image/")
+          ? "已选择本地图片；保存后会保留在此浏览器。"
+          : "已填写图片链接；保存后应用。",
+      );
     } else {
       backgroundPreview.removeAttribute("src");
       backgroundPreview.classList.add("hidden");
-      backgroundImageStatus.textContent = "将恢复默认渐变背景；保存后生效。";
+      setLocalizedText(backgroundImageStatus, "将恢复默认渐变背景；保存后生效。");
     }
   };
 

@@ -218,10 +218,7 @@ export function translateUiText(value, locale = activeLocale) {
     [/^已切换到 (.+)$/, "Switched to $1"],
     [/^导入完成：新增 (\d+) 个，更新 (\d+) 个。 原活动配置已失效，已按你的确认自动选择第一个可用配置。 请检查配置列表$/, "Import complete: $1 added, $2 updated. The previous active profile was invalid; the first available profile was selected as confirmed. Review the profile list"],
     [/^导入完成：新增 (\d+) 个，更新 (\d+) 个。 请检查配置列表$/, "Import complete: $1 added, $2 updated. Review the profile list"],
-    [/^确定删除「(.+)」？$/, "Delete “$1”?"],
-    [/^已删除 (.+)$/, "Deleted $1"],
     [/^配置已保存，但切换连接失败: (.+)$/, "Settings were saved, but switching the connection failed: $1"],
-    [/^删除 (.+)$/, "Delete $1"],
     [/^已验证 (\d+) 个配置。导入将按配置 ID 合并；相同 ID 的现有配置会被覆盖，其他配置保留。文件可能包含访问 Token，仅会写入本地浏览器存储。继续导入？$/, "Validated $1 profiles. Import merges by profile ID, replacing matching profiles and keeping the others. The file may contain access tokens and will only be stored locally in this browser. Continue?"],
   ];
   const leadingWhitespace = value.match(/^\s*/)?.[0] ?? "";
@@ -232,8 +229,43 @@ export function translateUiText(value, locale = activeLocale) {
       return leadingWhitespace + content.replace(pattern, replacement) + trailingWhitespace;
     }
   }
+
+  // Profile names are user-controlled and may contain the punctuation used
+  // around them in Chinese prompts. Match only the fixed prefix/suffix and
+  // slice the value between them instead of parsing it with a regular
+  // expression. This preserves names containing 」, ？, regex metacharacters,
+  // or other punctuation without interpreting them as pattern syntax.
+  const dynamicAffixes = [
+    ["确定删除「", "」？", profileName => `Delete “${profileName}”?`],
+    ["已删除 ", "", profileName => `Deleted ${profileName}`],
+    ["删除 ", "", profileName => `Delete ${profileName}`],
+  ];
+  for (const [prefix, suffix, format] of dynamicAffixes) {
+    if (
+      content.startsWith(prefix)
+      && content.endsWith(suffix)
+      && content.length > prefix.length + suffix.length
+    ) {
+      const profileName = content.slice(prefix.length, content.length - suffix.length);
+      return leadingWhitespace + format(profileName) + trailingWhitespace;
+    }
+  }
+
   const translated = ZH_TO_EN[trimmed];
   return translated === undefined ? value : leadingWhitespace + translated + trailingWhitespace;
+}
+
+/** Set interface text immediately while retaining its source for locale changes. */
+export function setLocalizedText(element, sourceText) {
+  if (!element || typeof sourceText !== "string") return;
+  element.textContent = sourceText;
+  const node = element.firstChild;
+  if (!node || node.nodeType !== 3) return;
+
+  const translated = translateUiText(sourceText, activeLocale);
+  textOriginals.set(node, sourceText);
+  textRendered.set(node, translated);
+  if (translated !== node.nodeValue) node.nodeValue = translated;
 }
 
 function translateTextNode(node) {
