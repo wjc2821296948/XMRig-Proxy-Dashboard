@@ -40,6 +40,7 @@ import { createBackgroundUploadGuard } from "./background-upload-guard.js";
 import { registerSnapshotExport } from "./snapshot-export.js";
 import { clearMetricHistory, getMetricHistory, recordMetricSample } from "./metrics-history.js";
 import { loadOfflineSnapshot, saveOfflineSnapshot } from "./offline-snapshot.js";
+import { applyLocale, translateUiText } from "./i18n-ui.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -1268,6 +1269,8 @@ function openSettingsModal(selectedProfileId = null) {
   `;
 
   document.body.insertAdjacentHTML("beforeend", modalHtml);
+  // Translate the complete dynamically-created settings dialog immediately.
+  applyLocale();
   const overlay = document.getElementById("settingsModal");
   requestAnimationFrame(() => overlay.classList.add("open"));
 
@@ -1345,6 +1348,8 @@ function openSettingsModal(selectedProfileId = null) {
       </div>
     `;
     document.body.insertAdjacentHTML("beforeend", choiceHtml);
+    // This nested export dialog is created after the settings dialog.
+    applyLocale();
     const choiceOverlay = document.getElementById("profileExportModeModal");
     requestAnimationFrame(() => choiceOverlay.classList.add("open"));
 
@@ -1407,9 +1412,9 @@ function openSettingsModal(selectedProfileId = null) {
         throw new Error("导入文件超过 1 MB 限制");
       }
       const bundle = parseProfilesImportJson(await file.text());
-      const accepted = confirm(
+      const accepted = confirm(translateUiText(
         "已验证 " + bundle.profiles.length + " 个配置。导入将按配置 ID 合并；相同 ID 的现有配置会被覆盖，其他配置保留。文件可能包含访问 Token，仅会写入本地浏览器存储。继续导入？",
-      );
+      ));
       if (!accepted) return;
 
       let result;
@@ -1417,9 +1422,9 @@ function openSettingsModal(selectedProfileId = null) {
         result = importProfiles(bundle.profiles);
       } catch (error) {
         if (error?.code !== "ACTIVE_PROFILE_FALLBACK_CONSENT_REQUIRED") throw error;
-        const allowFallback = confirm(
+        const allowFallback = confirm(translateUiText(
           "检测到当前活动配置已失效。继续导入将自动选择第一个可用配置作为当前配置。是否继续？",
-        );
+        ));
         if (!allowFallback) return;
         result = importProfiles(bundle.profiles, { allowActiveProfileFallback: true });
       }
@@ -1547,7 +1552,7 @@ function openSettingsModal(selectedProfileId = null) {
         showToast("至少保留一个 Proxy 配置", "warn");
         return;
       }
-      if (!confirm("确定删除「" + profile.name + "」？")) return;
+      if (!confirm(translateUiText("确定删除「" + profile.name + "」？"))) return;
       const wasActive = id === loadActiveProfileId();
       if (!deleteProfile(id)) {
         showToast(storageFailureMessage(

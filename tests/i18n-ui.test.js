@@ -26,3 +26,57 @@ test("unknown and non-string values remain unchanged", () => {
   assert.equal(translateUiText("a user-defined profile name", "en"), "a user-defined profile name");
   assert.equal(translateUiText(42, "en"), 42);
 });
+
+
+test("translates snapshot export and manual refresh controls and lifecycle messages", () => {
+  const cases = [
+    ["导出快照", "Export snapshot"],
+    ["导出当前监控指标为 JSON 文件", "Export current monitoring metrics as a JSON file"],
+    ["下载当前指标快照；不包含 Proxy URL 或 Token", "Download a snapshot of current metrics; excludes the Proxy URL and token"],
+    ["立即刷新", "Refresh now"],
+    ["立即刷新监控数据", "Refresh monitoring data now"],
+    ["立即获取最新的 Proxy 监控数据", "Fetch the latest Proxy monitoring data now"],
+    ["刷新中…", "Refreshing…"],
+    ["正在刷新监控数据", "Refreshing monitoring data"],
+    ["刷新已取消", "Refresh cancelled"],
+    ["手动刷新失败", "Manual refresh failed"],
+    ["手动刷新失败，请检查 Proxy 连接", "Manual refresh failed. Check the Proxy connection."],
+    ["监控数据刷新完成", "Monitoring data refresh completed"],
+  ];
+  for (const [source, expected] of cases) {
+    assert.equal(translateUiText(source, "en"), expected, source);
+  }
+});
+
+test("translates settings controls and the nested backup dialog", () => {
+  const cases = [
+    ["⚙ 设置", "⚙ Settings"],
+    ["删除", "Delete"],
+    ["选择备份内容", "Choose backup contents"],
+    ["请选择是否把 Proxy 访问 Token 一并写入备份文件。文件只会在本机生成并下载，不会上传。", "Choose whether to include Proxy access tokens in the backup. The file is generated and downloaded locally; nothing is uploaded."],
+    ["完整备份（包含 Token）", "Full backup (include tokens)"],
+    ["脱敏备份（不包含 Token）", "Redacted backup (exclude tokens)"],
+    ["完整备份可直接迁移连接凭据；脱敏备份会把所有 Token 留空，导入后需要重新填写。", "A full backup transfers credentials. A redacted backup leaves tokens blank; enter them again after importing."],
+  ];
+  for (const [source, expected] of cases) {
+    assert.equal(translateUiText(source, "en"), expected, source);
+  }
+});
+
+test("translates dynamic profile accessibility labels and import confirmation prompts", () => {
+  assert.equal(translateUiText("删除 主 Proxy", "en"), "Delete 主 Proxy");
+  assert.equal(translateUiText("确定删除「主 Proxy」？", "en"), "Delete “主 Proxy”?");
+  assert.equal(translateUiText("已删除 主 Proxy", "en"), "Deleted 主 Proxy");
+  assert.equal(
+    translateUiText("导入完成：新增 2 个，更新 1 个。 请检查配置列表", "en"),
+    "Import complete: 2 added, 1 updated. Review the profile list",
+  );
+  assert.equal(
+    translateUiText("导入完成：新增 2 个，更新 1 个。 原活动配置已失效，已按你的确认自动选择第一个可用配置。 请检查配置列表", "en"),
+    "Import complete: 2 added, 1 updated. The previous active profile was invalid; the first available profile was selected as confirmed. Review the profile list",
+  );
+  assert.equal(
+    translateUiText("已验证 3 个配置。导入将按配置 ID 合并；相同 ID 的现有配置会被覆盖，其他配置保留。文件可能包含访问 Token，仅会写入本地浏览器存储。继续导入？", "en"),
+    "Validated 3 profiles. Import merges by profile ID, replacing matching profiles and keeping the others. The file may contain access tokens and will only be stored locally in this browser. Continue?",
+  );
+});
