@@ -99,3 +99,37 @@ test("interpolation ignores inherited values but accepts own properties", () => 
     "example {count} Ada",
   );
 });
+
+
+test("unknown persisted locale values fall back to Simplified Chinese", () => {
+  const storage = new MemoryStorage();
+  storage.setItem(LOCALE_STORAGE_KEY, "fr-FR");
+  assert.equal(getLocale(storage), DEFAULT_LOCALE);
+  storage.setItem(LOCALE_STORAGE_KEY, "not-a-locale");
+  assert.equal(getLocale(storage), DEFAULT_LOCALE);
+});
+
+test("sessionStorage is not required for locale persistence", () => {
+  const storage = new MemoryStorage();
+  assert.equal(saveLocale("en", storage), true);
+  assert.equal(getLocale(storage), "en");
+});
+
+
+test("defaults safely when localStorage and sessionStorage are inaccessible", () => {
+  const originalLocal = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const originalSession = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const inaccessible = () => { throw new Error("storage access denied"); };
+
+  try {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get: inaccessible });
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: inaccessible });
+    assert.equal(getLocale(), DEFAULT_LOCALE);
+    assert.equal(saveLocale("en"), false);
+  } finally {
+    if (originalLocal) Object.defineProperty(globalThis, "localStorage", originalLocal);
+    else delete globalThis.localStorage;
+    if (originalSession) Object.defineProperty(globalThis, "sessionStorage", originalSession);
+    else delete globalThis.sessionStorage;
+  }
+});
