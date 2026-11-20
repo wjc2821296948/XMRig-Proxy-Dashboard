@@ -12,6 +12,14 @@ engine:
   version: "1.3.0"
   model: openai/glm-5.3-flash
   model-provider: openai
+  # LiteLLM routes this model group through an OpenAI-compatible
+  # Chat Completions endpoint; the default OpenAI provider selects Responses.
+  config: |
+    {
+      "model": {
+        "api": "openai-completions"
+      }
+    }
   env:
     OPENAI_BASE_URL: "https://litellm.lrate.top/v1"
     OPENAI_API_KEY: ${{ secrets.LITELLM_API_KEY }}
