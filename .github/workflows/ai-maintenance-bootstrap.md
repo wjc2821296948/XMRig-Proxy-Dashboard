@@ -3,8 +3,6 @@ name: AI Maintenance Bootstrap
 
 on:
   workflow_dispatch:
-  pull_request:
-    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
