@@ -1764,7 +1764,6 @@ function openSettingsModal(selectedProfileId = null) {
       const saved = saveAlertSettings({ ...current, notificationsEnabled: true });
       if (saved) {
         browserAlertToggle.checked = true;
-        alertTransitionState = {};
         showToast("浏览器通知已启用", "success");
       } else {
         showToast("无法保存通知设置：浏览器存储不可用或空间不足", "error");
@@ -1788,7 +1787,6 @@ function openSettingsModal(selectedProfileId = null) {
       showToast("无法保存通知设置：浏览器存储不可用或空间不足", "error");
       return;
     }
-    if (enabled) alertTransitionState = {};
     showToast(enabled ? "浏览器通知已启用" : "浏览器通知已关闭", "info");
   });
   updateBrowserAlertPermissionUI();

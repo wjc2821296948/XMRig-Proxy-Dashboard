@@ -60,10 +60,17 @@ test("fresh Proxy summaries enter local alert evaluation but offline cached snap
 });
 
 
-test("turning notifications off preserves transition history; turning them on starts a fresh notification cycle", () => {
-  const toggleStart = main.indexOf('browserAlertToggle.addEventListener("change"');
+test("enabling or disabling browser notifications preserves tracked alert transitions", () => {
+  const permissionStart = main.indexOf('browserAlertPermissionButton.addEventListener("click"');
+  const toggleStart = main.indexOf('browserAlertToggle.addEventListener("change"', permissionStart);
   const toggleEnd = main.indexOf('updateBrowserAlertPermissionUI();', toggleStart);
-  const handler = main.slice(toggleStart, toggleEnd);
-  assert.match(handler, /if \(enabled\) alertTransitionState = \{\};/);
-  assert.doesNotMatch(handler, /(^|[;\n])\s*alertTransitionState = \{\};/);
+  const permissionHandler = main.slice(permissionStart, toggleStart);
+  const toggleHandler = main.slice(toggleStart, toggleEnd);
+  assert.doesNotMatch(permissionHandler, /alertTransitionState\s*=\s*\{\}/);
+  assert.doesNotMatch(toggleHandler, /alertTransitionState\s*=\s*\{\}/);
+
+  const processStart = main.indexOf("function processLocalAlerts(data)");
+  const processEnd = main.indexOf("function clearConfigWithWarning", processStart);
+  const processHandler = main.slice(processStart, processEnd);
+  assert.ok(processHandler.indexOf("alertTransitionState = result.nextState") < processHandler.indexOf("if (!preferences.notificationsEnabled"));
 });
