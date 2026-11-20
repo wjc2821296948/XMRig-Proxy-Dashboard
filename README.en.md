@@ -26,6 +26,7 @@ Built for users looking for an **XMRig Proxy web UI, monitoring dashboard, or li
 | **Modern UI** | Dark theme, responsive layout, Skeleton loading, Toast notifications, Loading animations |
 | **PWA Offline Support** | Installable on supported browsers; static app shell works offline and the last successful metrics snapshot is shown locally |
 | **Optional Interactive Charts** | uPlot is bundled locally and loaded on demand; the lightweight SVG chart remains the default, with a time axis and hover values available on request |
+| **Local Alerts** | Evaluate hashrate, miner-count, and rejected-share thresholds in the browser, with explicitly enabled system notifications |
 | **Security First** | CSP restrictions, escaped dynamic values, sanitized token logs; anti-framing requires HTTP response headers |
 | **No Framework Deps** | Native ES Modules, < 50 KB gzip, instant load |
 
@@ -123,6 +124,13 @@ Enable HTTP API in your `config.json`:
 4. Click **Connect** → Frontend connects directly to your Proxy, validates Token
 5. Success → Dashboard loads, auto-refreshes every 10 seconds
 6. Click **⚙ Settings** (top-right) → Manage saved Proxy profiles, create/edit/delete profiles, and switch between them with one click
+7. Configure hashrate, miner-count, and rejected-share thresholds under **Local alert settings**; browser notifications require an explicit permission-button click. See the [Local Alerts Guide](docs/local-alerts.md#english) for details.
+
+---
+
+## 🔔 Local Alerts and Browser Notifications
+
+The dashboard can evaluate minimum hashrate, minimum active miners, and maximum rejected-share thresholds locally in the browser. Thresholds are disabled by default and preferences stay in this browser; there is no backend, webhook, or remote push. System notifications require the user to explicitly request permission and enable them in Settings. Alerts are evaluated only while the page is visible and fresh monitoring data is received; automatic polling pauses for hidden tabs. See the [Local Alerts Guide](docs/local-alerts.md#english) for setup, threshold boundaries, and privacy details.
 
 ---
 
@@ -220,8 +228,8 @@ The session hashrate trend uses a lightweight SVG by default. Select **Enable in
 - [x] **Theme Toggle** — Dark and light themes are supported
 - [x] **More Chart Libraries** — Optional uPlot session hashrate chart, loaded on demand with the lightweight SVG kept as default
 - [ ] **Optional Backend Proxy Mode** — Users may deploy stateless forwarder on own server, only forwards `/1/summary`, no logs, no Token storage
-- [ ] **Alert/Notification System** — Hashrate anomalies, miner offline thresholds (browser notifications / Webhook)
-- [ ] **Multi-language Support** — i18n framework reserved, Chinese/English priority
+- [x] **Local Alerts / Notifications** — Hashrate, miner-count, and rejected-share thresholds with optional, explicitly authorized browser notifications
+- [x] **Multi-language Support** — Switchable Chinese and English UI
 
 ---
 
