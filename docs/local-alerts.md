@@ -15,11 +15,11 @@
 | 最低总算力 | KH/s；当前总算力严格低于阈值时告警 | 留空 |
 | 最低活跃矿工数 | 个；活跃矿工数严格低于阈值时告警 | 留空 |
 | 最高拒绝份额比例 | 百分比；拒绝份额比例严格高于阈值时告警 | 留空 |
-| 告警冷却时间 | 秒；同一告警再次通知前的最短间隔，范围 0–86400 秒 | 0 表示不等待 |
+| 告警冷却时间 | 秒；同一告警再次通知前的最短间隔，范围 0–86400 秒；0 表示不同告警状态转换之间无需等待 | 0 表示不等待 |
 
 默认不启用任何阈值。算力和矿工数不能小于 0；矿工数必须为整数；拒绝比例必须在 0–100 之间。缺失、负数或非有限监控数据不会被当作有效的正常值或违规值；拒绝份额计数缺失或总数为 0 时，不计算拒绝比例。
 
-告警按状态变化发送，不会在每次刷新时重复通知。处于冷却期的持续告警会等待冷却时间结束后再通知一次；条件恢复后再次触发仍受冷却时间约束。切换 Proxy 配置或重新载入页面会重置当前页面中的告警状态。
+告警按状态变化发送，同一告警持续期间不会在每次刷新时重复通知。若告警在非零冷却期内再次触发且一直持续，会在冷却期结束后补发一次。冷却时间设为 0 时，恢复后再次触发的新告警状态转换可以立即通知；这不会让仍在持续的同一告警按刷新频率重复通知。切换 Proxy 配置或重新载入页面会重置当前页面中的告警状态。
 
 ### 开启浏览器通知
 
@@ -55,11 +55,11 @@
 | Minimum total hashrate | KH/s; alert when current total hashrate is strictly below the threshold | Leave blank |
 | Minimum active miners | Count; alert when the active miner count is strictly below the threshold | Leave blank |
 | Maximum rejected-share percentage | Percent; alert when the rejected-share ratio is strictly above the threshold | Leave blank |
-| Alert cooldown | Seconds; minimum interval before the same alert can notify again, from 0 to 86,400 seconds | Set to 0 for no wait |
+| Alert cooldown | Seconds; minimum interval between notifications for the same alert, from 0 to 86,400 seconds; 0 means no wait between distinct alert transitions | Set to 0 for no wait |
 
 All thresholds are disabled by default. Hashrate and miner thresholds cannot be negative; miner count must be an integer; rejected-share percentage must be between 0 and 100. Missing, negative, or non-finite metrics are not treated as valid healthy or breached values. The rejected-share ratio is not calculated when counters are missing or their sum is zero.
 
-Alerts are transition-based and are not repeated on every refresh. A breach that remains active during cooldown is sent once after the cooldown expires; a later recurrence is still subject to cooldown. Switching Proxy profiles or reloading the page resets the in-memory alert state for that page.
+Alerts are transition-based: the same ongoing breach is not repeated on every refresh. If a breach is triggered again during a non-zero cooldown and remains active, one notification is sent when the cooldown expires. With a cooldown of 0, a new alert transition after recovery can notify immediately; this does not make an ongoing breach repeat at the polling interval. Switching Proxy profiles or reloading the page resets the in-memory alert state for that page.
 
 ### Enable browser notifications
 
