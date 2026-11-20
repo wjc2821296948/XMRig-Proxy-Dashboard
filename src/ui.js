@@ -8,6 +8,8 @@
  *  - Status classification helpers
  */
 
+import { setLocalizedText } from "./i18n-ui.js";
+
 // Toast notification system
 let toastContainer = null;
 let toastContainerPromise = null;
@@ -39,7 +41,7 @@ export async function showToast(message, type = "info", durationMs = 3000) {
   await ensureToastContainer();
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
-  toast.textContent = message;
+  setLocalizedText(toast, message);
   toastContainer.appendChild(toast);
   // Force reflow for animation
   requestAnimationFrame(() => toast.classList.add("show"));
