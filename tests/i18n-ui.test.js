@@ -190,3 +190,14 @@ test("localized dynamic text retains its source when switching languages", () =>
     applyLocale("zh-CN");
   }
 });
+
+
+test("keeps profile-limit and background-processing toast messages localized", () => {
+  const cases = [
+    ["至少保留一个 Proxy 配置", "At least one Proxy profile must be kept."],
+    ["处理图片失败，请重试", "Image processing failed. Try again."],
+  ];
+  for (const [source, expected] of cases) {
+    assert.equal(translateUiText(source, "en"), expected, source);
+  }
+});
