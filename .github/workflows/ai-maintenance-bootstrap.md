@@ -35,6 +35,9 @@ safe-outputs:
 tools:
   github:
     toolsets: [repos]
+    allowed: [get_file_contents]
+    allowed-repos: "${{ github.repository }}"
+    min-integrity: approved
   bash: false
   cli-proxy: false
   edit: false
@@ -56,7 +59,7 @@ Inspect the entire checked-out repository, including source files, tests, docume
 
 1. Confirm the configured model/provider is available through the workflow's inference gateway. Do not reveal, print, or echo credentials or request headers.
 2. Read the repository's project instructions and summarize its architecture and development constraints.
-3. Inventory all source modules, test files, and CI workflows. Identify the existing test command and Node.js support range.
+3. Inventory all source modules, test files, and CI workflow definitions from the checked-out repository. Identify the existing test command and Node.js support range. Assess CI coverage from workflow configuration files only; do not query workflow runs, job logs, or other Actions API data.
 4. Review the repository for high-confidence correctness, security, reliability, and maintenance concerns. Distinguish confirmed findings from hypotheses; cite exact file paths and line ranges.
 5. Do not run shell commands. Do not edit or generate files. Do not use network access except the configured LiteLLM inference endpoint and GitHub tools already provided by the workflow.
 
