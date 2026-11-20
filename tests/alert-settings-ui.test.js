@@ -35,4 +35,35 @@ test("alert settings copy is translated for English locale", () => {
   assert.equal(translateUiText("本地告警设置", "en"), "Local alert settings");
   assert.equal(translateUiText("最低总算力（KH/s）", "en"), "Minimum total hashrate (KH/s)");
   assert.equal(translateUiText("保存告警设置", "en"), "Save alert settings");
+  assert.equal(translateUiText("请求浏览器通知权限", "en"), "Request browser notification permission");
+  assert.equal(translateUiText("接收浏览器通知", "en"), "Receive browser notifications");
+});
+
+test("browser notification permission is requested only from the explicit settings button", () => {
+  const handlerStart = main.indexOf('browserAlertPermissionButton.addEventListener("click"');
+  const handlerEnd = main.indexOf('browserAlertToggle.addEventListener("change"', handlerStart);
+  assert.notEqual(handlerStart, -1);
+  assert.notEqual(handlerEnd, -1);
+  const handler = main.slice(handlerStart, handlerEnd);
+  assert.match(handler, /await requestBrowserNotificationPermission\(\)/);
+  assert.match(main, /id="requestBrowserAlertPermission"/);
+  assert.match(main, /id="enableBrowserAlertNotifications"/);
+  assert.match(main, /browserAlertToggle\.addEventListener\("change"/);
+});
+
+test("fresh Proxy summaries enter local alert evaluation but offline cached snapshots do not", () => {
+  const freshPath = main.slice(main.indexOf("async function fetchAndRender()"), main.indexOf("function startAutoRefresh()"));
+  assert.match(freshPath, /await request\("\/1\/summary"/);
+  assert.match(freshPath, /processLocalAlerts\(data\)/);
+  assert.ok(freshPath.indexOf("controller.signal.aborted") < freshPath.indexOf("processLocalAlerts(data)"));
+  assert.doesNotMatch(main.slice(main.indexOf("function renderCachedSummary"), main.indexOf("async function fetchAndRender()")), /processLocalAlerts/);
+});
+
+
+test("turning notifications off preserves transition history; turning them on starts a fresh notification cycle", () => {
+  const toggleStart = main.indexOf('browserAlertToggle.addEventListener("change"');
+  const toggleEnd = main.indexOf('updateBrowserAlertPermissionUI();', toggleStart);
+  const handler = main.slice(toggleStart, toggleEnd);
+  assert.match(handler, /if \(enabled\) alertTransitionState = \{\};/);
+  assert.doesNotMatch(handler, /(^|[;\n])\s*alertTransitionState = \{\};/);
 });

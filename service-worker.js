@@ -13,6 +13,8 @@ const APP_SHELL = [
   "./src/api.js",
   "./src/main.js",
   "./src/alert-preferences.js",
+  "./src/alert-notifications.js",
+  "./src/alert-rules.js",
   "./src/status.js",
   "./src/storage.js",
   "./src/theme-color.js",
