@@ -1139,6 +1139,40 @@ a:focus-visible,
   text-align: center;
 }
 
+.alert-settings {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.alert-settings-heading h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.alert-settings-heading .input-hint {
+  margin: 0.35rem 0 0.9rem;
+}
+
+.alert-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 0.85rem;
+}
+
+.alert-settings-grid .input-group {
+  min-width: 0;
+  margin-bottom: 0.8rem;
+}
+
+@media (max-width: 520px) {
+  .alert-settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 600px) {
   .profile-modal {
     max-width: 100%;

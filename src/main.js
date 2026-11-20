@@ -41,6 +41,7 @@ import { registerSnapshotExport } from "./snapshot-export.js";
 import { clearMetricHistory, getMetricHistory, recordMetricSample } from "./metrics-history.js";
 import { loadOfflineSnapshot, saveOfflineSnapshot } from "./offline-snapshot.js";
 import { applyLocale, setLocalizedText, translateUiText } from "./i18n-ui.js";
+import { loadAlertSettings, saveAlertSettings } from "./alert-preferences.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -1188,6 +1189,7 @@ function openSettingsModal(selectedProfileId = null) {
   const themePreference = loadTheme();
   const backgroundImage = loadBackgroundImage();
   const backgroundImageUrl = backgroundImage.startsWith("https://") ? backgroundImage : "";
+  const alertSettings = loadAlertSettings();
 
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -1261,6 +1263,35 @@ function openSettingsModal(selectedProfileId = null) {
                 <button type="button" class="btn btn-secondary btn-sm" id="clearBackgroundImage">恢复默认背景</button>
               </div>
             </div>
+            <section class="alert-settings" aria-labelledby="alertSettingsTitle">
+              <div class="alert-settings-heading">
+                <h4 id="alertSettingsTitle">本地告警设置</h4>
+                <p class="input-hint">只在当前浏览器评估；不会上传 Proxy 地址、Token 或原始监控数据。</p>
+              </div>
+              <div class="alert-settings-grid">
+                <div class="input-group">
+                  <label class="input-label" for="sAlertHashrate">最低总算力（KH/s）</label>
+                  <input class="input-field" type="number" id="sAlertHashrate" min="0" step="any" value="${alertSettings.minimumHashrateKhS ?? ""}" placeholder="留空表示关闭">
+                  <span class="input-hint">低于此值时触发告警；留空表示关闭。</span>
+                </div>
+                <div class="input-group">
+                  <label class="input-label" for="sAlertMiners">最低活跃矿工数</label>
+                  <input class="input-field" type="number" id="sAlertMiners" min="0" step="1" value="${alertSettings.minimumMiners ?? ""}" placeholder="留空表示关闭">
+                  <span class="input-hint">低于此数量时触发告警；留空表示关闭。</span>
+                </div>
+                <div class="input-group">
+                  <label class="input-label" for="sAlertRejected">最高拒绝份额比例（%）</label>
+                  <input class="input-field" type="number" id="sAlertRejected" min="0" max="100" step="any" value="${alertSettings.maximumRejectedSharePercent ?? ""}" placeholder="留空表示关闭">
+                  <span class="input-hint">高于此比例时触发告警；留空表示关闭。</span>
+                </div>
+                <div class="input-group">
+                  <label class="input-label" for="sAlertCooldown">告警冷却时间（秒）</label>
+                  <input class="input-field" type="number" id="sAlertCooldown" min="0" max="86400" step="1" value="${alertSettings.cooldownMs / 1000}">
+                  <span class="input-hint">同一告警再次触发前的最短间隔；0 表示不等待。</span>
+                </div>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="saveAlertSettings" type="button">保存告警设置</button>
+            </section>
             <div class="config-actions">
               <button class="btn btn-secondary" id="cancelSettings">取消</button>
               <button class="btn btn-danger" id="logoutBtn">登出</button>
@@ -1613,6 +1644,53 @@ function openSettingsModal(selectedProfileId = null) {
     );
     renderConnectForm();
     stopAutoRefresh();
+  });
+
+  const saveAlertSettingsButton = document.getElementById("saveAlertSettings");
+  saveAlertSettingsButton.addEventListener("click", () => {
+    const readOptionalThreshold = id => {
+      const raw = document.getElementById(id).value.trim();
+      if (!raw) return null;
+      const value = Number(raw);
+      return Number.isFinite(value) && value >= 0 ? value : Number.NaN;
+    };
+    const minimumHashrateKhS = readOptionalThreshold("sAlertHashrate");
+    const minimumMiners = readOptionalThreshold("sAlertMiners");
+    const maximumRejectedSharePercent = readOptionalThreshold("sAlertRejected");
+    const cooldownSeconds = Number(document.getElementById("sAlertCooldown").value);
+
+    if (Number.isNaN(minimumHashrateKhS)) {
+      showToast("请输入有效的最低算力，且不能小于 0", "warning");
+      document.getElementById("sAlertHashrate").focus();
+      return;
+    }
+    if (minimumMiners !== null && (!Number.isInteger(minimumMiners) || minimumMiners < 0)) {
+      showToast("最低矿工数必须是非负整数", "warning");
+      document.getElementById("sAlertMiners").focus();
+      return;
+    }
+    if (Number.isNaN(maximumRejectedSharePercent)
+        || (maximumRejectedSharePercent !== null && maximumRejectedSharePercent > 100)) {
+      showToast("拒绝份额比例必须在 0 到 100 之间", "warning");
+      document.getElementById("sAlertRejected").focus();
+      return;
+    }
+    if (!Number.isInteger(cooldownSeconds) || cooldownSeconds < 0 || cooldownSeconds > 86400) {
+      showToast("冷却时间必须是 0 到 86400 的整数秒", "warning");
+      document.getElementById("sAlertCooldown").focus();
+      return;
+    }
+
+    const saved = saveAlertSettings({
+      minimumHashrateKhS,
+      minimumMiners,
+      maximumRejectedSharePercent,
+      cooldownMs: cooldownSeconds * 1000,
+    });
+    showToast(
+      saved ? "本地告警设置已保存" : "本地告警设置保存失败：浏览器存储不可用或空间不足",
+      saved ? "success" : "error",
+    );
   });
 
   const saveSettingsButton = document.getElementById("saveSettings");
