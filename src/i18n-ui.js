@@ -133,6 +133,7 @@ const ZH_TO_EN = Object.freeze({
   "最低矿工数必须是非负整数": "Minimum miner count must be a non-negative integer.",
   "拒绝份额比例必须在 0 到 100 之间": "Rejected-share percentage must be between 0 and 100.",
   "冷却时间必须是 0 到 86400 的整数秒": "Cooldown must be a whole number of seconds from 0 to 86400.",
+  "请输入冷却时间；0 表示不等待": "Enter a cooldown value; use 0 for no wait.",
   "本地告警设置已保存": "Local alert settings saved.",
   "本地告警设置保存失败：浏览器存储不可用或空间不足": "Could not save local alert settings: browser storage is unavailable or full.",
   "恢复默认背景": "Restore default background",

@@ -1286,7 +1286,7 @@ function openSettingsModal(selectedProfileId = null) {
                 </div>
                 <div class="input-group">
                   <label class="input-label" for="sAlertCooldown">告警冷却时间（秒）</label>
-                  <input class="input-field" type="number" id="sAlertCooldown" min="0" max="86400" step="1" value="${alertSettings.cooldownMs / 1000}">
+                  <input class="input-field" type="number" id="sAlertCooldown" min="0" max="86400" step="1" value="${alertSettings.cooldownMs / 1000}" placeholder="0 表示不等待" required>
                   <span class="input-hint">同一告警再次触发前的最短间隔；0 表示不等待。</span>
                 </div>
               </div>
@@ -1657,9 +1657,16 @@ function openSettingsModal(selectedProfileId = null) {
     const minimumHashrateKhS = readOptionalThreshold("sAlertHashrate");
     const minimumMiners = readOptionalThreshold("sAlertMiners");
     const maximumRejectedSharePercent = readOptionalThreshold("sAlertRejected");
-    const cooldownSeconds = Number(document.getElementById("sAlertCooldown").value);
+    const cooldownInput = document.getElementById("sAlertCooldown");
+    const cooldownRaw = cooldownInput.value.trim();
+    if (!cooldownRaw) {
+      showToast("请输入冷却时间；0 表示不等待", "warning");
+      cooldownInput.focus();
+      return;
+    }
+    const cooldownSeconds = Number(cooldownRaw);
 
-    if (Number.isNaN(minimumHashrateKhS)) {
+    if (minimumHashrateKhS !== null && Number.isNaN(minimumHashrateKhS)) {
       showToast("请输入有效的最低算力，且不能小于 0", "warning");
       document.getElementById("sAlertHashrate").focus();
       return;
