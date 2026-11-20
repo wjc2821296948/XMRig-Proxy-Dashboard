@@ -47,6 +47,7 @@ export async function requestBrowserNotificationPermission(notificationApi) {
 export function sendAlertNotification(alert, { notificationApi, locale = getLocale() } = {}) {
   const api = resolveNotificationApi(notificationApi);
   if (getBrowserNotificationPermission(api) !== "granted" || !alert || typeof alert.id !== "string") return false;
+  // Match the dashboard's supported locales and Simplified Chinese default fallback.
   const language = normalizeLocale(locale);
   const body = MESSAGE_BY_LOCALE[language][alert.id];
   if (!body) return false;
