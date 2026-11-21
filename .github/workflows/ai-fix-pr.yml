@@ -109,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/scripts/validate-qa-fix-patch.py qa-fix.patch
-          python3 -m unittest discover -s tests -p 'qa_fix_patch_validator_test.py'
+          python3 -m unittest discover -s tests -p 'qa_*_test.py'
           git apply --check qa-fix.patch
           git apply qa-fix.patch
           git diff --check

@@ -44,6 +44,9 @@ jobs:
       - name: Run static checks
         run: node --experimental-default-type=module --test tests/static.test.js
 
+      - name: Run QA security helper tests
+        run: python3 -m unittest discover -s tests -p 'qa_*_test.py'
+
   syntax-check:
     name: JavaScript syntax checks
     runs-on: ubuntu-latest
@@ -64,3 +67,4 @@ jobs:
             node --experimental-default-type=module --check "$file"
           done
           python -m py_compile .github/qa/agent/*.py .github/scripts/qa-fix-agent.py
+          bash -n .github/qa/agent/run-sandbox.sh

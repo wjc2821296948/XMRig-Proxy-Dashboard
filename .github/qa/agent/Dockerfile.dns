@@ -1,0 +1,10 @@
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN useradd --uid 10003 --no-create-home --shell /usr/sbin/nologin dns \
+    && mkdir -p /app
+COPY --chown=10003:10003 dns_sinkhole.py /app/dns_sinkhole.py
+USER 10003:10003
+WORKDIR /app
+EXPOSE 53/udp 53/tcp
+ENTRYPOINT ["python", "/app/dns_sinkhole.py"]

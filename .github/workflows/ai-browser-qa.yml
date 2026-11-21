@@ -161,7 +161,7 @@ jobs:
     needs: route
     if: needs.route.outputs.mode == 'explore' || needs.route.outputs.mode == 'issue'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -169,52 +169,24 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch || 'main' }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install Browser Use (pinned)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r .github/qa/agent/requirements.txt
-          browser-use install
-      - name: Start local dashboard and mock Proxy API
-        shell: bash
-        run: |
-          set -euo pipefail
-          HOST=127.0.0.1 PORT=18080 node bin/server.js >/dev/null 2>&1 &
-          echo $! > "$RUNNER_TEMP/dashboard.pid"
-          python .github/qa/agent/mock_proxy.py >/dev/null 2>&1 &
-          echo $! > "$RUNNER_TEMP/mock-proxy.pid"
-          for attempt in {1..40}; do
-            if curl --silent --fail http://127.0.0.1:18080/ >/dev/null && curl --silent --fail http://127.0.0.1:18081/1/summary >/dev/null; then exit 0; fi
-            sleep 0.25
-          done
-          echo "Local QA fixtures did not become ready; startup output is intentionally discarded."
-          exit 1
       - name: Prepare QA context
         env:
           QA_CONTEXT: ${{ needs.route.outputs.context_json }}
           QA_MODE: ${{ needs.route.outputs.mode }}
         run: |
-          python - <<'PY'
+          python3 - <<'PY_CONTEXT'
           import json, os
           context=json.loads(os.environ['QA_CONTEXT'])
           if not context.get('task'):
               context['task'] = 'Explore the Dashboard UI and validate the local alert workflow, settings persistence, notification permission UX, and any obvious functional regressions.'
           context['mode']=os.environ['QA_MODE']
           open('qa-context.json','w',encoding='utf-8').write(json.dumps(context,ensure_ascii=False))
-          PY
-      - name: Run bounded AI browser exploration
+          PY_CONTEXT
+      - name: Run Browser Use in an isolated no-egress container
         env:
           QA_EXPLORER_LITELLM_API_KEY: ${{ secrets.QA_EXPLORER_LITELLM_API_KEY }}
-          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
           QA_EXPLORER_MODEL: ${{ vars.QA_EXPLORER_MODEL }}
-          BROWSER_USE_SETUP_LOGGING: 'false'
-          ANONYMIZED_TELEMETRY: 'false'
-        run: python .github/qa/agent/run_explorer.py --context qa-context.json --output .github/qa/reports/ai-browser-qa.json
+        run: bash .github/qa/agent/run-sandbox.sh qa-context.json .github/qa/reports/ai-browser-qa.json
       - name: Upload AI exploration report
         if: always()
         uses: actions/upload-artifact@v4
@@ -223,12 +195,6 @@ jobs:
           path: .github/qa/reports/ai-browser-qa.json
           if-no-files-found: ignore
           retention-days: 14
-      - name: Stop local fixtures
-        if: always()
-        run: |
-          [ ! -f "$RUNNER_TEMP/dashboard.pid" ] || kill "$(cat "$RUNNER_TEMP/dashboard.pid")" 2>/dev/null || true
-          [ ! -f "$RUNNER_TEMP/mock-proxy.pid" ] || kill "$(cat "$RUNNER_TEMP/mock-proxy.pid")" 2>/dev/null || true
-
   pr-report:
     needs: route
     if: needs.route.outputs.mode == 'pr-report' && needs.route.outputs.comment_target != ''
