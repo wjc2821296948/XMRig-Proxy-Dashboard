@@ -25,6 +25,10 @@ review_states = ["changes_requested"]
 review_author_types = ["User"]
 review_commands = ["/improve"]
 
+[ignore]
+# gh-aw lock files are generated; the Markdown source is reviewed and lock freshness is enforced in CI.
+glob = ["*.lock.yml"]
+
 [pr_reviewer]
 require_score_review = true
 require_tests_review = true

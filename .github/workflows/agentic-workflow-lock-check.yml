@@ -1,0 +1,35 @@
+name: Agentic Workflow Lock Checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-generated-locks:
+    name: Check gh-aw source and generated locks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned gh-aw CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh extension install github/gh-aw --pin v1.2.2
+
+      - name: Verify every agentic workflow lock is current
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflows="$(gh aw list --json)"
+          printf '%s\n' "$workflows" | jq -r '.[] | "\(.workflow): \(.compiled)"'
+          if ! printf '%s\n' "$workflows" | jq -e 'length > 0 and all(.[]; .compiled == "Yes")' >/dev/null; then
+            echo "One or more gh-aw generated lock files are missing or stale. Run 'gh aw compile <workflow-id>' and commit the updated .lock.yml alongside its .md source."
+            gh aw list --stale || true
+            exit 1
+          fi
