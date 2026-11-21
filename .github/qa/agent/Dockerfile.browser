@@ -11,7 +11,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libatomic1 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 10001 --create-home --shell /usr/sbin/nologin qa \
-    && mkdir -p /app /opt/ms-playwright \
+    && mkdir -p /app /opt/ms-playwright /report \
+    && touch /app/qa-context.json \
+    && chmod 0777 /report \
     && python -m pip install --no-cache-dir --upgrade pip
 
 COPY requirements.txt /tmp/requirements.txt

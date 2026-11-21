@@ -20,6 +20,8 @@ host_gateway_ip=""
 host_test_pid=""
 host_test_port=18082
 host_ingress_blocked=false
+sandbox_io_dir=""
+report_mount_dir=""
 
 : "${QA_EXPLORER_LITELLM_API_KEY:?Missing dedicated Browser Explorer key}"
 : "${QA_EXPLORER_MODEL:?Missing Browser Explorer model}"
@@ -35,8 +37,21 @@ cleanup() {
       && ! docker network inspect "$internal_network" >/dev/null 2>&1; then
     sudo iptables -D INPUT -i "$bridge" -j DROP >/dev/null 2>&1 || true
   fi
+  if [ -n "$sandbox_io_dir" ]; then
+    rm -rf "$sandbox_io_dir"
+  fi
 }
 trap cleanup EXIT
+
+# The model-code container gets one read-only task file and one dedicated output
+# directory, never the checkout or the runner's general temporary directory.
+sandbox_io_dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/qa-browser-io.XXXXXX")
+report_mount_dir="$sandbox_io_dir/report"
+mkdir -p "$report_mount_dir"
+cp "$context_file" "$sandbox_io_dir/context.json"
+chmod 0755 "$sandbox_io_dir"
+chmod 0444 "$sandbox_io_dir/context.json"
+chmod 0777 "$report_mount_dir"
 
 # Build the trusted sandbox images before the secret is passed to any container.
 docker build --pull -f .github/qa/agent/Dockerfile.browser -t "$agent_image" .github/qa/agent >/dev/null
@@ -119,14 +134,14 @@ docker run -d --name "$agent_name" --network "$internal_network" \
   --add-host "mock-proxy:${mock_ip}" \
   --add-host "litellm-relay:${relay_ip}" \
   --add-host "qa-dns:${dns_ip}" \
+  --mount "type=bind,src=${sandbox_io_dir}/context.json,dst=/app/qa-context.json,readonly" \
+  --mount "type=bind,src=${report_mount_dir},dst=/report" \
   --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges:true \
   --pids-limit 128 --memory 2g --cpus 2 --shm-size 256m \
-  --env HOME=/home/qa --env PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+  --env HOME=/home/qa --env PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
   --env LITELLM_API_BASE=http://litellm-relay:8080/v1 \
   --env QA_EXPLORER_MODEL --env BROWSER_USE_SETUP_LOGGING=false --env ANONYMIZED_TELEMETRY=false \
   --entrypoint python "$agent_image" -c 'import time; time.sleep(900)' >/dev/null
-
-docker cp "$context_file" "$agent_name:/tmp/qa-context.json" >/dev/null
 
 ready=false
 for _ in $(seq 1 40); do
@@ -191,7 +206,7 @@ asyncio.run(main())'
   exit 0
 fi
 
-mkdir -p "$(dirname "$report_file")"
 docker exec "$agent_name" python /app/run_explorer.py \
-  --context /tmp/qa-context.json --output /tmp/ai-browser-qa.json
-docker cp "$agent_name:/tmp/ai-browser-qa.json" "$report_file" >/dev/null
+  --context /app/qa-context.json --output /report/ai-browser-qa.json
+mkdir -p "$(dirname "$report_file")"
+cp "$report_mount_dir/ai-browser-qa.json" "$report_file"

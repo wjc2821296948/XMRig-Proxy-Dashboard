@@ -45,7 +45,7 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   const exploreJob = workflow.slice(workflow.indexOf("  explore:"), workflow.indexOf("  pr-report:"));
   const smokeJob = browserWorkflow.slice(browserWorkflow.indexOf("  sandbox-security-smoke:"));
   const browserStart = sandbox.indexOf('docker run -d --name "$agent_name"');
-  const browserContainer = sandbox.slice(browserStart, sandbox.indexOf("\ndocker cp", browserStart));
+  const browserContainer = sandbox.slice(browserStart, sandbox.indexOf("\nready=false", browserStart));
   assert.match(exploreJob, /contents:\s+read/);
   assert.doesNotMatch(workflow, /needs\.route\.outputs\.checkout_ref/);
   assert.match(workflow, /checks\.listForRef/);
@@ -81,8 +81,14 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(browserContainer, /--read-only/);
   assert.match(browserContainer, /--cap-drop ALL/);
   assert.match(browserContainer, /--pids-limit 128 --memory 2g --cpus 2/);
-  assert.doesNotMatch(browserContainer, /--mount|docker\.sock|--network host/);
+  assert.match(browserContainer, /dst=\/app\/qa-context\.json,readonly/);
+  assert.match(browserContainer, /dst=\/report/);
+  assert.match(browserContainer, /PLAYWRIGHT_BROWSERS_PATH=\/opt\/ms-playwright/);
+  assert.doesNotMatch(browserContainer, /GITHUB_WORKSPACE|docker\.sock|--network host|--mount[^\n]*workspace/);
+  assert.doesNotMatch(sandbox, /docker cp/);
   assert.match(browserDockerfile, /USER 10001:10001/);
+  assert.match(browserDockerfile, /touch \/app\/qa-context\.json/);
+  assert.match(browserDockerfile, /mkdir -p \/app \/opt\/ms-playwright \/report/);
   assert.match(browserDockerfile, /apt-get install -y --no-install-recommends libatomic1/);
   assert.match(browserDockerfile, /browser-use install/);
   assert.match(browserDockerfile, /PLAYWRIGHT_BROWSERS_PATH=\/opt\/ms-playwright/);
