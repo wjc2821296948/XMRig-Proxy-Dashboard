@@ -1,0 +1,64 @@
+name: Browser E2E
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "src/**"
+      - "index.html"
+      - "styles.css"
+      - "bin/**"
+      - ".github/qa/**"
+      - ".github/workflows/browser-e2e.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "index.html"
+      - "styles.css"
+      - "bin/**"
+      - ".github/qa/**"
+      - ".github/workflows/browser-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-e2e:
+    name: Chromium E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted workflow revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install isolated QA dependencies
+        run: npm ci --prefix .github/qa
+
+      - name: Install Chromium
+        run: npx --prefix .github/qa playwright install --with-deps chromium
+
+      - name: Run browser regression suite
+        run: npm --prefix .github/qa test
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-${{ github.run_id }}
+          path: |
+            .github/qa/test-results/
+            .github/qa/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

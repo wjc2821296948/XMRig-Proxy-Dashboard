@@ -10,3 +10,6 @@ Thumbs.db
 .claude/
 MEMORY.md
 REFRACTOR_PLAN.md
+
+__pycache__/
+*.py[cod]
