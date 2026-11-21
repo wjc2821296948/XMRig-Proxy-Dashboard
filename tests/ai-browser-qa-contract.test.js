@@ -118,7 +118,12 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.match(patchValidator, /PROTECTED_FILES/);
   assert.ok(patchValidator.includes('"src/ui.js"'));
   assert.match(patchValidator, /untracked or new file/);
-  for (const file of ["index.html", "src/api.js", "src/storage.js", "src/public-assets.js", "src/ui.js"]) {
+  for (const file of [
+    "index.html", "src/api.js", "src/storage.js", "src/public-assets.js", "src/ui.js",
+    "src/escape-html.js", "src/background-upload-guard.js", "src/alert-rules.js",
+    "src/alert-preferences.js", "src/alert-notifications.js", "tests/alert-rules.test.js",
+    ".github/scripts/validate-qa-fix-patch.py",
+  ]) {
     assert.ok(patchValidator.includes(JSON.stringify(file)), `${file} must remain protected`);
   }
   assert.match(alertTests, /threshold comparisons use explicit strict boundaries/);

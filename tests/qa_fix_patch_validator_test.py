@@ -17,15 +17,15 @@ class PatchValidatorTests(unittest.TestCase):
             return VALIDATOR.validate(patch)
 
     def test_accepts_changes_to_existing_non_sensitive_source(self):
-        patch = """diff --git a/src/alert-rules.js b/src/alert-rules.js
+        patch = """diff --git a/src/keyboard-shortcuts.js b/src/keyboard-shortcuts.js
 index 1111111..2222222 100644
---- a/src/alert-rules.js
-+++ b/src/alert-rules.js
+--- a/src/keyboard-shortcuts.js
++++ b/src/keyboard-shortcuts.js
 @@ -1 +1 @@
 -const oldValue = 1;
 +const newValue = 2;
 """
-        self.assertEqual(self.validate_text(patch), ["src/alert-rules.js"])
+        self.assertEqual(self.validate_text(patch), ["src/keyboard-shortcuts.js"])
 
     def test_rejects_new_files_even_inside_allowed_directories(self):
         patch = """diff --git a/src/qa-backdoor.js b/src/qa-backdoor.js
@@ -49,6 +49,29 @@ index 1111111..2222222 100644
 """
         with self.assertRaisesRegex(SystemExit, "security-sensitive"):
             self.validate_text(patch)
+
+
+    def test_rejects_alert_engine_tests_and_security_helpers(self):
+        protected = [
+            "src/alert-rules.js",
+            "src/alert-preferences.js",
+            "src/alert-notifications.js",
+            "src/escape-html.js",
+            "src/background-upload-guard.js",
+            "tests/alert-rules.test.js",
+            ".github/scripts/validate-qa-fix-patch.py",
+        ]
+        for path in protected:
+            patch = f"""diff --git a/{path} b/{path}
+index 1111111..2222222 100644
+--- a/{path}
++++ b/{path}
+@@ -1 +1 @@
+-const oldValue = 1;
++const newValue = 2;
+"""
+            with self.subTest(path=path), self.assertRaisesRegex(SystemExit, "security-sensitive"):
+                self.validate_text(patch)
 
     def test_rejects_renames(self):
         patch = """diff --git a/src/alert-rules.js b/src/alert-rules-copy.js

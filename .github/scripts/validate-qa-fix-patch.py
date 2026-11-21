@@ -13,6 +13,13 @@ PROTECTED_FILES = {
     "src/storage.js",
     "src/public-assets.js",
     "src/ui.js",
+    "src/escape-html.js",
+    "src/background-upload-guard.js",
+    "src/alert-rules.js",
+    "src/alert-preferences.js",
+    "src/alert-notifications.js",
+    "tests/alert-rules.test.js",
+    ".github/scripts/validate-qa-fix-patch.py",
 }
 
 
@@ -49,14 +56,14 @@ def validate(patch_path: Path) -> list[str]:
             parts = Path(path).parts
             if path.startswith("/") or ".." in parts or "\\" in path:
                 fail(f"Refusing unsafe patch path: {path}")
-            if not (path.startswith(ALLOWED_ROOTS) or path in ALLOWED_ROOT_FILES):
+            if path not in PROTECTED_FILES and not (path.startswith(ALLOWED_ROOTS) or path in ALLOWED_ROOT_FILES):
                 fail(f"Refusing patch outside the allowlist: {path}")
         if old_path != new_path:
             fail(f"Refusing file creation, deletion, rename, or copy: {old_path} -> {new_path}")
-        if old_path not in tracked:
-            fail(f"Refusing changes to an untracked or new file: {old_path}")
         if old_path in PROTECTED_FILES:
             fail(f"Refusing changes to security-sensitive file: {old_path}")
+        if old_path not in tracked:
+            fail(f"Refusing changes to an untracked or new file: {old_path}")
         if old_path in changed:
             fail(f"Refusing duplicate diff sections for: {old_path}")
         changed.append(old_path)
