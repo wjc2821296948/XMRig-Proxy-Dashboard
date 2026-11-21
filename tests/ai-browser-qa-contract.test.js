@@ -74,6 +74,7 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.match(fixer, /LITELLM_API_BASE must be https:\/\/litellm\.lrate\.top\/v1/);
   assert.match(patchValidator, /tracked_regular_files/);
   assert.match(patchValidator, /PROTECTED_FILES/);
+  assert.match(patchValidator, /src\\/ui\\.js/);
   assert.match(patchValidator, /untracked or new file/);
 });
 
