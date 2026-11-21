@@ -53,6 +53,7 @@ function extractNoopMessage(agentOutput, safeOutputLines) {
 function parseFindingCounts(report, noopMessage = '') {
   const counts = { critical: 0, high: 0, medium: 0, low: 0, unclassified: 0, parseReliable: false };
   const idSets = { C: new Set(), H: new Set(), M: new Set(), L: new Set() };
+  const fallbackItems = new Set();
   const source = String(report || '');
   const headingMatch = /^##\s+(?:\d+\.\s*)?Findings\b[^\r\n]*$/im.exec(source);
   if (!headingMatch) { counts.total = 0; return counts; }
@@ -60,30 +61,55 @@ function parseFindingCounts(report, noopMessage = '') {
   const nextHeading = /^##\s+/m.exec(remainder);
   const section = nextHeading ? remainder.slice(0, nextHeading.index) : remainder;
   let severity = null;
-  let hasFindingBullet = false;
+  let hasFinding = false;
   let hasExplicitNoFindings = false;
+  let paragraph = [];
+  const severityKey = (value) => ({ critical: 'critical', high: 'high', medium: 'medium', low: 'low' })[value] || null;
+  const flushParagraph = () => {
+    const value = paragraph.join(' ').trim();
+    paragraph = [];
+    if (!value || severity === 'informational' || /^no\s+(?:actionable\s+)?findings\b/i.test(value)) return;
+    hasFinding = true;
+    const key = severityKey(severity);
+    if (key) fallbackItems.add(key + ':' + value);
+    else counts.unclassified += 1;
+  };
 
-  // Finding IDs are preferred for de-duplication, but their exact syntax is not a contract.
+  // Count by severity headings and list entries, not by a particular finding-ID format.
   for (const line of section.split(/\r?\n/)) {
     const heading = line.match(/^###\s+(Critical|High|Medium|Low|Informational)\b/i);
-    if (heading) { severity = heading[1].toLowerCase(); continue; }
-    if (/^\s*[-*]\s*No\s+(?:actionable\s+)?findings\b/i.test(line)
+    if (heading) { flushParagraph(); severity = heading[1].toLowerCase(); continue; }
+    if (/^\s*[-*+•‣▪–—]\s*No\s+(?:actionable\s+)?findings\b/i.test(line)
       || /^\s*No\s+(?:actionable\s+)?findings\b/i.test(line)) {
-      hasExplicitNoFindings = true; continue;
+      flushParagraph(); hasExplicitNoFindings = true; continue;
     }
-    const bullet = line.match(/^\s*[-*+]\s+(\S.*)$/);
-    if (!bullet || severity === 'informational') continue;
-    hasFindingBullet = true;
-    const id = bullet[1].match(/^(?:(?:\*{1,2}|\x60))?([CHML])-(\d+)\b/i);
-    if (id) idSets[id[1].toUpperCase()].add(id[2]);
-    else counts.unclassified += 1;
+    const item = line.match(/^\s*(?:[-*+•‣▪–—]|\d+[.)])\s+(\S.*)$/);
+    if (item) {
+      flushParagraph();
+      if (severity === 'informational') continue;
+      hasFinding = true;
+      const id = item[1].match(/(?:^|[\s*\x60])([CHML])\s*[-–—:]\s*(\d+)\b/i);
+      if (id) idSets[id[1].toUpperCase()].add(id[2]);
+      else {
+        const key = severityKey(severity);
+        if (key) fallbackItems.add(key + ':' + item[1].trim());
+        else counts.unclassified += 1;
+      }
+      continue;
+    }
+    if (!line.trim() || /^\s*(?:```|~~~|\|)/.test(line) || /^\s*<!--/.test(line)) continue;
+    if (/^\s{2,}\S/.test(line) && hasFinding) continue;
+    if (severity && severity !== 'informational') paragraph.push(line.trim());
   }
+  flushParagraph();
   counts.critical = idSets.C.size;
   counts.high = idSets.H.size;
   counts.medium = idSets.M.size;
   counts.low = idSets.L.size;
-  const identified = counts.critical + counts.high + counts.medium + counts.low;
-  if (identified === 0 && counts.unclassified === 0 && !hasFindingBullet && noopMessage) {
+  for (const key of ['critical', 'high', 'medium', 'low']) {
+    counts[key] += [...fallbackItems].filter((item) => item.startsWith(key + ':')).length;
+  }
+  if (!hasFinding && noopMessage) {
     const labels = [
       ['critical', /(?:^|[,;:]\s*)(\d+)\s+critical\b/i],
       ['high', /(?:^|[,;:]\s*)(\d+)\s+high\b/i],
@@ -94,11 +120,53 @@ function parseFindingCounts(report, noopMessage = '') {
       const match = noopMessage.match(pattern);
       if (match) counts[key] = Number(match[1]);
     }
-    counts.parseReliable = labels.every(([, pattern]) => pattern.test(noopMessage));
+    const summaryReliable = labels.every(([, pattern]) => pattern.test(noopMessage));
+    const summaryTotal = counts.critical + counts.high + counts.medium + counts.low;
+    if (summaryReliable && (summaryTotal > 0 || !hasExplicitNoFindings)) {
+      counts.parseReliable = true;
+    }
   }
-  counts.parseReliable = counts.parseReliable || hasFindingBullet || hasExplicitNoFindings || identified > 0;
+  counts.parseReliable = counts.parseReliable || hasFinding || hasExplicitNoFindings;
   counts.total = counts.critical + counts.high + counts.medium + counts.low + counts.unclassified;
   return counts;
+}
+
+function buildCommitUrl(run) {
+  const sha = String(run?.head_sha || '');
+  if (!/^[a-f0-9]{7,64}$/i.test(sha) || !run?.html_url) return '';
+  try {
+    const runUrl = new URL(run.html_url);
+    if (runUrl.protocol !== 'https:' || runUrl.username || runUrl.password) return '';
+    const match = runUrl.pathname.match(/^\/([^/]+)\/([^/]+)\/actions\/runs\/(\d+)\/?$/);
+    if (!match || (run.id != null && match[3] !== String(run.id))) return '';
+    const owner = decodeURIComponent(match[1]);
+    const repo = decodeURIComponent(match[2]);
+    const fullName = run.repository?.full_name;
+    if (fullName && fullName.toLowerCase() !== (owner + '/' + repo).toLowerCase()) return '';
+    const commitUrl = new URL(runUrl.origin);
+    commitUrl.pathname = '/' + match[1] + '/' + match[2] + '/commit/' + sha;
+    return commitUrl.toString();
+  } catch {
+    return '';
+  }
+}
+
+async function upsertRerunSummary({ github, owner, repo, issueNumber, report }) {
+  const comments = await github.paginate(github.rest.issues.listComments, {
+    owner, repo, issue_number: issueNumber, per_page: 100,
+  });
+  const existing = comments.find((comment) => (comment.body || '').includes(report.rerunMarker));
+  const body = [
+    'Latest rerun: attempt ' + report.attempt + ' — ' + (report.needsAttention ? 'requires attention' : 'no findings detected') + '.',
+    'Actions run: [#' + report.runId + '](' + report.runUrl + ')',
+    report.rerunMarker,
+  ].join('\n');
+  if (existing) {
+    await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+    return 'updated';
+  }
+  await github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body });
+  return 'created';
 }
 
 function firstExisting(...paths) {
@@ -154,20 +222,10 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
   const runUrl = run.html_url || '';
   const sha = run.head_sha || '';
   const branch = run.head_branch || 'unknown';
-  let commitUrl = '';
-  if (sha && runUrl) {
-    try {
-      const parsedRunUrl = new URL(runUrl);
-      parsedRunUrl.pathname = parsedRunUrl.pathname.replace(/\/actions\/runs\/\d+\/?$/, `/commit/${sha}`);
-      parsedRunUrl.search = '';
-      parsedRunUrl.hash = '';
-      if (parsedRunUrl.pathname.endsWith(`/commit/${sha}`)) commitUrl = parsedRunUrl.toString();
-    } catch {
-      // An invalid or unfamiliar Actions URL should not produce a broken link.
-    }
-  }
+  const commitUrl = buildCommitUrl(run);
   const marker = `<!-- ai-review-run:${runId} -->`;
   const attemptMarker = `<!-- ai-review-attempt:${runId}:${attempt} -->`;
+  const rerunMarker = `<!-- ai-review-rerun-summary:${runId} -->`;
 
   const summaryRows = [
     ['Date (UTC)', date],
@@ -229,6 +287,7 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
     body,
     marker,
     attemptMarker,
+    rerunMarker,
     counts,
     model,
     aic,
@@ -244,8 +303,10 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
 }
 
 module.exports = {
+  buildCommitUrl,
   buildReviewData,
   extractFinalReport,
   extractNoopMessage,
   parseFindingCounts,
+  upsertRerunSummary,
 };

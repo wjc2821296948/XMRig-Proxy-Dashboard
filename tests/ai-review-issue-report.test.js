@@ -7,10 +7,12 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const {
+  buildCommitUrl,
   buildReviewData,
   extractFinalReport,
   extractNoopMessage,
   parseFindingCounts,
+  upsertRerunSummary,
 } = require('../.github/scripts/ai-review-issue-report.cjs');
 
 function makeTempDir() {
@@ -81,10 +83,81 @@ test('counts findings with changed IDs or bullet formats conservatively', () => 
     '+ HIGH: missing validation',
   ].join('\n');
   const counts = parseFindingCounts(report);
-  assert.equal(counts.high, 0);
-  assert.equal(counts.unclassified, 2);
+  assert.equal(counts.high, 2);
+  assert.equal(counts.unclassified, 0);
   assert.equal(counts.total, 2);
   assert.equal(counts.parseReliable, true);
+});
+
+test('counts numbered and alternate list styles using the severity heading', () => {
+  const report = [
+    '## Findings',
+    '### Critical',
+    '1. Finding alpha: authorization bypass',
+    '### High',
+    '• Finding beta — unsafe output handling',
+    '### Medium',
+    'An unbulleted finding paragraph with changed formatting.',
+  ].join('\n');
+  const counts = parseFindingCounts(report);
+  assert.equal(counts.critical, 1);
+  assert.equal(counts.high, 1);
+  assert.equal(counts.medium, 1);
+  assert.equal(counts.total, 3);
+  assert.equal(counts.parseReliable, true);
+});
+
+test('builds commit links only from a validated Actions run URL', () => {
+  const run = {
+    id: 123456,
+    head_sha: 'abcdef1234567890',
+    html_url: 'https://github.com/example/project/actions/runs/123456?check_suite_focus=true',
+    repository: { full_name: 'example/project' },
+  };
+  assert.equal(buildCommitUrl(run), 'https://github.com/example/project/commit/abcdef1234567890');
+  assert.equal(buildCommitUrl({ ...run, html_url: 'https://github.com/attacker/path/actions/runs/999' }), '');
+  assert.equal(buildCommitUrl({ ...run, html_url: 'https://github.com/example/project/actions/runs/999' }), '');
+  assert.equal(buildCommitUrl({ ...run, html_url: 'http://github.com/example/project/actions/runs/123456' }), '');
+  assert.equal(buildCommitUrl({ ...run, head_sha: 'not-a-sha' }), '');
+});
+
+test('updates one stable rerun summary comment instead of creating duplicates', async () => {
+  const calls = [];
+  const github = {
+    paginate: async () => [{ id: 77, body: 'old summary <!-- ai-review-rerun-summary:123456 -->' }],
+    rest: { issues: {
+      listComments: async () => ({ data: [] }),
+      updateComment: async (args) => calls.push({ type: 'update', ...args }),
+      createComment: async (args) => calls.push({ type: 'create', ...args }),
+    } },
+  };
+  const report = {
+    attempt: 3,
+    needsAttention: true,
+    runId: '123456',
+    runUrl: 'https://github.com/example/project/actions/runs/123456',
+    rerunMarker: '<!-- ai-review-rerun-summary:123456 -->',
+  };
+  const result = await upsertRerunSummary({ github, owner: 'example', repo: 'project', issueNumber: 9, report });
+  assert.equal(result, 'updated');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, 'update');
+  assert.equal(calls[0].comment_id, 77);
+  assert.match(calls[0].body, /attempt 3/);
+
+  const createCalls = [];
+  const emptyGithub = {
+    paginate: async () => [],
+    rest: { issues: {
+      listComments: async () => ({ data: [] }),
+      updateComment: async (args) => createCalls.push({ type: 'update', ...args }),
+      createComment: async (args) => createCalls.push({ type: 'create', ...args }),
+    } },
+  };
+  const created = await upsertRerunSummary({ github: emptyGithub, owner: 'example', repo: 'project', issueNumber: 9, report });
+  assert.equal(created, 'created');
+  assert.equal(createCalls.length, 1);
+  assert.equal(createCalls[0].type, 'create');
 });
 
 test('marks an unrecognized or missing Findings section as unreliable', () => {

@@ -68,7 +68,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { buildReviewData } = require('./.github/scripts/ai-review-issue-report.cjs');
+            const { buildReviewData, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
             const run = context.payload.workflow_run;
             const report = buildReviewData({
               agentDir: 'report-agent',
@@ -115,28 +115,8 @@ jobs:
             } else {
               issue = existing;
               const alreadyRecordedAttempt = (existing.body || '').includes(report.attemptMarker);
-              let attemptCommentExists = false;
               if (!alreadyRecordedAttempt) {
-                const comments = await github.rest.issues.listComments({
-                  owner,
-                  repo,
-                  issue_number: existing.number,
-                  per_page: 100,
-                });
-                attemptCommentExists = comments.data.some((comment) =>
-                  (comment.body || '').includes(report.attemptMarker));
-              }
-              if (!alreadyRecordedAttempt && !attemptCommentExists) {
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: existing.number,
-                  body: [
-                    `Re-run attempt ${report.attempt}: ${report.needsAttention ? 'requires attention' : 'no findings detected'}.`,
-                    `Actions run: [#${report.runId}](${report.runUrl})`,
-                    report.attemptMarker,
-                  ].join('\n'),
-                });
+                await upsertRerunSummary({ github, owner, repo, issueNumber: existing.number, report });
               }
               const hasLabel = (existing.labels || []).some((label) => label.name === 'ai-review');
               if (!hasLabel) {
