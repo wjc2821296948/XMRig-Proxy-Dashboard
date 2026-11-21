@@ -69,8 +69,8 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(sandbox, /host-gateway isolation probe/);
   assert.match(sandbox, /unexpectedly reached the runner host/);
   assert.match(sandbox, /QA_SANDBOX_SMOKE_ONLY/);
-  assert.match(sandbox, /playwright\.async_api/);
-  assert.match(sandbox, /Browser Use and Chromium imports passed/);
+  assert.match(sandbox, /Browser\("chromium"/);
+  assert.match(sandbox, /Browser Use agent imports passed/);
   assert.match(sandbox, /no model call was made/);
   assert.match(smokeJob, /github\.head_ref == 'feat\/ai-browser-qa'/);
   assert.match(smokeJob, /QA_EXPLORER_LITELLM_API_KEY: sandbox-smoke-placeholder/);
@@ -83,8 +83,8 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(browserContainer, /--pids-limit 128 --memory 2g --cpus 2/);
   assert.doesNotMatch(browserContainer, /--mount|docker\.sock|--network host/);
   assert.match(browserDockerfile, /USER 10001:10001/);
-  assert.match(browserDockerfile, /python -m playwright install --with-deps chromium/);
-  assert.match(browserDockerfile, /PLAYWRIGHT_BROWSERS_PATH=\/ms-playwright/);
+  assert.match(browserDockerfile, /browser-use install/);
+  assert.match(browserDockerfile, /PLAYWRIGHT_BROWSERS_PATH=\/opt\/ms-playwright/);
   assert.match(relayDockerfile, /USER 10002:10002/);
   assert.match(dnsDockerfile, /USER 10003:10003/);
   assert.match(sandbox, /--cap-add NET_BIND_SERVICE/);

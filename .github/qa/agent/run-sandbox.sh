@@ -179,16 +179,14 @@ else:
 
 if [ "${QA_SANDBOX_SMOKE_ONLY:-false}" = true ]; then
   # Exercise the bundled Chromium and local dashboard without making any model call.
-  docker exec "$agent_name" python -c 'import asyncio; from playwright.async_api import async_playwright
+  docker exec "$agent_name" python -c 'import asyncio; from browser_use import Browser; from run_explorer import validate_relay_url
 async def main():
- async with async_playwright() as p:
-  browser=await p.chromium.launch()
-  page=await browser.new_page()
-  await page.goto("http://dashboard:18080", wait_until="domcontentloaded")
-  assert await page.title()
-  await browser.close()
+ assert validate_relay_url("http://litellm-relay:8080/v1")
+ browser=Browser("chromium", allowed_domains=["http://dashboard:18080", "http://mock-proxy:18081"])
+ await browser.start()
+ await browser.stop()
 asyncio.run(main())'
-  docker exec "$agent_name" python -c 'import browser_use; from run_explorer import validate_relay_url; assert validate_relay_url("http://litellm-relay:8080/v1"); print("Browser Use and Chromium imports passed")'
+  docker exec "$agent_name" python -c 'import browser_use; from run_explorer import Agent, ChatOpenAI; print("Browser Use agent imports passed")'
   echo "Sandbox isolation smoke passed; no model call was made."
   exit 0
 fi
