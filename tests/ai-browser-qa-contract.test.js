@@ -67,12 +67,16 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(sandbox, /sudo iptables -I INPUT 1 -i/);
   assert.match(sandbox, /sudo iptables -D INPUT -i/);
   assert.match(sandbox, /host-gateway isolation probe/);
+  assert.match(sandbox, /trap 'exit 143' TERM/);
+  assert.match(sandbox, /trap 'exit 130' INT/);
+  assert.match(sandbox, /time\.sleep\(300\)/);
+  assert.match(sandbox, /time\.sleep\(1800\)/);
   assert.match(sandbox, /unexpectedly reached the runner host/);
   assert.match(sandbox, /QA_SANDBOX_SMOKE_ONLY/);
   assert.match(sandbox, /Browser\("chromium"/);
   assert.match(sandbox, /Browser Use agent imports passed/);
   assert.match(sandbox, /no model call was made/);
-  assert.match(smokeJob, /github\.head_ref == 'feat\/ai-browser-qa'/);
+  assert.match(smokeJob, /contains\(github\.event\.pull_request\.labels\.\*\.name, 'browser-qa-sandbox'\)/);
   assert.match(smokeJob, /QA_EXPLORER_LITELLM_API_KEY: sandbox-smoke-placeholder/);
   assert.match(smokeJob, /QA_SANDBOX_SMOKE_ONLY: "true"/);
   assert.match(sandbox, /--pids-limit 256 --memory 2g --cpus 2/);
@@ -120,6 +124,7 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   const publisher = workflow.slice(workflow.indexOf("  publish-pr:"));
   const fixer = read(".github/scripts/qa-fix-agent.py");
   const patchValidator = read(".github/scripts/validate-qa-fix-patch.py");
+  const fixAgent = read(".github/scripts/qa-fix-agent.py");
   const alertTests = read("tests/alert-rules.test.js");
   assert.match(generator, /QA_FIXER_LITELLM_API_KEY/);
   assert.match(workflow, /context\.actor !== context\.repo\.owner/);
@@ -135,6 +140,14 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.match(fixer, /LITELLM_API_BASE must be https:\/\/litellm\.lrate\.top\/v1/);
   assert.match(patchValidator, /tracked_regular_files/);
   assert.match(patchValidator, /PROTECTED_FILES/);
+  assert.match(fixAgent, /urllib\.error\.HTTPError/);
+  assert.match(fixAgent, /NoRedirectHandler/);
+  assert.match(fixAgent, /def load_context/);
+  assert.match(fixAgent, /def extract_patch/);
+  assert.match(fixAgent, /def validate_patch_text/);
+  assert.match(read("tests/qa_fix_agent_test.py"), /test_reports_http_status_without_echoing_response_body/);
+  assert.match(fixAgent, /def redirect_request/);
+  assert.match(fixAgent, /HTTPError as exc/);
   assert.ok(patchValidator.includes('"src/ui.js"'));
   assert.match(patchValidator, /untracked or new file/);
   for (const file of [

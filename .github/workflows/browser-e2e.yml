@@ -9,14 +9,17 @@ on:
       - "styles.css"
       - "bin/**"
       - ".github/qa/**"
+      - ".github/workflows/ai-browser-qa.yml"
       - ".github/workflows/browser-e2e.yml"
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "src/**"
       - "index.html"
       - "styles.css"
       - "bin/**"
       - ".github/qa/**"
+      - ".github/workflows/ai-browser-qa.yml"
       - ".github/workflows/browser-e2e.yml"
   workflow_dispatch:
 
@@ -30,6 +33,7 @@ concurrency:
 jobs:
   browser-e2e:
     name: Chromium E2E
+    if: ${{ github.event_name != 'pull_request' || github.event.action != 'labeled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -65,7 +69,7 @@ jobs:
 
   sandbox-security-smoke:
     name: Browser Use container isolation smoke
-    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/ai-browser-qa' }}
+    if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'browser-qa-sandbox') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:

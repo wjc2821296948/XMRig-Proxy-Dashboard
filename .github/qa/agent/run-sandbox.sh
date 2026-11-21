@@ -27,6 +27,7 @@ report_mount_dir=""
 : "${QA_EXPLORER_MODEL:?Missing Browser Explorer model}"
 
 cleanup() {
+  trap - EXIT INT TERM
   # Remove the model-code container and all fixtures before lifting the host firewall.
   docker rm -f "$agent_name" "$mock_name" "$dashboard_name" "$dns_name" "$relay_name" >/dev/null 2>&1 || true
   docker network rm "$internal_network" "$egress_network" >/dev/null 2>&1 || true
@@ -42,6 +43,8 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # The model-code container gets one read-only task file and one dedicated output
 # directory, never the checkout or the runner's general temporary directory.
@@ -71,7 +74,7 @@ host_ingress_blocked=true
 host_gateway_ip=$(docker network inspect -f '{{(index .IPAM.Config 0).Gateway}}' "$internal_network")
 # Start a temporary listener on the host bridge address so the sandbox can prove
 # that host-gateway access is blocked (rather than merely finding a closed port).
-python3 -c 'import socket,sys,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind((sys.argv[1],int(sys.argv[2]))); s.listen(8); time.sleep(900)' "$host_gateway_ip" "$host_test_port" >/dev/null 2>&1 &
+python3 -c 'import socket,sys,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind((sys.argv[1],int(sys.argv[2]))); s.listen(8); time.sleep(300)' "$host_gateway_ip" "$host_test_port" >/dev/null 2>&1 &
 host_test_pid=$!
 host_listener_ready=false
 for _ in $(seq 1 20); do
@@ -141,7 +144,7 @@ docker run -d --name "$agent_name" --network "$internal_network" \
   --env HOME=/home/qa --env PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
   --env LITELLM_API_BASE=http://litellm-relay:8080/v1 \
   --env QA_EXPLORER_MODEL --env BROWSER_USE_SETUP_LOGGING=false --env ANONYMIZED_TELEMETRY=false \
-  --entrypoint python "$agent_image" -c 'import time; time.sleep(900)' >/dev/null
+  --entrypoint python "$agent_image" -c 'import time; time.sleep(1800)' >/dev/null
 
 ready=false
 for _ in $(seq 1 40); do
