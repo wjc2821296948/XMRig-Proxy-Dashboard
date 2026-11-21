@@ -184,15 +184,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          HOST=127.0.0.1 PORT=18080 node bin/server.js > "$RUNNER_TEMP/dashboard.log" 2>&1 &
+          HOST=127.0.0.1 PORT=18080 node bin/server.js >/dev/null 2>&1 &
           echo $! > "$RUNNER_TEMP/dashboard.pid"
-          python .github/qa/agent/mock_proxy.py > "$RUNNER_TEMP/mock-proxy.log" 2>&1 &
+          python .github/qa/agent/mock_proxy.py >/dev/null 2>&1 &
           echo $! > "$RUNNER_TEMP/mock-proxy.pid"
           for attempt in {1..40}; do
             if curl --silent --fail http://127.0.0.1:18080/ >/dev/null && curl --silent --fail http://127.0.0.1:18081/1/summary >/dev/null; then exit 0; fi
             sleep 0.25
           done
-          echo "Local QA fixtures did not become ready; startup logs are retained only on the ephemeral runner."
+          echo "Local QA fixtures did not become ready; startup output is intentionally discarded."
           exit 1
       - name: Prepare QA context
         env:

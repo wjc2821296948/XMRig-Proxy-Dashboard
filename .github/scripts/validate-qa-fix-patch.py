@@ -8,9 +8,11 @@ from pathlib import Path
 ALLOWED_ROOTS = ("src/", "tests/", "docs/")
 ALLOWED_ROOT_FILES = {"README.md", "README.en.md"}
 PROTECTED_FILES = {
+    "index.html",
     "src/api.js",
     "src/storage.js",
     "src/public-assets.js",
+    "src/ui.js",
 }
 
 
