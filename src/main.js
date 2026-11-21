@@ -42,6 +42,27 @@ import { clearMetricHistory, getMetricHistory, recordMetricSample } from "./metr
 import { loadOfflineSnapshot, saveOfflineSnapshot } from "./offline-snapshot.js";
 import { applyLocale, setLocalizedText, translateUiText } from "./i18n-ui.js";
 import { loadAlertSettings, readOptionalThresholdInput, saveAlertSettings } from "./alert-preferences.js";
+import { transitionAlertState } from "./alert-rules.js";
+import {
+  getBrowserNotificationPermission,
+  requestBrowserNotificationPermission,
+  sendAlertNotification,
+} from "./alert-notifications.js";
+
+function processLocalAlerts(data) {
+  const profileId = loadActiveProfileId() || "current";
+  if (alertStateProfileId !== profileId) {
+    alertTransitionState = {};
+    alertStateProfileId = profileId;
+  }
+
+  const preferences = loadAlertSettings();
+  const result = transitionAlertState(data, preferences, alertTransitionState);
+  alertTransitionState = result.nextState;
+  if (!preferences.notificationsEnabled || getBrowserNotificationPermission() !== "granted") return;
+
+  for (const alert of result.notifications) sendAlertNotification(alert);
+}
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -67,6 +88,8 @@ let advancedHistoryChartModulePromise = null;
 let advancedHistoryChartCleanup = null;
 let advancedHistoryChartMountController = null;
 let advancedHistoryChartRenderId = 0;
+let alertTransitionState = {};
+let alertStateProfileId = null;
 const statusTracker = createStatusTracker();
 
 function disposeAdvancedHistoryChart() {
@@ -1190,6 +1213,13 @@ function openSettingsModal(selectedProfileId = null) {
   const backgroundImage = loadBackgroundImage();
   const backgroundImageUrl = backgroundImage.startsWith("https://") ? backgroundImage : "";
   const alertSettings = loadAlertSettings();
+  const notificationPermission = getBrowserNotificationPermission();
+  const notificationPermissionText = {
+    unsupported: "当前浏览器环境不支持系统通知。",
+    default: "浏览器通知权限尚未授予；点击按钮后，浏览器会询问是否允许。",
+    granted: "浏览器通知已获授权。",
+    denied: "浏览器通知已被拒绝；请在浏览器站点设置中重新允许。",
+  }[notificationPermission];
 
   const modalHtml = `
     <div class="modal-overlay" id="settingsModal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -1291,6 +1321,14 @@ function openSettingsModal(selectedProfileId = null) {
                 </div>
               </div>
               <button class="btn btn-secondary btn-sm" id="saveAlertSettings" type="button">保存告警设置</button>
+              <div class="alert-notification-settings">
+                <div class="checkbox-group">
+                  <input type="checkbox" id="enableBrowserAlertNotifications" ${alertSettings.notificationsEnabled && notificationPermission === "granted" ? "checked" : ""} ${notificationPermission === "granted" ? "" : "disabled"}>
+                  <label for="enableBrowserAlertNotifications">接收浏览器通知</label>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="requestBrowserAlertPermission" type="button" ${notificationPermission === "default" ? "" : "disabled"}>请求浏览器通知权限</button>
+                <span class="input-hint" id="browserAlertPermissionStatus" role="status">${notificationPermissionText}</span>
+              </div>
             </section>
             <div class="config-actions">
               <button class="btn btn-secondary" id="cancelSettings">取消</button>
@@ -1648,9 +1686,7 @@ function openSettingsModal(selectedProfileId = null) {
 
   const saveAlertSettingsButton = document.getElementById("saveAlertSettings");
   saveAlertSettingsButton.addEventListener("click", () => {
-    const readOptionalThreshold = id => {
-      return readOptionalThresholdInput(document.getElementById(id));
-    };
+    const readOptionalThreshold = id => readOptionalThresholdInput(document.getElementById(id));
     const minimumHashrateKhS = readOptionalThreshold("sAlertHashrate");
     const minimumMiners = readOptionalThreshold("sAlertMiners");
     const maximumRejectedSharePercent = readOptionalThreshold("sAlertRejected");
@@ -1684,7 +1720,9 @@ function openSettingsModal(selectedProfileId = null) {
       return;
     }
 
+    const currentAlertSettings = loadAlertSettings();
     const saved = saveAlertSettings({
+      ...currentAlertSettings,
       minimumHashrateKhS,
       minimumMiners,
       maximumRejectedSharePercent,
@@ -1695,6 +1733,64 @@ function openSettingsModal(selectedProfileId = null) {
       saved ? "success" : "error",
     );
   });
+
+  const browserAlertToggle = document.getElementById("enableBrowserAlertNotifications");
+  const browserAlertPermissionButton = document.getElementById("requestBrowserAlertPermission");
+  const browserAlertPermissionStatus = document.getElementById("browserAlertPermissionStatus");
+  const updateBrowserAlertPermissionUI = () => {
+    const permission = getBrowserNotificationPermission();
+    const messages = {
+      unsupported: "当前浏览器环境不支持系统通知。",
+      default: "浏览器通知权限尚未授予；点击按钮后，浏览器会询问是否允许。",
+      granted: "浏览器通知已获授权。",
+      denied: "浏览器通知已被拒绝；请在浏览器站点设置中重新允许。",
+    };
+    browserAlertPermissionStatus.textContent = messages[permission];
+    browserAlertToggle.disabled = permission !== "granted";
+    if (permission !== "granted") browserAlertToggle.checked = false;
+    browserAlertPermissionButton.disabled = permission !== "default";
+  };
+
+  browserAlertPermissionButton.addEventListener("click", async () => {
+    browserAlertPermissionButton.disabled = true;
+    const permission = await requestBrowserNotificationPermission();
+    updateBrowserAlertPermissionUI();
+    if (permission === "granted") {
+      const current = loadAlertSettings();
+      const saved = saveAlertSettings({ ...current, notificationsEnabled: true });
+      if (saved) {
+        browserAlertToggle.checked = true;
+        showToast("浏览器通知已启用", "success");
+      } else {
+        showToast("无法保存通知设置：浏览器存储不可用或空间不足", "error");
+      }
+    } else if (permission === "denied") {
+      showToast("浏览器通知已被拒绝；请在浏览器站点设置中重新允许。", "warning");
+    } else if (permission === "unsupported") {
+      showToast("当前浏览器环境不支持系统通知。", "warning");
+    } else {
+      showToast("请求通知权限失败，请重试。", "warning");
+    }
+    updateBrowserAlertPermissionUI();
+  });
+
+  browserAlertToggle.addEventListener("change", () => {
+    const enabled = browserAlertToggle.checked;
+    if (enabled && getBrowserNotificationPermission() !== "granted") {
+      updateBrowserAlertPermissionUI();
+      showToast("浏览器通知权限不可用；请在浏览器站点设置中重新允许。", "warning");
+      return;
+    }
+    const current = loadAlertSettings();
+    const saved = saveAlertSettings({ ...current, notificationsEnabled: enabled });
+    if (!saved) {
+      browserAlertToggle.checked = !enabled;
+      showToast("无法保存通知设置：浏览器存储不可用或空间不足", "error");
+      return;
+    }
+    showToast(enabled ? "浏览器通知已启用" : "浏览器通知已关闭", "info");
+  });
+  updateBrowserAlertPermissionUI();
 
   const saveSettingsButton = document.getElementById("saveSettings");
   saveSettingsButton.addEventListener("click", async () => {
@@ -1837,6 +1933,7 @@ async function fetchAndRender() {
   try {
     const data = await request("/1/summary", { signal: controller.signal });
     if (controller.signal.aborted) return { status: "cancelled" };
+    processLocalAlerts(data);
     saveOfflineSnapshot(loadActiveProfileId() || "current", data);
     renderDashboard(data);
     return true;

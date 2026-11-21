@@ -26,6 +26,7 @@ test("alert preferences default to disabled rules and the standard cooldown", ()
     minimumMiners: null,
     maximumRejectedSharePercent: null,
     cooldownMs: DEFAULT_ALERT_COOLDOWN_MS,
+    notificationsEnabled: false,
   });
 });
 
@@ -35,6 +36,7 @@ test("alert preferences persist only normalized threshold and cooldown fields", 
     minimumMiners: 2,
     maximumRejectedSharePercent: 3,
     cooldownMs: 45000,
+    notificationsEnabled: true,
     apiUrl: "https://private.example",
     apiToken: "must-not-persist",
   }, storage), true);
@@ -44,6 +46,7 @@ test("alert preferences persist only normalized threshold and cooldown fields", 
     minimumMiners: 2,
     maximumRejectedSharePercent: 3,
     cooldownMs: 45000,
+    notificationsEnabled: true,
   });
   const serialized = storage.getItem("xmrig_proxy_alert_settings");
   assert.doesNotMatch(serialized, /private\.example|must-not-persist|apiUrl|apiToken/);
@@ -56,6 +59,7 @@ test("malformed stored preferences safely fall back to defaults", () => {
     minimumMiners: null,
     maximumRejectedSharePercent: null,
     cooldownMs: DEFAULT_ALERT_COOLDOWN_MS,
+    notificationsEnabled: false,
   });
 });
 

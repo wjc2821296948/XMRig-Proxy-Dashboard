@@ -2,6 +2,11 @@ import { normalizeAlertConfig } from "./alert-rules.js";
 
 const ALERT_SETTINGS_KEY = "xmrig_proxy_alert_settings";
 
+function normalizeAlertPreferences(input = {}) {
+  const rules = normalizeAlertConfig(input);
+  return { ...rules, notificationsEnabled: input?.notificationsEnabled === true };
+}
+
 /**
  * Parse an optional numeric threshold from a number input.
  * Browsers can sanitize an unparseable user entry to an empty value while
@@ -28,13 +33,13 @@ function resolveStorage(storageRef) {
 /** Load browser-local alert thresholds without ever reading connection credentials. */
 export function loadAlertSettings(storageRef) {
   const storage = resolveStorage(storageRef);
-  if (!storage) return normalizeAlertConfig();
+  if (!storage) return normalizeAlertPreferences();
   try {
     const raw = storage.getItem(ALERT_SETTINGS_KEY);
-    if (!raw) return normalizeAlertConfig();
-    return normalizeAlertConfig(JSON.parse(raw));
+    if (!raw) return normalizeAlertPreferences();
+    return normalizeAlertPreferences(JSON.parse(raw));
   } catch {
-    return normalizeAlertConfig();
+    return normalizeAlertPreferences();
   }
 }
 
@@ -43,7 +48,7 @@ export function saveAlertSettings(input, storageRef) {
   const storage = resolveStorage(storageRef);
   if (!storage || !input || typeof input !== "object") return false;
   try {
-    const normalized = normalizeAlertConfig(input);
+    const normalized = normalizeAlertPreferences(input);
     storage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(normalized));
     return true;
   } catch {

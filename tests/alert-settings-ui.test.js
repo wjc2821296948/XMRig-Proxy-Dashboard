@@ -29,6 +29,11 @@ test("all persisted alert values are escaped before insertion into HTML attribut
   assert.ok(main.includes('value="${escapeHtml(alertSettings.cooldownMs / 1000)}"'));
 });
 
+test("saving thresholds preserves the browser notification opt-in", () => {
+  assert.match(main, /const currentAlertSettings = loadAlertSettings\(\)/);
+  assert.match(main, /\.\.\.currentAlertSettings/);
+});
+
 test("alert settings are saved separately from Proxy profile changes", () => {
   assert.match(main, /saveAlertSettings\(\{/);
   assert.match(main, /showToast\(\s*saved \? "本地告警设置已保存"/);
@@ -44,4 +49,54 @@ test("alert settings copy is translated for English locale", () => {
   assert.equal(translateUiText("本地告警设置", "en"), "Local alert settings");
   assert.equal(translateUiText("最低总算力（KH/s）", "en"), "Minimum total hashrate (KH/s)");
   assert.equal(translateUiText("保存告警设置", "en"), "Save alert settings");
+  assert.equal(translateUiText("请求浏览器通知权限", "en"), "Request browser notification permission");
+  assert.equal(translateUiText("接收浏览器通知", "en"), "Receive browser notifications");
+});
+
+test("browser notification permission is requested only from the explicit settings button", () => {
+  const handlerStart = main.indexOf('browserAlertPermissionButton.addEventListener("click"');
+  const handlerEnd = main.indexOf('browserAlertToggle.addEventListener("change"', handlerStart);
+  assert.notEqual(handlerStart, -1);
+  assert.notEqual(handlerEnd, -1);
+  const handler = main.slice(handlerStart, handlerEnd);
+  assert.match(handler, /await requestBrowserNotificationPermission\(\)/);
+  assert.match(main, /id="requestBrowserAlertPermission"/);
+  assert.match(main, /id="enableBrowserAlertNotifications"/);
+  assert.match(main, /browserAlertToggle\.addEventListener\("change"/);
+});
+
+test("enabling browser notifications rechecks permission before saving the opt-in", () => {
+  const toggleStart = main.indexOf('browserAlertToggle.addEventListener("change"');
+  const toggleEnd = main.indexOf("\n  updateBrowserAlertPermissionUI();\n", toggleStart);
+  assert.notEqual(toggleStart, -1);
+  assert.notEqual(toggleEnd, -1);
+  const handler = main.slice(toggleStart, toggleEnd);
+  assert.match(handler, /enabled && getBrowserNotificationPermission\(\) !== "granted"/);
+  assert.match(handler, /updateBrowserAlertPermissionUI\(\)/);
+  assert.match(handler, /return;/);
+  assert.ok(handler.indexOf('getBrowserNotificationPermission() !== "granted"') < handler.indexOf("saveAlertSettings("));
+});
+
+test("fresh Proxy summaries enter local alert evaluation but offline cached snapshots do not", () => {
+  const freshPath = main.slice(main.indexOf("async function fetchAndRender()"), main.indexOf("function startAutoRefresh()"));
+  assert.match(freshPath, /await request\("\/1\/summary"/);
+  assert.match(freshPath, /processLocalAlerts\(data\)/);
+  assert.ok(freshPath.indexOf("controller.signal.aborted") < freshPath.indexOf("processLocalAlerts(data)"));
+  assert.doesNotMatch(main.slice(main.indexOf("function renderCachedSummary"), main.indexOf("async function fetchAndRender()")), /processLocalAlerts/);
+});
+
+
+test("enabling or disabling browser notifications preserves tracked alert transitions", () => {
+  const permissionStart = main.indexOf('browserAlertPermissionButton.addEventListener("click"');
+  const toggleStart = main.indexOf('browserAlertToggle.addEventListener("change"', permissionStart);
+  const toggleEnd = main.indexOf('updateBrowserAlertPermissionUI();', toggleStart);
+  const permissionHandler = main.slice(permissionStart, toggleStart);
+  const toggleHandler = main.slice(toggleStart, toggleEnd);
+  assert.doesNotMatch(permissionHandler, /alertTransitionState\s*=\s*\{\}/);
+  assert.doesNotMatch(toggleHandler, /alertTransitionState\s*=\s*\{\}/);
+
+  const processStart = main.indexOf("function processLocalAlerts(data)");
+  const processEnd = main.indexOf("function clearConfigWithWarning", processStart);
+  const processHandler = main.slice(processStart, processEnd);
+  assert.ok(processHandler.indexOf("alertTransitionState = result.nextState") < processHandler.indexOf("if (!preferences.notificationsEnabled"));
 });

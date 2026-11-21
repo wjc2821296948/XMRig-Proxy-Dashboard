@@ -1169,6 +1169,25 @@ a:focus-visible,
   margin-bottom: 0.8rem;
 }
 
+.alert-notification-settings {
+  margin-top: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.alert-notification-settings .checkbox-group {
+  margin-bottom: 0.55rem;
+}
+
+.alert-notification-settings .checkbox-group input:disabled + label {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.alert-notification-settings #browserAlertPermissionStatus {
+  margin-top: 0.45rem;
+}
+
 @media (max-width: 520px) {
   .alert-settings-grid { grid-template-columns: minmax(0, 1fr); }
 }
