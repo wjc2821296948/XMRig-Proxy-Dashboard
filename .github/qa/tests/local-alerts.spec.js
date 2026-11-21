@@ -92,13 +92,29 @@ test("an offline cached snapshot is display-only and cannot trigger a new alert"
   await connectDashboard(page);
   await configureHashrateAlert(page);
 
+  await openAlertSettings(page);
+  await page.locator("#enableBrowserAlertNotifications").uncheck();
+  await page.locator("#cancelSettings").click();
+  await expect(page.locator("#settingsModal")).toHaveCount(0);
+
+  // Save a below-threshold snapshot while notifications are disabled. The
+  // cached value is deliberately unhealthy so this test proves cached data
+  // is display-only rather than merely checking a healthy cached snapshot.
+  api.summary = createSummary({ hashrate: 20 });
+  await refreshDashboard(page);
+  expect(await notificationCount(page)).toBe(0);
+
+  await openAlertSettings(page);
+  await page.locator("#enableBrowserAlertNotifications").check();
+  await page.locator("#cancelSettings").click();
+  await expect(page.locator("#settingsModal")).toHaveCount(0);
+
   api.offline = true;
   await page.reload();
   await expect(page.locator("#statusBadge")).toContainText("离线缓存");
   expect(await notificationCount(page)).toBe(0);
 
   api.offline = false;
-  api.summary = createSummary({ hashrate: 20 });
   await refreshDashboard(page);
   await expect.poll(() => notificationCount(page)).toBe(1);
 });
@@ -131,6 +147,6 @@ test("active-miner and rejected-share thresholds trigger only after strict bound
   await refreshDashboard(page);
   await expect.poll(() => notificationCount(page)).toBe(2);
   const bodies = await page.evaluate(() => window.__qa_notifications.map(item => item.options.body));
-  expect(bodies).toContain("Active miner count is below your configured threshold.");
-  expect(bodies).toContain("Rejected-share ratio is above your configured threshold.");
+  expect(bodies).toContain("活跃矿工数量低于你设置的阈值。");
+  expect(bodies).toContain("拒绝份额比例高于你设置的阈值。");
 });
