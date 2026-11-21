@@ -40,7 +40,17 @@ export async function mockProxyApi(page, initialSummary = createSummary()) {
 }
 
 export async function connectDashboard(page) {
+  const pageErrors = [];
+  const failedModules = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
+  page.on("response", response => {
+    if (response.status() >= 400 && /\/src\/.*\.js(?:$|\?)/.test(response.url())) {
+      failedModules.push(`${response.status()} ${response.url()}`);
+    }
+  });
   await page.goto("/");
+  expect(pageErrors, "dashboard JavaScript errors").toEqual([]);
+  expect(failedModules, "failed JavaScript module responses").toEqual([]);
   await expect(page.locator("#connectBtn")).toBeVisible();
   await page.locator("#apiUrlInput").fill("http://127.0.0.1:18080");
   await page.locator("#apiTokenInput").fill("QA_ONLY_FAKE_TOKEN_DO_NOT_USE");

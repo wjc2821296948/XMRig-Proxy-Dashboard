@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const parse = path => JSON.parse(read(path));
@@ -65,4 +66,24 @@ test("AI QA documentation lists independent agent keys and slash commands", () =
   assert.match(docs, /QA_FIXER_LITELLM_API_KEY/);
   assert.match(docs, /`\/qa issue 140`/);
   assert.match(docs, /`\/qa fix`/);
+});
+
+
+test("every browser entrypoint module and its local imports are in the static server allowlist", () => {
+  const html = read("index.html");
+  const allowlistSource = read("src/public-assets.js");
+  const allowed = new Set([...allowlistSource.matchAll(/"((?:src|vendor)\/[^"]+\.js)"/g)].map(match => match[1]));
+  const pending = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/g)].map(match => match[1]);
+  const visited = new Set();
+
+  while (pending.length) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    assert.ok(allowed.has(file), `${file} must be included in PUBLIC_ASSET_PATHS`);
+    const source = read(file);
+    for (const match of source.matchAll(/\b(?:from|import)\s*(?:\(\s*)?["'](\.\/[^"']+\.js)["']/g)) {
+      pending.push(path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1].slice(2))));
+    }
+  }
 });
