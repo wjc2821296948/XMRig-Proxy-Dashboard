@@ -1,6 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { loadAlertSettings, saveAlertSettings } from "../src/alert-preferences.js";
+import { loadAlertSettings, readOptionalThresholdInput, saveAlertSettings } from "../src/alert-preferences.js";
 import { DEFAULT_ALERT_COOLDOWN_MS } from "../src/alert-rules.js";
 
 class MemoryStorage {
@@ -11,6 +11,14 @@ class MemoryStorage {
 
 let storage;
 beforeEach(() => { storage = new MemoryStorage(); });
+
+test("optional threshold input distinguishes invalid browser input from an intentionally blank field", () => {
+  assert.equal(readOptionalThresholdInput({ value: "", validity: { badInput: false } }), null);
+  assert.ok(Number.isNaN(readOptionalThresholdInput({ value: "", validity: { badInput: true } })));
+  assert.equal(readOptionalThresholdInput({ value: " 12.5 ", validity: { badInput: false } }), 12.5);
+  assert.ok(Number.isNaN(readOptionalThresholdInput({ value: "-1", validity: { badInput: false } })));
+  assert.ok(Number.isNaN(readOptionalThresholdInput({ value: "1e999", validity: { badInput: false } })));
+});
 
 test("alert preferences default to disabled rules and the standard cooldown", () => {
   assert.deepEqual(loadAlertSettings(storage), {

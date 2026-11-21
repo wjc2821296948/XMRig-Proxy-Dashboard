@@ -16,8 +16,22 @@ test("settings modal exposes all local alert thresholds and cooldown controls", 
   assert.match(main, /aria-labelledby="alertSettingsTitle"/);
   assert.match(main, /只在当前浏览器评估；不会上传 Proxy 地址、Token 或原始监控数据。/);
   assert.match(main, /saveAlertSettingsButton\.addEventListener\("click"/);
-  assert.match(main, /if \(!cooldownRaw\)/);
+  assert.match(main, /readOptionalThresholdInput\(document\.getElementById\(id\)\)/);
+  assert.match(main, /const cooldownSeconds = readOptionalThresholdInput\(cooldownInput\)/);
+  assert.match(main, /if \(cooldownSeconds === null\)/);
   assert.match(main, /placeholder="0 表示不等待" required/);
+});
+
+test("all persisted alert values are escaped before insertion into HTML attributes", () => {
+  assert.ok(main.includes('value="${escapeHtml(alertSettings.minimumHashrateKhS ?? "")}"'));
+  assert.ok(main.includes('value="${escapeHtml(alertSettings.minimumMiners ?? "")}"'));
+  assert.ok(main.includes('value="${escapeHtml(alertSettings.maximumRejectedSharePercent ?? "")}"'));
+  assert.ok(main.includes('value="${escapeHtml(alertSettings.cooldownMs / 1000)}"'));
+});
+
+test("saving thresholds preserves the browser notification opt-in", () => {
+  assert.match(main, /const currentAlertSettings = loadAlertSettings\(\)/);
+  assert.match(main, /\.\.\.currentAlertSettings/);
 });
 
 test("alert settings are saved separately from Proxy profile changes", () => {
