@@ -120,3 +120,105 @@ test("a cooldown-suppressed alert fires once when the same breach remains active
   const repeated = transitionAlertState(payload({ hashrate: 20 }), config, released.nextState, 1200);
   assert.deepEqual(repeated.notifications, []);
 });
+
+test("configuration normalization rejects invalid thresholds and bounds cooldown values", () => {
+  assert.deepEqual(normalizeAlertConfig({
+    minimumHashrateKhS: "10",
+    minimumMiners: 1.5,
+    maximumRejectedSharePercent: 100.01,
+    cooldownMs: 24 * 60 * 60 * 1000 + 1,
+  }), {
+    minimumHashrateKhS: null,
+    minimumMiners: null,
+    maximumRejectedSharePercent: null,
+    cooldownMs: DEFAULT_ALERT_COOLDOWN_MS,
+  });
+
+  assert.deepEqual(normalizeAlertConfig({
+    minimumHashrateKhS: 0,
+    minimumMiners: 0,
+    maximumRejectedSharePercent: 100,
+    cooldownMs: 1500.9,
+  }), {
+    minimumHashrateKhS: 0,
+    minimumMiners: 0,
+    maximumRejectedSharePercent: 100,
+    cooldownMs: 1500,
+  });
+});
+
+test("each metric is evaluated independently when another metric is missing or invalid", () => {
+  const data = {
+    hashrate: { total: [Number.NaN] },
+    miners: { now: 0 },
+    results: { accepted: 100, rejected: 5 },
+  };
+  const alerts = evaluateAlertConditions(data, {
+    minimumHashrateKhS: 10,
+    minimumMiners: 1,
+    maximumRejectedSharePercent: 4.7,
+  });
+
+  assert.deepEqual(alerts.map(alert => alert.id), ["low-miners", "high-rejection-rate"]);
+  assert.ok(alerts.every(alert => !Object.hasOwn(alert, "apiUrl") && !Object.hasOwn(alert, "apiToken")));
+});
+
+test("multiple active rules produce stable IDs and transition notifications", () => {
+  const config = {
+    minimumHashrateKhS: 50,
+    minimumMiners: 2,
+    maximumRejectedSharePercent: 5,
+  };
+  const data = payload({ hashrate: 10, miners: 0, accepted: 90, rejected: 10 });
+  const first = transitionAlertState(data, config, {}, 5000);
+
+  assert.deepEqual(first.activeIds, ["low-hashrate", "low-miners", "high-rejection-rate"]);
+  assert.deepEqual(first.notifications.map(alert => alert.id), first.activeIds);
+  assert.deepEqual(first.recoveredIds, []);
+
+  const repeated = transitionAlertState(data, config, first.nextState, 6000);
+  assert.deepEqual(repeated.notifications, []);
+  assert.deepEqual(repeated.recoveredIds, []);
+});
+
+test("transition handling ignores unknown prior IDs and reports only valid recoveries", () => {
+  const previousState = {
+    activeIds: ["low-hashrate", "unknown-alert"],
+    notifiedActiveIds: ["low-hashrate", "unknown-alert"],
+    lastNotifiedAt: { "low-hashrate": 1000, "unknown-alert": 2000 },
+  };
+  const result = transitionAlertState(payload({ hashrate: 100, miners: 0 }), {
+    minimumHashrateKhS: 50,
+    minimumMiners: 1,
+  }, previousState, 3000);
+
+  assert.deepEqual(result.recoveredIds, ["low-hashrate"]);
+  assert.deepEqual(result.activeIds, ["low-miners"]);
+  assert.deepEqual(result.notifications.map(alert => alert.id), ["low-miners"]);
+  assert.deepEqual(result.nextState.notifiedActiveIds, ["low-miners"]);
+});
+
+test("evaluation and transition handling do not mutate frozen metric or state snapshots", () => {
+  const data = Object.freeze({
+    hashrate: Object.freeze({ total: Object.freeze([10]) }),
+    miners: Object.freeze({ now: 0 }),
+    results: Object.freeze({ accepted: 90, rejected: 10 }),
+  });
+  const previousState = Object.freeze({
+    activeIds: Object.freeze([]),
+    notifiedActiveIds: Object.freeze([]),
+    lastNotifiedAt: Object.freeze({}),
+  });
+  const config = Object.freeze({
+    minimumHashrateKhS: 50,
+    minimumMiners: 1,
+    maximumRejectedSharePercent: 5,
+    cooldownMs: 100,
+  });
+
+  assert.doesNotThrow(() => evaluateAlertConditions(data, config));
+  assert.doesNotThrow(() => transitionAlertState(data, config, previousState, 1000));
+  assert.deepEqual(previousState.activeIds, []);
+  assert.deepEqual(previousState.notifiedActiveIds, []);
+  assert.deepEqual(previousState.lastNotifiedAt, {});
+});
