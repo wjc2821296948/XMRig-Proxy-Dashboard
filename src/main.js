@@ -1776,6 +1776,11 @@ function openSettingsModal(selectedProfileId = null) {
 
   browserAlertToggle.addEventListener("change", () => {
     const enabled = browserAlertToggle.checked;
+    if (enabled && getBrowserNotificationPermission() !== "granted") {
+      updateBrowserAlertPermissionUI();
+      showToast("浏览器通知权限不可用；请在浏览器站点设置中重新允许。", "warning");
+      return;
+    }
     const current = loadAlertSettings();
     const saved = saveAlertSettings({ ...current, notificationsEnabled: enabled });
     if (!saved) {

@@ -65,6 +65,18 @@ test("browser notification permission is requested only from the explicit settin
   assert.match(main, /browserAlertToggle\.addEventListener\("change"/);
 });
 
+test("enabling browser notifications rechecks permission before saving the opt-in", () => {
+  const toggleStart = main.indexOf('browserAlertToggle.addEventListener("change"');
+  const toggleEnd = main.indexOf("\n  updateBrowserAlertPermissionUI();\n", toggleStart);
+  assert.notEqual(toggleStart, -1);
+  assert.notEqual(toggleEnd, -1);
+  const handler = main.slice(toggleStart, toggleEnd);
+  assert.match(handler, /enabled && getBrowserNotificationPermission\(\) !== "granted"/);
+  assert.match(handler, /updateBrowserAlertPermissionUI\(\)/);
+  assert.match(handler, /return;/);
+  assert.ok(handler.indexOf('getBrowserNotificationPermission() !== "granted"') < handler.indexOf("saveAlertSettings("));
+});
+
 test("fresh Proxy summaries enter local alert evaluation but offline cached snapshots do not", () => {
   const freshPath = main.slice(main.indexOf("async function fetchAndRender()"), main.indexOf("function startAutoRefresh()"));
   assert.match(freshPath, /await request\("\/1\/summary"/);
