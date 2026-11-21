@@ -13,6 +13,11 @@ test("browser QA dependencies stay outside the published dashboard package", () 
   const qa = parse(".github/qa/package.json");
   assert.equal(qa.private, true);
   assert.equal(qa.devDependencies["@playwright/test"], "1.65.1");
+  const lock = parse(".github/qa/package-lock.json");
+  assert.equal(lock.packages[""].devDependencies["@playwright/test"], "1.65.1");
+  for (const name of ["@playwright/test", "playwright", "playwright-core"]) {
+    assert.equal(lock.packages[`node_modules/${name}`].version, "1.65.1");
+  }
   assert.ok(read(".github/qa/package-lock.json").includes('"lockfileVersion": 3'));
 });
 
