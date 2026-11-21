@@ -2,6 +2,20 @@ import { normalizeAlertConfig } from "./alert-rules.js";
 
 const ALERT_SETTINGS_KEY = "xmrig_proxy_alert_settings";
 
+/**
+ * Parse an optional numeric threshold from a number input.
+ * Browsers can sanitize an unparseable user entry to an empty value while
+ * exposing the invalid state through validity.badInput. Keep that distinct
+ * from an intentionally empty field, which means the threshold is disabled.
+ */
+export function readOptionalThresholdInput(input) {
+  if (!input || input.validity?.badInput) return Number.NaN;
+  const raw = String(input.value ?? "").trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : Number.NaN;
+}
+
 function resolveStorage(storageRef) {
   if (storageRef !== undefined) return storageRef;
   try {

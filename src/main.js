@@ -41,7 +41,7 @@ import { registerSnapshotExport } from "./snapshot-export.js";
 import { clearMetricHistory, getMetricHistory, recordMetricSample } from "./metrics-history.js";
 import { loadOfflineSnapshot, saveOfflineSnapshot } from "./offline-snapshot.js";
 import { applyLocale, setLocalizedText, translateUiText } from "./i18n-ui.js";
-import { loadAlertSettings, saveAlertSettings } from "./alert-preferences.js";
+import { loadAlertSettings, readOptionalThresholdInput, saveAlertSettings } from "./alert-preferences.js";
 
 function clearConfigWithWarning({ showWarning = true } = {}) {
   const cleared = clearConfig();
@@ -1649,10 +1649,7 @@ function openSettingsModal(selectedProfileId = null) {
   const saveAlertSettingsButton = document.getElementById("saveAlertSettings");
   saveAlertSettingsButton.addEventListener("click", () => {
     const readOptionalThreshold = id => {
-      const raw = document.getElementById(id).value.trim();
-      if (!raw) return null;
-      const value = Number(raw);
-      return Number.isFinite(value) && value >= 0 ? value : Number.NaN;
+      return readOptionalThresholdInput(document.getElementById(id));
     };
     const minimumHashrateKhS = readOptionalThreshold("sAlertHashrate");
     const minimumMiners = readOptionalThreshold("sAlertMiners");

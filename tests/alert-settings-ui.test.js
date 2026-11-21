@@ -16,6 +16,7 @@ test("settings modal exposes all local alert thresholds and cooldown controls", 
   assert.match(main, /aria-labelledby="alertSettingsTitle"/);
   assert.match(main, /只在当前浏览器评估；不会上传 Proxy 地址、Token 或原始监控数据。/);
   assert.match(main, /saveAlertSettingsButton\.addEventListener\("click"/);
+  assert.match(main, /readOptionalThresholdInput\(document\.getElementById\(id\)\)/);
   assert.match(main, /if \(!cooldownRaw\)/);
   assert.match(main, /placeholder="0 表示不等待" required/);
 });
