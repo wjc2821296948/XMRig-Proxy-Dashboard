@@ -1,0 +1,184 @@
+name: AI QA Fix PR
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number with a previous AI QA report
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  context:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'issue_comment' &&
+       github.event.comment.user.login == github.repository_owner &&
+       github.event.comment.body == '/qa fix')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+    outputs:
+      issue_number: ${{ steps.context.outputs.issue_number }}
+      issue_json: ${{ steps.context.outputs.issue_json }}
+      report: ${{ steps.context.outputs.report }}
+    steps:
+      - uses: actions/github-script@v7
+        id: context
+        with:
+          script: |
+            const number = Number(context.eventName === 'workflow_dispatch' ? context.payload.inputs.issue_number : context.payload.issue.number);
+            const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: number })).data;
+            if (issue.pull_request) core.setFailed('AI fix PR accepts Issues only; do not nest a fix PR from a PR comment.');
+            const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: number, per_page: 100 });
+            const latest = comments.filter(c => c.body?.includes('<!-- AI_BROWSER_QA_REPORT -->')).at(-1);
+            if (!latest) core.setFailed('No AI Browser QA report found. Run /qa issue ' + number + ' first.');
+            core.setOutput('issue_number', String(number));
+            core.setOutput('issue_json', JSON.stringify({ title: issue.title, body: (issue.body || '').slice(0, 8000), number }));
+            core.setOutput('report', latest.body.slice(0, 12000));
+
+  generate:
+    needs: context
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare bounded fix context
+        env:
+          ISSUE_JSON: ${{ needs.context.outputs.issue_json }}
+          QA_REPORT: ${{ needs.context.outputs.report }}
+        run: |
+          python - <<'PY'
+          import json, os
+          json.dump({'issue':json.loads(os.environ['ISSUE_JSON']),'report':os.environ['QA_REPORT']},open('qa-fix-context.json','w',encoding='utf-8'),ensure_ascii=False)
+          PY
+      - name: Generate patch with the dedicated fix agent key
+        env:
+          QA_FIXER_LITELLM_API_KEY: ${{ secrets.QA_FIXER_LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
+          QA_FIXER_MODEL: ${{ vars.QA_FIXER_MODEL }}
+        run: python .github/scripts/qa-fix-agent.py qa-fix-context.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-fix-patch-${{ github.run_id }}
+          path: qa-fix.patch
+          if-no-files-found: error
+          retention-days: 2
+
+  open-pr:
+    needs: [context, generate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-fix-patch-${{ github.run_id }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate and apply the constrained patch
+        run: |
+          set -euo pipefail
+          git apply --check qa-fix.patch
+          git apply qa-fix.patch
+          git diff --check
+          test -n "$(git status --porcelain)"
+          while IFS= read -r path; do
+            case "$path" in src/*|tests/*|docs/*|README.md|README.en.md) ;; *) echo "Refusing changed path: $path"; exit 1 ;; esac
+          done < <(git diff --name-only)
+      - name: Run unit and static tests
+        run: npm test
+      - name: Run browser regression suite
+        run: |
+          npm ci --prefix .github/qa
+          npx --prefix .github/qa playwright install --with-deps chromium
+          npm --prefix .github/qa test
+      - name: Commit and push isolated fix branch
+        id: push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.context.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          branch="ai-fix/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests docs README.md README.en.md 2>/dev/null || true
+          git commit -m "fix: address QA findings from #${ISSUE_NUMBER}"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "HEAD:refs/heads/${branch}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - name: Dispatch the existing CI workflows for the fix branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.push.outputs.branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run status-tests.yml --ref "$BRANCH"
+          gh workflow run release-smoke.yml --ref "$BRANCH"
+          gh workflow run browser-e2e.yml --ref "$BRANCH"
+      - name: Wait for all CI workflows to pass
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.push.outputs.branch }}
+        run: |
+          set -euo pipefail
+          for workflow in status-tests.yml release-smoke.yml browser-e2e.yml; do
+            found=false
+            for attempt in {1..120}; do
+              run="$(gh run list --workflow "$workflow" --branch "$BRANCH" --event workflow_dispatch --limit 1 --json status,conclusion,databaseId --jq '.[0] // empty')"
+              if [ -n "$run" ]; then
+                status="$(jq -r '.status' <<<"$run")"
+                conclusion="$(jq -r '.conclusion // empty' <<<"$run")"
+                if [ "$status" = completed ]; then
+                  if [ "$conclusion" != success ]; then echo "$workflow failed: $conclusion"; exit 1; fi
+                  found=true; break
+                fi
+              fi
+              sleep 10
+            done
+            if [ "$found" != true ]; then echo "Timed out waiting for $workflow"; exit 1; fi
+          done
+          echo "all_passed=true" >> "$GITHUB_OUTPUT"
+      - name: Open a PR (never merge)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.push.outputs.branch }}
+          ISSUE_NUMBER: ${{ needs.context.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body_file="$RUNNER_TEMP/qa-fix-pr-body.md"
+          cat > "$body_file" <<BODY
+          Automated, constrained fix proposal based on AI Browser QA report for #${ISSUE_NUMBER}.
+
+          - Generated by the dedicated QA Fix Agent.
+          - Restricted to application source, tests, and documentation.
+          - Unit, static, package smoke, and Chromium E2E workflows were dispatched and passed before opening this PR.
+          - This workflow does not merge pull requests; human review is required.
+          BODY
+          gh pr create --base main --head "$BRANCH" \
+            --title "fix: address QA findings from #${ISSUE_NUMBER}" \
+            --body-file "$body_file"
