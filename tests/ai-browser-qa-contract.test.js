@@ -83,6 +83,7 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(browserContainer, /--pids-limit 128 --memory 2g --cpus 2/);
   assert.doesNotMatch(browserContainer, /--mount|docker\.sock|--network host/);
   assert.match(browserDockerfile, /USER 10001:10001/);
+  assert.match(browserDockerfile, /apt-get install -y --no-install-recommends libatomic1/);
   assert.match(browserDockerfile, /browser-use install/);
   assert.match(browserDockerfile, /PLAYWRIGHT_BROWSERS_PATH=\/opt\/ms-playwright/);
   assert.match(relayDockerfile, /USER 10002:10002/);
