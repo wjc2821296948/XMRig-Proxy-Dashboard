@@ -60,6 +60,7 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   const publisher = workflow.slice(workflow.indexOf("  publish-pr:"));
   const fixer = read(".github/scripts/qa-fix-agent.py");
   const patchValidator = read(".github/scripts/validate-qa-fix-patch.py");
+  const alertTests = read("tests/alert-rules.test.js");
   assert.match(generator, /QA_FIXER_LITELLM_API_KEY/);
   assert.match(workflow, /context\.actor !== context\.repo\.owner/);
   assert.doesNotMatch(generator, /contents:\s+write|pull-requests:\s+write|GH_TOKEN/);
@@ -74,8 +75,15 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.match(fixer, /LITELLM_API_BASE must be https:\/\/litellm\.lrate\.top\/v1/);
   assert.match(patchValidator, /tracked_regular_files/);
   assert.match(patchValidator, /PROTECTED_FILES/);
-  assert.match(patchValidator, /src\\/ui\\.js/);
+  assert.ok(patchValidator.includes('"src/ui.js"'));
   assert.match(patchValidator, /untracked or new file/);
+  for (const file of ["index.html", "src/api.js", "src/storage.js", "src/public-assets.js", "src/ui.js"]) {
+    assert.ok(patchValidator.includes(JSON.stringify(file)), `${file} must remain protected`);
+  }
+  assert.match(alertTests, /threshold comparisons use explicit strict boundaries/);
+  assert.match(alertTests, /missing, negative, and non-finite metrics/);
+  assert.match(alertTests, /notifications are transition-only/);
+  assert.match(alertTests, /cooldown suppresses a quick re-trigger/);
 });
 
 test("dedicated API-key smoke jobs never share an agent secret", () => {
