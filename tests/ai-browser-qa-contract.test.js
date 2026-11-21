@@ -75,12 +75,12 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(smokeJob, /github\.head_ref == 'feat\/ai-browser-qa'/);
   assert.match(smokeJob, /QA_EXPLORER_LITELLM_API_KEY: sandbox-smoke-placeholder/);
   assert.match(smokeJob, /QA_SANDBOX_SMOKE_ONLY: "true"/);
-  assert.match(sandbox, /--pids-limit 128 --memory 2g --cpus 2/);
+  assert.match(sandbox, /--pids-limit 256 --memory 2g --cpus 2/);
   assert.match(sandbox, /--env QA_EXPLORER_LITELLM_API_KEY --env QA_EXPLORER_MODEL/);
   assert.doesNotMatch(browserContainer, /QA_EXPLORER_LITELLM_API_KEY|LITELLM_API_KEY/);
   assert.match(browserContainer, /--read-only/);
   assert.match(browserContainer, /--cap-drop ALL/);
-  assert.match(browserContainer, /--pids-limit 128 --memory 2g --cpus 2/);
+  assert.match(browserContainer, /--pids-limit 256 --memory 2g --cpus 2/);
   assert.match(browserContainer, /dst=\/app\/qa-context\.json,readonly/);
   assert.match(browserContainer, /dst=\/report/);
   assert.match(browserContainer, /PLAYWRIGHT_BROWSERS_PATH=\/opt\/ms-playwright/);

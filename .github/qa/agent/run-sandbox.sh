@@ -137,7 +137,7 @@ docker run -d --name "$agent_name" --network "$internal_network" \
   --mount "type=bind,src=${sandbox_io_dir}/context.json,dst=/app/qa-context.json,readonly" \
   --mount "type=bind,src=${report_mount_dir},dst=/report" \
   --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges:true \
-  --pids-limit 128 --memory 2g --cpus 2 --shm-size 256m \
+  --pids-limit 256 --memory 2g --cpus 2 --shm-size 256m \
   --env HOME=/home/qa --env PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
   --env LITELLM_API_BASE=http://litellm-relay:8080/v1 \
   --env QA_EXPLORER_MODEL --env BROWSER_USE_SETUP_LOGGING=false --env ANONYMIZED_TELEMETRY=false \
