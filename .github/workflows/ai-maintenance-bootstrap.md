@@ -12,6 +12,14 @@ engine:
   version: "1.3.0"
   model: openai/glm-5.3-flash
   model-provider: openai
+  # LiteLLM routes this model group through an OpenAI-compatible
+  # Chat Completions endpoint; the default OpenAI provider selects Responses.
+  config: |
+    {
+      "model": {
+        "api": "openai-completions"
+      }
+    }
   env:
     OPENAI_BASE_URL: "https://litellm.lrate.top/v1"
     OPENAI_API_KEY: ${{ secrets.LITELLM_API_KEY }}
@@ -43,34 +51,42 @@ tools:
   edit: false
 
 max-turns: 10
+# This LiteLLM/NVIDIA NIM route reports no prompt-cache tokens; allow one miss per turn.
+max-turn-cache-misses: 10
+# The first successful protocol test used 26.265 AIC; keep a bounded ~3.8x ceiling.
+max-ai-credits: 100
 max-tool-calls: 40
 timeout-minutes: 20
 ---
 
 # AI Maintenance Bootstrap — Read-only Smoke Test
 
-This workflow validates the Pi-to-LiteLLM connection and performs a read-only repository inventory. It must not modify files, create branches, commit, push, open pull requests, comment, label, or otherwise write to GitHub.
+This workflow validates the Pi-to-LiteLLM connection and performs a bounded, read-only repository review. It must not modify files, create branches, commit, push, open pull requests, comment, label, or otherwise write to GitHub.
 
 ## Scope
 
-Inspect the entire checked-out repository, including source files, tests, documentation, package metadata, and existing GitHub Actions workflows. Exclude only generated/binary assets from textual inspection; identify excluded paths in the report.
+Inspect the project's documented architecture, package/test contract, application entrypoints, representative core modules, representative tests, and all known CI workflow definitions listed below. This is a bounded bootstrap review, not an exhaustive line-by-line audit of every file.
+
+Use only the explicit file paths below and paths referenced directly by those files. Do not attempt directory listings, call search tools, or probe guessed filenames. The GitHub content tool applies `min-integrity: approved`, which can filter directory listings; do not retry filtered listings or weaken that integrity policy. If an explicit file is unavailable, record that path as unavailable and continue with the remaining files. Never claim a complete repository-wide inventory.
 
 ## Required checks
 
 1. Confirm the configured model/provider is available through the workflow's inference gateway. Do not reveal, print, or echo credentials or request headers.
-2. Read the repository's project instructions and summarize its architecture and development constraints.
-3. Inventory all source modules, test files, and CI workflow definitions from the checked-out repository. Identify the existing test command and Node.js support range. Assess CI coverage from workflow configuration files only; do not query workflow runs, job logs, or other Actions API data.
-4. Review the repository for high-confidence correctness, security, reliability, and maintenance concerns. Distinguish confirmed findings from hypotheses; cite exact file paths and line ranges.
-5. Do not run shell commands. Do not edit or generate files. Do not use network access except the configured LiteLLM inference endpoint and GitHub tools already provided by the workflow.
+2. Read `CLAUDE.md`, `README.md`, `package.json`, and `index.html`; summarize the architecture, development constraints, scripts, and supported Node.js versions.
+3. Inspect these application files: `src/main.js`, `src/api.js`, `src/storage.js`, `src/ui.js`, `src/status.js`, and `service-worker.js`.
+4. Inspect these representative tests: `tests/api.test.js`, `tests/storage.test.js`, `tests/status.test.js`, `tests/static.test.js`, and `tests/server.test.js`. Identify test coverage gaps without claiming these are all tests.
+5. Assess CI configuration from these workflow files only: `.github/workflows/pr_agent.yml`, `.github/workflows/publish-package.yml`, `.github/workflows/release-smoke.yml`, `.github/workflows/status-tests.yml`, and `.github/workflows/ai-maintenance-bootstrap.md`. Do not query workflow runs, job logs, or other Actions API data.
+6. Report only high-confidence correctness, security, reliability, and maintenance concerns. Distinguish confirmed findings from hypotheses; cite exact file paths and line ranges.
+7. Do not run shell commands. Do not edit or generate files. Do not use network access except the configured LiteLLM inference endpoint and GitHub tools already provided by the workflow. Batch independent file reads where possible to reduce model turns and repeated context.
 
 ## Output
 
 Return a concise Markdown report in the workflow run summary containing:
 
 - Provider/model connectivity result (success/failure only; never include secrets)
-- Repository inventory and architecture
-- Existing tests and CI coverage
+- Bounded file inventory and architecture, including any unavailable paths
+- Representative tests and CI coverage
 - Findings grouped by severity with evidence and confidence
 - Recommended next steps for the daily reporting and safe-fix stages
 
-If the model cannot be reached or repository access is incomplete, report the exact limitation and stop. Do not claim a successful scan without evidence.
+If the model cannot be reached or a required explicit file cannot be read, report the exact limitation and stop. Filtered directory listings are an expected limitation under the approved integrity policy; do not retry them or treat them as proof that individual files are unavailable. Do not claim exhaustive repository coverage.
