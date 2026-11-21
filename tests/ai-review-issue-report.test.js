@@ -59,6 +59,19 @@ test('counts unique actionable findings only inside the Findings section', () =>
   });
 });
 
+test('counts finding IDs when Markdown emphasis and title separators vary', () => {
+  const report = [
+    '## Findings',
+    '### Medium',
+    '- M-3 — Security issue',
+    '- **M-4: Reliability issue**',
+    '- `M-5` · Compatibility issue',
+  ].join('\n');
+  const counts = parseFindingCounts(report);
+  assert.equal(counts.medium, 3);
+  assert.equal(counts.total, 3);
+});
+
 test('uses the noop summary when a report has no numbered finding entries', () => {
   const counts = parseFindingCounts(
     '## 4. Findings\n\nNo actionable findings.',
@@ -115,6 +128,7 @@ test('builds an open Issue for findings and a closed historical Issue for a clea
   assert.match(data.body, /M-1 · Security/);
   assert.match(data.body, /glm-5.3-flash/);
   assert.match(data.body, /ai-review-run:123456/);
+  assert.match(data.body, /https:\/\/github\.com\/example\/project\/commit\/abcdef1234567890/);
 
   fs.writeFileSync(path.join(agentDir, 'agent-session.jsonl'), JSON.stringify({
     type: 'assistant.message',

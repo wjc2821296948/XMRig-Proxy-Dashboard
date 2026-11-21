@@ -63,7 +63,9 @@ function parseFindingCounts(report, noopMessage = '') {
     section = nextHeading ? remainder.slice(0, nextHeading.index) : remainder;
   }
 
-  for (const match of section.matchAll(/^\s*[-*]\s+\*\*([CHML])-(\d+)\b/gim)) {
+  // Accept the stable severity/number identifier even if Markdown emphasis or
+  // the separator between the identifier and title changes.
+  for (const match of section.matchAll(/^\s*[-*]\s+(?:(?:\*{1,2}|`))?([CHML])-(\d+)\b/gim)) {
     idSets[match[1].toUpperCase()].add(match[2]);
   }
 
@@ -159,6 +161,18 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
   const runUrl = run.html_url || '';
   const sha = run.head_sha || '';
   const branch = run.head_branch || 'unknown';
+  let commitUrl = '';
+  if (sha && runUrl) {
+    try {
+      const parsedRunUrl = new URL(runUrl);
+      parsedRunUrl.pathname = parsedRunUrl.pathname.replace(/\/actions\/runs\/\d+\/?$/, `/commit/${sha}`);
+      parsedRunUrl.search = '';
+      parsedRunUrl.hash = '';
+      if (parsedRunUrl.pathname.endsWith(`/commit/${sha}`)) commitUrl = parsedRunUrl.toString();
+    } catch {
+      // An invalid or unfamiliar Actions URL should not produce a broken link.
+    }
+  }
   const marker = `<!-- ai-review-run:${runId} -->`;
   const attemptMarker = `<!-- ai-review-attempt:${runId}:${attempt} -->`;
 
@@ -167,7 +181,7 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
     ['Actions Run', `[#${runId}](${runUrl})`],
     ['Attempt', String(attempt)],
     ['Branch', `\`${branch}\``],
-    ['Commit', sha ? '[`' + sha.slice(0, 12) + '`](' + runUrl.replace(/\/actions\/runs\/\d+$/, `/commit/${sha}`) + ')' : 'not available'],
+    ['Commit', commitUrl ? '[`' + sha.slice(0, 12) + '`](' + commitUrl + ')' : (sha ? `\`${sha.slice(0, 12)}\` (link unavailable)` : 'not available')],
     ['Workflow conclusion', run.conclusion || 'unknown'],
     ['Model', `\`${model}\``],
     ['AI credits (AIC)', aic],
