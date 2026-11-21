@@ -9,10 +9,12 @@ const require = createRequire(import.meta.url);
 const {
   buildCommitUrl,
   buildReviewData,
+  dispatchAutoFix,
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
   parseFindingCounts,
+  shouldDispatchAutoFix,
   upsertRerunSummary,
 } = require('../.github/scripts/ai-review-issue-report.cjs');
 
@@ -313,4 +315,41 @@ test('extracts noop messages from both agent output and fallback safe-output rec
     JSON.stringify({ type: 'noop', message: 'fallback latest' }),
   );
   assert.equal(message, 'fallback latest');
+});
+
+test('dispatches automatic fixes only for successful, reliable, open review reports', () => {
+  const report = {
+    executionSucceeded: true,
+    counts: { parseReliable: true, total: 2, unclassified: 0 },
+  };
+  const issue = { state: 'open', labels: [{ name: 'ai-review' }] };
+  assert.equal(shouldDispatchAutoFix(report, issue), true);
+  assert.equal(shouldDispatchAutoFix({ ...report, executionSucceeded: false }, issue), false);
+  assert.equal(shouldDispatchAutoFix({ ...report, counts: { parseReliable: false, total: 2 } }, issue), false);
+  assert.equal(shouldDispatchAutoFix({ ...report, counts: { parseReliable: true, total: 0, unclassified: 0 } }, issue), false);
+  assert.equal(shouldDispatchAutoFix({ ...report, counts: { parseReliable: true, total: 2, unclassified: 1 } }, issue), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, state: 'closed' }), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, labels: [] }), false);
+});
+
+
+test('dispatches the validated report Issue to the generated auto-fix workflow', async () => {
+  const calls = [];
+  const github = { rest: { actions: { createWorkflowDispatch: async (payload) => calls.push(payload) } } };
+  const report = { executionSucceeded: true, counts: { parseReliable: true, total: 1, unclassified: 0 } };
+  const issue = { number: 170, state: 'open', labels: [{ name: 'ai-review' }] };
+  const dispatched = await dispatchAutoFix({
+    github, owner: 'owner', repo: 'repo', issue, report,
+    run: { head_branch: 'main' },
+  });
+  assert.equal(dispatched, true);
+  assert.deepEqual(calls, [{
+    owner: 'owner',
+    repo: 'repo',
+    workflow_id: 'ai-review-auto-fix.lock.yml',
+    ref: 'main',
+    inputs: { issue_number: '170' },
+  }]);
+  assert.equal(await dispatchAutoFix({ github, owner: 'owner', repo: 'repo', issue, report: { ...report, counts: { parseReliable: true, total: 0 } }, run: { head_branch: 'main' } }), false);
+  assert.equal(calls.length, 1);
 });

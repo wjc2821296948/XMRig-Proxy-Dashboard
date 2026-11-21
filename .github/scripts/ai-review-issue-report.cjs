@@ -189,6 +189,31 @@ async function upsertRerunSummary({ github, owner, repo, issueNumber, report }) 
   return 'created';
 }
 
+function shouldDispatchAutoFix(report, issue) {
+  const hasReviewLabel = Array.isArray(issue?.labels)
+    && issue.labels.some((label) => (typeof label === 'string' ? label : label?.name) === 'ai-review');
+  return Boolean(
+    report?.executionSucceeded
+    && report?.counts?.parseReliable
+    && report.counts.total > 0
+    && report.counts.unclassified === 0
+    && issue?.state === 'open'
+    && hasReviewLabel,
+  );
+}
+
+async function dispatchAutoFix({ github, owner, repo, issue, run, report }) {
+  if (!shouldDispatchAutoFix(report, issue)) return false;
+  await github.rest.actions.createWorkflowDispatch({
+    owner,
+    repo,
+    workflow_id: 'ai-review-auto-fix.lock.yml',
+    ref: run.head_branch,
+    inputs: { issue_number: String(issue.number) },
+  });
+  return true;
+}
+
 function firstExisting(...paths) {
   return paths.find((candidate) => candidate && fs.existsSync(candidate));
 }
@@ -363,9 +388,11 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
 module.exports = {
   buildCommitUrl,
   buildReviewData,
+  dispatchAutoFix,
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
   parseFindingCounts,
+  shouldDispatchAutoFix,
   upsertRerunSummary,
 };
