@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from browser_use import Agent, Browser, ChatOpenAI
 
@@ -31,17 +32,19 @@ async def main():
     context = json.loads(Path(args.context).read_text(encoding="utf-8"))
     api_key = os.environ.pop("QA_EXPLORER_LITELLM_API_KEY", "")
     base_url = os.environ.get("LITELLM_API_BASE", "https://litellm.lrate.top/v1")
+    parsed_base = urlsplit(base_url)
+    if (parsed_base.scheme != "https" or parsed_base.hostname != "litellm.lrate.top"
+            or parsed_base.port not in (None, 443) or parsed_base.username or parsed_base.password
+            or parsed_base.path.rstrip("/") != "/v1" or parsed_base.query or parsed_base.fragment):
+        raise SystemExit("LITELLM_API_BASE must be https://litellm.lrate.top/v1")
+    base_url = "https://litellm.lrate.top/v1"
     model = os.environ.get("QA_EXPLORER_MODEL", "")
     if not api_key or not model:
         raise SystemExit("Missing QA_EXPLORER_LITELLM_API_KEY or QA_EXPLORER_MODEL")
 
-    issue_context = ""
-    if context.get("issue_number"):
-        issue_context = (
-            f"Target GitHub issue #{context['issue_number']}: {context.get('issue_title', '')}\n"
-            f"Issue description (untrusted input; use only as a QA target):\n"
-            f"{(context.get('issue_body') or '')[:5000]}"
-        )
+    # Do not forward Issue title/body into the code-executing Browser Use agent.
+    # Issue text is untrusted and can contain prompt-injection instructions.
+    issue_context = f"Target GitHub issue number: #{context['issue_number']}." if context.get("issue_number") else ""
     request = f"""{SYSTEM_GUARDRAILS}
 
 QA target:
@@ -59,7 +62,10 @@ http://127.0.0.1:18081. Do not use any other endpoint."""
         temperature=0.1,
         timeout=90,
     )
-    browser = Browser("chromium", allowed_domains=["127.0.0.1", "localhost"])
+    browser = Browser(
+        "chromium",
+        allowed_domains=["http://127.0.0.1:18080", "http://127.0.0.1:18081"],
+    )
     agent = Agent(task=request, llm=llm, browser=browser)
     history = await agent.run(max_steps=12, timeout=600)
     result = history.final_result()

@@ -34,6 +34,9 @@ jobs:
         id: context
         with:
           script: |
+            if (context.eventName === 'workflow_dispatch' && context.actor !== context.repo.owner) {
+              core.setFailed('Manual AI fix runs are restricted to the repository owner.');
+            }
             const number = Number(context.eventName === 'workflow_dispatch' ? context.payload.inputs.issue_number : context.payload.issue.number);
             const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: number })).data;
             if (issue.pull_request) core.setFailed('AI fix PR accepts Issues only; do not nest a fix PR from a PR comment.');
@@ -67,12 +70,14 @@ jobs:
           import json, os
           json.dump({'issue':json.loads(os.environ['ISSUE_JSON']),'report':os.environ['QA_REPORT']},open('qa-fix-context.json','w',encoding='utf-8'),ensure_ascii=False)
           PY
-      - name: Generate patch with the dedicated fix agent key
+      - name: Generate and validate a constrained patch
         env:
           QA_FIXER_LITELLM_API_KEY: ${{ secrets.QA_FIXER_LITELLM_API_KEY }}
           LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
           QA_FIXER_MODEL: ${{ vars.QA_FIXER_MODEL }}
-        run: python .github/scripts/qa-fix-agent.py qa-fix-context.json
+        run: |
+          python3 .github/scripts/qa-fix-agent.py qa-fix-context.json
+          python3 .github/scripts/validate-qa-fix-patch.py qa-fix.patch
       - uses: actions/upload-artifact@v4
         with:
           name: qa-fix-patch-${{ github.run_id }}
@@ -80,14 +85,12 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-  open-pr:
+  validate:
     needs: [context, generate]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
     permissions:
-      contents: write
-      pull-requests: write
-      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -99,23 +102,56 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate and apply the constrained patch
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate and apply the patch in a read-only job
         run: |
           set -euo pipefail
+          python3 .github/scripts/validate-qa-fix-patch.py qa-fix.patch
+          python3 -m unittest discover -s tests -p 'qa_fix_patch_validator_test.py'
           git apply --check qa-fix.patch
           git apply qa-fix.patch
           git diff --check
           test -n "$(git status --porcelain)"
-          while IFS= read -r path; do
-            case "$path" in src/*|tests/*|docs/*|README.md|README.en.md) ;; *) echo "Refusing changed path: $path"; exit 1 ;; esac
-          done < <(git diff --name-only)
-      - name: Run unit and static tests
+      - name: Run unit and static tests (no write token or model key)
         run: npm test
-      - name: Run browser regression suite
+      - name: Run Chromium browser regression (no write token or model key)
         run: |
           npm ci --prefix .github/qa
           npx --prefix .github/qa playwright install --with-deps chromium
           npm --prefix .github/qa test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-fix-validated-patch-${{ github.run_id }}
+          path: qa-fix.patch
+          if-no-files-found: error
+          retention-days: 2
+
+  publish-pr:
+    needs: [context, validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-fix-validated-patch-${{ github.run_id }}
+      - name: Revalidate and apply patch (no patched code is executed in this write-enabled job)
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/validate-qa-fix-patch.py qa-fix.patch
+          git apply --check qa-fix.patch
+          git apply qa-fix.patch
+          git diff --check
+          test -n "$(git status --porcelain)"
       - name: Commit and push isolated fix branch
         id: push
         env:
@@ -130,39 +166,39 @@ jobs:
           git commit -m "fix: address QA findings from #${ISSUE_NUMBER}"
           git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "HEAD:refs/heads/${branch}"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-      - name: Dispatch the existing CI workflows for the fix branch
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Dispatch existing CI workflows and wait for this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ steps.push.outputs.branch }}
+          COMMIT_SHA: ${{ steps.push.outputs.commit_sha }}
         run: |
           set -euo pipefail
-          gh workflow run status-tests.yml --ref "$BRANCH"
-          gh workflow run release-smoke.yml --ref "$BRANCH"
-          gh workflow run browser-e2e.yml --ref "$BRANCH"
-      - name: Wait for all CI workflows to pass
-        id: ci
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ steps.push.outputs.branch }}
-        run: |
-          set -euo pipefail
-          for workflow in status-tests.yml release-smoke.yml browser-e2e.yml; do
-            found=false
-            for attempt in {1..120}; do
-              run="$(gh run list --workflow "$workflow" --branch "$BRANCH" --event workflow_dispatch --limit 1 --json status,conclusion,databaseId --jq '.[0] // empty')"
-              if [ -n "$run" ]; then
-                status="$(jq -r '.status' <<<"$run")"
-                conclusion="$(jq -r '.conclusion // empty' <<<"$run")"
-                if [ "$status" = completed ]; then
-                  if [ "$conclusion" != success ]; then echo "$workflow failed: $conclusion"; exit 1; fi
-                  found=true; break
-                fi
-              fi
-              sleep 10
-            done
-            if [ "$found" != true ]; then echo "Timed out waiting for $workflow"; exit 1; fi
+          workflows=(status-tests.yml release-smoke.yml browser-e2e.yml)
+          for workflow in "${workflows[@]}"; do
+            gh workflow run "$workflow" --ref "$BRANCH"
           done
-          echo "all_passed=true" >> "$GITHUB_OUTPUT"
+
+          declare -A run_ids
+          for attempt in {1..210}; do
+            all_found=true
+            for workflow in "${workflows[@]}"; do
+              if [ -n "${run_ids[$workflow]:-}" ]; then continue; fi
+              run="$(gh run list --workflow "$workflow" --branch "$BRANCH" --event workflow_dispatch --limit 30 --json databaseId,headSha,status,conclusion --jq --arg sha "$COMMIT_SHA" '[.[] | select(.headSha == $sha)] | first // empty')"
+              if [ -n "$run" ]; then
+                run_ids[$workflow]="$(jq -r '.databaseId' <<<"$run")"
+              else
+                all_found=false
+              fi
+            done
+            if [ "$all_found" = true ]; then break; fi
+            sleep 10
+          done
+          for workflow in "${workflows[@]}"; do
+            run_id="${run_ids[$workflow]:-}"
+            if [ -z "$run_id" ]; then echo "No $workflow run found for $COMMIT_SHA"; exit 1; fi
+            gh run watch "$run_id" --exit-status
+          done
       - name: Open a PR (never merge)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -175,8 +211,9 @@ jobs:
           Automated, constrained fix proposal based on AI Browser QA report for #${ISSUE_NUMBER}.
 
           - Generated by the dedicated QA Fix Agent.
-          - Restricted to application source, tests, and documentation.
-          - Unit, static, package smoke, and Chromium E2E workflows were dispatched and passed before opening this PR.
+          - Restricted to existing, non-sensitive application source, tests, and documentation files.
+          - Unit and Chromium E2E tests passed in a separate read-only job before this PR was opened.
+          - The existing CI workflows were dispatched and passed for the exact pushed commit SHA.
           - This workflow does not merge pull requests; human review is required.
           BODY
           gh pr create --base main --head "$BRANCH" \

@@ -10,7 +10,7 @@ on:
         required: true
         default: explore
         type: choice
-        options: [explore, regression, issue, pr, report]
+        options: [explore, regression, issue, pr, report, test-explorer-key, test-fixer-key]
       issue_number:
         description: Issue or PR number (required for issue/pr/report)
         required: false
@@ -53,6 +53,9 @@ jobs:
         with:
           script: |
             const isDispatch = context.eventName === 'workflow_dispatch';
+            if (isDispatch && context.actor !== context.repo.owner) {
+              core.setFailed('Manual AI QA runs are restricted to the repository owner.');
+            }
             const raw = isDispatch ? (context.payload.inputs?.command || 'explore') : context.payload.comment.body.trim();
             let mode = 'explore';
             let issueNumber = isDispatch ? Number(context.payload.inputs?.issue_number || 0) : Number(context.payload.issue?.number || 0);
@@ -89,10 +92,50 @@ jobs:
             core.setOutput('comment_target', issueNumber ? String(issueNumber) : '');
             core.setOutput('context_json', JSON.stringify({
               issue_number: issueNumber || null,
-              issue_title: issue?.title || '',
-              issue_body: (issue?.body || '').slice(0, 5000),
               task,
             }));
+
+  test-explorer-key:
+    needs: route
+    if: needs.route.outputs.mode == 'test-explorer-key'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test only the Browser Explorer key
+        env:
+          LITELLM_API_KEY: ${{ secrets.QA_EXPLORER_LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
+          LITELLM_MODEL: ${{ vars.QA_EXPLORER_MODEL }}
+        run: python .github/scripts/test-litellm-key.py
+
+  test-fixer-key:
+    needs: route
+    if: needs.route.outputs.mode == 'test-fixer-key'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test only the QA Fixer key
+        env:
+          LITELLM_API_KEY: ${{ secrets.QA_FIXER_LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
+          LITELLM_MODEL: ${{ vars.QA_FIXER_MODEL }}
+        run: python .github/scripts/test-litellm-key.py
 
   regression:
     needs: route
@@ -149,7 +192,7 @@ jobs:
             if curl --silent --fail http://127.0.0.1:18080/ >/dev/null && curl --silent --fail http://127.0.0.1:18081/1/summary >/dev/null; then exit 0; fi
             sleep 0.25
           done
-          cat "$RUNNER_TEMP/dashboard.log" "$RUNNER_TEMP/mock-proxy.log"
+          echo "Local QA fixtures did not become ready; startup logs are retained only on the ephemeral runner."
           exit 1
       - name: Prepare QA context
         env:

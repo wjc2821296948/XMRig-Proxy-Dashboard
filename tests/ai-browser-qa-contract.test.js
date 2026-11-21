@@ -41,27 +41,50 @@ test("Browser Explorer is bounded, restricted to local hosts, and has no GitHub 
   assert.match(workflow, /checks\.listForRef/);
   assert.match(workflow, /pr-report:/);
   assert.doesNotMatch(exploreJob, /issues:\s+write|pull-requests:\s+write|GH_TOKEN|github\.token/);
+  assert.doesNotMatch(exploreJob, /cat \"\$RUNNER_TEMP\/dashboard\.log/);
   assert.match(exploreJob, /QA_EXPLORER_LITELLM_API_KEY/);
-  assert.match(runner, /Browser\("chromium", allowed_domains=\["127\.0\.0\.1", "localhost"\]\)/);
+  assert.match(workflow, /context\.actor !== context\.repo\.owner/);
+  assert.ok(runner.includes('"http://127.0.0.1:18080"'));
+  assert.ok(runner.includes('"http://127.0.0.1:18081"'));
   assert.match(runner, /max_steps=12/);
   assert.match(runner, /127\.0\.0\.1:18081/);
+  assert.match(runner, /urlsplit/);
+  assert.doesNotMatch(runner, /context\.get\(['\"]issue_body|context\.get\(['\"]issue_title/);
   assert.doesNotMatch(runner, /GH_TOKEN|GITHUB_TOKEN/);
 });
 
 test("Fix Agent and PR creator use separate jobs and distinct API key names", () => {
   const workflow = read(".github/workflows/ai-fix-pr.yml");
-  const generator = workflow.slice(workflow.indexOf("  generate:"), workflow.indexOf("  open-pr:"));
-  const opener = workflow.slice(workflow.indexOf("  open-pr:"));
+  const generator = workflow.slice(workflow.indexOf("  generate:"), workflow.indexOf("  validate:"));
+  const validator = workflow.slice(workflow.indexOf("  validate:"), workflow.indexOf("  publish-pr:"));
+  const publisher = workflow.slice(workflow.indexOf("  publish-pr:"));
   const fixer = read(".github/scripts/qa-fix-agent.py");
+  const patchValidator = read(".github/scripts/validate-qa-fix-patch.py");
   assert.match(generator, /QA_FIXER_LITELLM_API_KEY/);
+  assert.match(workflow, /context\.actor !== context\.repo\.owner/);
   assert.doesNotMatch(generator, /contents:\s+write|pull-requests:\s+write|GH_TOKEN/);
-  assert.doesNotMatch(opener, /QA_FIXER_LITELLM_API_KEY/);
-  assert.match(fixer, /src\/|tests\/|docs\//);
-  assert.doesNotMatch(opener, /gh pr merge|merge-pull-request/);
-  assert.match(opener, /gh pr create/);
-  assert.match(opener, /gh workflow run status-tests\.yml/);
-  assert.match(opener, /gh workflow run release-smoke\.yml/);
-  assert.match(opener, /gh workflow run browser-e2e\.yml/);
+  assert.doesNotMatch(validator, /contents:\s+write|pull-requests:\s+write|GH_TOKEN|QA_FIXER_LITELLM_API_KEY/);
+  assert.match(validator, /npm test/);
+  assert.match(validator, /npm --prefix \.github\/qa test/);
+  assert.doesNotMatch(publisher, /npm test|playwright install|QA_FIXER_LITELLM_API_KEY/);
+  assert.match(publisher, /git rev-parse HEAD/);
+  assert.match(publisher, /\.headSha == \$sha/);
+  assert.match(publisher, /gh pr create/);
+  assert.doesNotMatch(publisher, /gh pr merge|merge-pull-request/);
+  assert.match(fixer, /LITELLM_API_BASE must be https:\/\/litellm\.lrate\.top\/v1/);
+  assert.match(patchValidator, /tracked_regular_files/);
+  assert.match(patchValidator, /PROTECTED_FILES/);
+  assert.match(patchValidator, /untracked or new file/);
+});
+
+test("dedicated API-key smoke jobs never share an agent secret", () => {
+  const workflow = read(".github/workflows/ai-browser-qa.yml");
+  const explorer = workflow.slice(workflow.indexOf("  test-explorer-key:"), workflow.indexOf("  test-fixer-key:"));
+  const fixer = workflow.slice(workflow.indexOf("  test-fixer-key:"), workflow.indexOf("  regression:"));
+  assert.match(explorer, /QA_EXPLORER_LITELLM_API_KEY/);
+  assert.doesNotMatch(explorer, /QA_FIXER_LITELLM_API_KEY/);
+  assert.match(fixer, /QA_FIXER_LITELLM_API_KEY/);
+  assert.doesNotMatch(fixer, /QA_EXPLORER_LITELLM_API_KEY/);
 });
 
 test("AI QA documentation lists independent agent keys and slash commands", () => {
@@ -70,6 +93,8 @@ test("AI QA documentation lists independent agent keys and slash commands", () =
   assert.match(docs, /QA_FIXER_LITELLM_API_KEY/);
   assert.match(docs, /`\/qa issue 140`/);
   assert.match(docs, /`\/qa fix`/);
+  assert.match(docs, /test-explorer-key/);
+  assert.match(docs, /test-fixer-key/);
 });
 
 
