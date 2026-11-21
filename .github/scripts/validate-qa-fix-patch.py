@@ -11,6 +11,7 @@ PROTECTED_FILES = {
     "src/api.js",
     "src/storage.js",
     "src/public-assets.js",
+    "src/ui.js",
 }
 
 
