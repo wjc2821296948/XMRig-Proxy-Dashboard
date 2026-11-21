@@ -29,6 +29,7 @@ test("deterministic browser E2E uses read-only permissions and no model secrets"
   assert.doesNotMatch(workflow, /pull_request_target/);
   assert.match(workflow, /npm ci --prefix \.github\/qa/);
   assert.match(workflow, /playwright install --with-deps chromium/);
+  assert.doesNotMatch(workflow, /cache:\s*npm/);
 });
 
 test("Browser Explorer is bounded, restricted to local hosts, and has no GitHub write permissions", () => {

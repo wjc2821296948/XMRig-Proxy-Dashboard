@@ -114,8 +114,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: .github/qa/package-lock.json
       - run: npm ci --prefix .github/qa
       - run: npx --prefix .github/qa playwright install --with-deps chromium
       - run: npm --prefix .github/qa test
