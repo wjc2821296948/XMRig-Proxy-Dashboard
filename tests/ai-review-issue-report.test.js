@@ -55,6 +55,7 @@ test('counts unique actionable findings only inside the Findings section', () =>
     medium: 2,
     low: 1,
     unclassified: 0,
+    parseReliable: true,
     total: 3,
   });
 });
@@ -70,6 +71,25 @@ test('counts finding IDs when Markdown emphasis and title separators vary', () =
   const counts = parseFindingCounts(report);
   assert.equal(counts.medium, 3);
   assert.equal(counts.total, 3);
+});
+
+test('counts findings with changed IDs or bullet formats conservatively', () => {
+  const report = [
+    '## Findings',
+    '### High',
+    '- Finding A — unsafe HTML rendering',
+    '+ HIGH: missing validation',
+  ].join('\n');
+  const counts = parseFindingCounts(report);
+  assert.equal(counts.high, 0);
+  assert.equal(counts.unclassified, 2);
+  assert.equal(counts.total, 2);
+  assert.equal(counts.parseReliable, true);
+});
+
+test('marks an unrecognized or missing Findings section as unreliable', () => {
+  assert.equal(parseFindingCounts('# AI Report\n\n## Summary\nAll good.').parseReliable, false);
+  assert.equal(parseFindingCounts('## Findings\n\nNo conclusion was provided.').parseReliable, false);
 });
 
 test('uses the noop summary when a report has no numbered finding entries', () => {
@@ -138,6 +158,15 @@ test('builds an open Issue for findings and a closed historical Issue for a clea
   const clean = buildReviewData({ agentDir, usageDir, run });
   assert.equal(clean.needsAttention, false);
   assert.equal(clean.counts.total, 0);
+
+  fs.writeFileSync(path.join(agentDir, 'agent-session.jsonl'), JSON.stringify({
+    type: 'assistant.message',
+    data: { type: 'text', content: '# AI Maintenance Bootstrap Report\n\n## 4. Findings\n\nThe finding format changed and cannot be parsed.' },
+  }));
+  const unparseable = buildReviewData({ agentDir, usageDir, run });
+  assert.equal(unparseable.findingCountsReliable, false);
+  assert.equal(unparseable.needsAttention, true);
+  assert.match(unparseable.body, /could not be parsed safely/i);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

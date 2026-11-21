@@ -132,14 +132,8 @@ jobs:
                   repo,
                   issue_number: existing.number,
                   body: [
-                    `## Re-run summary — attempt ${report.attempt}`,
-                    '',
-                    `- Actions run: [#${report.runId}](${report.runUrl})`,
-                    `- Result: ${report.executionSucceeded ? 'completed' : 'failed or incomplete'}`,
-                    `- Findings: critical ${report.counts.critical}, high ${report.counts.high}, medium ${report.counts.medium}, low ${report.counts.low}, unclassified ${report.counts.unclassified}`,
-                    `- Model: \`${report.model}\`; AIC: ${report.aic}`,
-                    '',
-                    'The original full report remains in the Issue body. Open the Actions run above for this attempt\'s logs and artifacts.',
+                    `Re-run attempt ${report.attempt}: ${report.needsAttention ? 'requires attention' : 'no findings detected'}.`,
+                    `Actions run: [#${report.runId}](${report.runUrl})`,
                     report.attemptMarker,
                   ].join('\n'),
                 });

@@ -51,31 +51,39 @@ function extractNoopMessage(agentOutput, safeOutputLines) {
 }
 
 function parseFindingCounts(report, noopMessage = '') {
-  const counts = { critical: 0, high: 0, medium: 0, low: 0, unclassified: 0 };
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, unclassified: 0, parseReliable: false };
   const idSets = { C: new Set(), H: new Set(), M: new Set(), L: new Set() };
   const source = String(report || '');
   const headingMatch = /^##\s+(?:\d+\.\s*)?Findings\b[^\r\n]*$/im.exec(source);
-  let section = '';
-  if (headingMatch) {
-    const sectionStart = headingMatch.index + headingMatch[0].length;
-    const remainder = source.slice(sectionStart);
-    const nextHeading = /^##\s+/m.exec(remainder);
-    section = nextHeading ? remainder.slice(0, nextHeading.index) : remainder;
-  }
+  if (!headingMatch) { counts.total = 0; return counts; }
+  const remainder = source.slice(headingMatch.index + headingMatch[0].length);
+  const nextHeading = /^##\s+/m.exec(remainder);
+  const section = nextHeading ? remainder.slice(0, nextHeading.index) : remainder;
+  let severity = null;
+  let hasFindingBullet = false;
+  let hasExplicitNoFindings = false;
 
-  // Accept the stable severity/number identifier even if Markdown emphasis or
-  // the separator between the identifier and title changes.
-  for (const match of section.matchAll(/^\s*[-*]\s+(?:(?:\*{1,2}|`))?([CHML])-(\d+)\b/gim)) {
-    idSets[match[1].toUpperCase()].add(match[2]);
+  // Finding IDs are preferred for de-duplication, but their exact syntax is not a contract.
+  for (const line of section.split(/\r?\n/)) {
+    const heading = line.match(/^###\s+(Critical|High|Medium|Low|Informational)\b/i);
+    if (heading) { severity = heading[1].toLowerCase(); continue; }
+    if (/^\s*[-*]\s*No\s+(?:actionable\s+)?findings\b/i.test(line)
+      || /^\s*No\s+(?:actionable\s+)?findings\b/i.test(line)) {
+      hasExplicitNoFindings = true; continue;
+    }
+    const bullet = line.match(/^\s*[-*+]\s+(\S.*)$/);
+    if (!bullet || severity === 'informational') continue;
+    hasFindingBullet = true;
+    const id = bullet[1].match(/^(?:(?:\*{1,2}|\x60))?([CHML])-(\d+)\b/i);
+    if (id) idSets[id[1].toUpperCase()].add(id[2]);
+    else counts.unclassified += 1;
   }
-
   counts.critical = idSets.C.size;
   counts.high = idSets.H.size;
   counts.medium = idSets.M.size;
   counts.low = idSets.L.size;
-
   const identified = counts.critical + counts.high + counts.medium + counts.low;
-  if (identified === 0 && noopMessage) {
+  if (identified === 0 && counts.unclassified === 0 && !hasFindingBullet && noopMessage) {
     const labels = [
       ['critical', /(?:^|[,;:]\s*)(\d+)\s+critical\b/i],
       ['high', /(?:^|[,;:]\s*)(\d+)\s+high\b/i],
@@ -86,24 +94,9 @@ function parseFindingCounts(report, noopMessage = '') {
       const match = noopMessage.match(pattern);
       if (match) counts[key] = Number(match[1]);
     }
+    counts.parseReliable = labels.every(([, pattern]) => pattern.test(noopMessage));
   }
-
-  const afterFallback = counts.critical + counts.high + counts.medium + counts.low;
-  if (afterFallback === 0 && section) {
-    let severity = null;
-    for (const line of section.split(/\r?\n/)) {
-      const heading = line.match(/^###\s+(Critical|High|Medium|Low|Informational)\b/i);
-      if (heading) {
-        severity = heading[1].toLowerCase();
-        continue;
-      }
-      if (severity && severity !== 'informational' && /^\s*[-*]\s+\S/.test(line)
-        && !/^\s*[-*]\s+No\s+(?:actionable\s+)?findings\b/i.test(line)) {
-        counts.unclassified += 1;
-      }
-    }
-  }
-
+  counts.parseReliable = counts.parseReliable || hasFindingBullet || hasExplicitNoFindings || identified > 0;
   counts.total = counts.critical + counts.high + counts.medium + counts.low + counts.unclassified;
   return counts;
 }
@@ -148,7 +141,7 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
   const title = `AI Review Report — ${date} — Run #${runId}`;
   const reportComplete = Boolean(report);
   const executionSucceeded = run.conclusion === 'success' && reportComplete;
-  const needsAttention = !executionSucceeded || counts.total > 0;
+  const needsAttention = !executionSucceeded || !counts.parseReliable || counts.total > 0;
   const graderSummary = graders?.run
     ? `${graders.run.passed}/${graders.run.graderCount} passed; ${graders.run.failed} failed; ${graders.run.errors} errors`
     : 'not available';
@@ -199,8 +192,10 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
 
   const statusNote = !executionSucceeded
     ? `**Review execution needs attention.** Workflow conclusion: \`${run.conclusion || 'unknown'}\`; ${reportComplete ? 'a Markdown report was recovered from the run artifact.' : 'no complete Markdown review report was found in the run artifacts.'} This Issue remains open so the incomplete or failed review is visible.`
-    : needsAttention
-      ? '**Actionable findings detected.** This Issue remains open until the findings are handled and the Issue is closed manually.'
+    : !counts.parseReliable
+      ? '**Finding format could not be parsed safely.** This Issue remains open because zero findings cannot be confirmed; review the report manually.'
+      : needsAttention
+        ? '**Actionable findings detected.** This Issue remains open until the findings are handled and the Issue is closed manually.'
       : '**No actionable findings detected.** This report is retained as a closed Issue for history.';
 
   const body = [
@@ -238,6 +233,7 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
     model,
     aic,
     reportComplete,
+    findingCountsReliable: counts.parseReliable,
     executionSucceeded,
     needsAttention,
     runUrl,
