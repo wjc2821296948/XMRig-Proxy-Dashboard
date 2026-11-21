@@ -63,6 +63,7 @@ function parseFindingCounts(report, noopMessage = '') {
   let severity = null;
   let hasFinding = false;
   let hasExplicitNoFindings = false;
+  let severityTableSeen = false;
   let paragraph = [];
   const severityKey = (value) => ({ critical: 'critical', high: 'high', medium: 'medium', low: 'low' })[value] || null;
   const flushParagraph = () => {
@@ -75,10 +76,10 @@ function parseFindingCounts(report, noopMessage = '') {
     else counts.unclassified += 1;
   };
 
-  // Count by severity headings and list entries, not by a particular finding-ID format.
+  // Count by severity headings, list entries, and Markdown table rows.
   for (const line of section.split(/\r?\n/)) {
     const heading = line.match(/^###\s+(Critical|High|Medium|Low|Informational)\b/i);
-    if (heading) { flushParagraph(); severity = heading[1].toLowerCase(); continue; }
+    if (heading) { flushParagraph(); severity = heading[1].toLowerCase(); severityTableSeen = false; continue; }
     if (/^\s*[-*+•‣▪–—]\s*No\s+(?:actionable\s+)?findings\b/i.test(line)
       || /^\s*No\s+(?:actionable\s+)?findings\b/i.test(line)) {
       flushParagraph(); hasExplicitNoFindings = true; continue;
@@ -97,8 +98,27 @@ function parseFindingCounts(report, noopMessage = '') {
       }
       continue;
     }
-    if (!line.trim() || /^\s*(?:```|~~~|\|)/.test(line) || /^\s*<!--/.test(line)) continue;
+    if (/^\s*\|/.test(line)) {
+      const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+      if (cells.length >= 2 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))) continue;
+      if (severity && severity !== 'informational' && cells.length >= 2) {
+        const firstCell = cells[0].replace(/^[*`]+|[*`]+$/g, '').trim();
+        if (/^(?:#|id\b)/i.test(firstCell) || /^finding$/i.test(firstCell)) continue;
+        hasFinding = true;
+        severityTableSeen = true;
+        const id = firstCell.match(/^([CHML])\s*[-–—:]?\s*(\d+)$/i);
+        if (id) idSets[id[1].toUpperCase()].add(id[2]);
+        else {
+          const key = severityKey(severity);
+          if (key) fallbackItems.add(key + ':' + cells.join(' | '));
+          else counts.unclassified += 1;
+        }
+      }
+      continue;
+    }
+    if (!line.trim() || /^\s*(?:```|~~~)/.test(line) || /^\s*<!--/.test(line)) continue;
     if (/^\s{2,}\S/.test(line) && hasFinding) continue;
+    if (severityTableSeen) continue;
     if (severity && severity !== 'informational') paragraph.push(line.trim());
   }
   flushParagraph();
@@ -173,6 +193,47 @@ function firstExisting(...paths) {
   return paths.find((candidate) => candidate && fs.existsSync(candidate));
 }
 
+function extractInventorySummary(report) {
+  const source = String(report || '');
+  const legacyMatch = source.match(/(\d+)\s+explicit paths read successfully[;,]\s*(\d+)\s+unavailable/i);
+  if (legacyMatch) return `${legacyMatch[1]} read; ${legacyMatch[2]} unavailable`;
+
+  const heading = /^##\s+(?:\d+\.\s*)?Bounded file inventory\b[^\r\n]*$/im.exec(source);
+  if (!heading) return 'not available';
+  const remainder = source.slice(heading.index + heading[0].length);
+  const nextHeading = /^##\s+/m.exec(remainder);
+  const section = nextHeading ? remainder.slice(0, nextHeading.index) : remainder;
+  const lines = section.split(/\r?\n/);
+  let tableStarted = false;
+  const readPaths = new Set();
+  const unavailablePaths = new Set();
+  let unavailableWithoutPath = 0;
+
+  for (const line of lines) {
+    if (!/^\s*\|/.test(line)) continue;
+    const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+    if (!tableStarted) {
+      if (/^group$/i.test(cells[0] || '') && /^files$/i.test(cells[1] || '') && /^result$/i.test(cells[2] || '')) {
+        tableStarted = true;
+      }
+      continue;
+    }
+    if (cells.every((cell) => /^:?-{3,}:?$/.test(cell))) continue;
+    if (cells.length < 3) continue;
+    const paths = [...cells[1].matchAll(/`([^`]+)`/g)].map((match) => match[1]);
+    if (/\b(?:read|success|available)\b|✅/i.test(cells[2])) {
+      for (const filePath of paths) readPaths.add(filePath);
+    } else if (/unavailable|not read|failed|missing/i.test(cells[2])) {
+      if (paths.length) for (const filePath of paths) unavailablePaths.add(filePath);
+      else unavailableWithoutPath += 1;
+    }
+  }
+
+  return tableStarted
+    ? `${readPaths.size} read; ${unavailablePaths.size + unavailableWithoutPath} unavailable`
+    : 'not available';
+}
+
 function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
   const agentSessionPath = firstExisting(
     path.join(agentDir || '', 'agent-session.jsonl'),
@@ -213,10 +274,7 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
   const graderSummary = graders?.run
     ? `${graders.run.passed}/${graders.run.graderCount} passed; ${graders.run.failed} failed; ${graders.run.errors} errors`
     : 'not available';
-  const inventoryMatch = report.match(/(\d+)\s+explicit paths read successfully[;,]\s*(\d+)\s+unavailable/i);
-  const inventorySummary = inventoryMatch
-    ? `${inventoryMatch[1]} read; ${inventoryMatch[2]} unavailable`
-    : 'not available';
+  const inventorySummary = extractInventorySummary(report);
   const model = usage?.primary_model || 'not available';
   const aic = Number.isFinite(usage?.ai_credits) ? String(usage.ai_credits) : 'not available';
   const runUrl = run.html_url || '';
@@ -306,6 +364,7 @@ module.exports = {
   buildCommitUrl,
   buildReviewData,
   extractFinalReport,
+  extractInventorySummary,
   extractNoopMessage,
   parseFindingCounts,
   upsertRerunSummary,

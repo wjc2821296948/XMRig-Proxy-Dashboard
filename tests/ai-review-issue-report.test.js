@@ -10,6 +10,7 @@ const {
   buildCommitUrl,
   buildReviewData,
   extractFinalReport,
+  extractInventorySummary,
   extractNoopMessage,
   parseFindingCounts,
   upsertRerunSummary,
@@ -105,6 +106,48 @@ test('counts numbered and alternate list styles using the severity heading', () 
   assert.equal(counts.medium, 1);
   assert.equal(counts.total, 3);
   assert.equal(counts.parseReliable, true);
+});
+
+test('counts findings in severity Markdown tables with compact IDs', () => {
+  const report = [
+    '## 4. Findings',
+    '### Medium (confirmed)',
+    '| # | Finding | Evidence |',
+    '|---|---|---|',
+    '| M1 | **Duplicate status helper** | Both files read |',
+    '| M2 | **Documentation drift** | Architecture list stale |',
+    '| M3 | **Tag publish bypasses checks** | Trigger semantics |',
+    '### Low (confirmed)',
+    '| # | Finding | Evidence |',
+    '|---|---|---|',
+    '| L1 | **Toast vocabulary mismatch** | `warn` vs `warning` |',
+    '| L2 | **Mutable action tags** | Three workflows |',
+    '| L3 | **Offline chart assets** | Fallback behavior |',
+    '',
+    '**Positive controls verified:** the reviewed API remains read-only.',
+    '## 5. Next steps',
+    '- Fix M1 and L1 first.',
+  ].join('\n');
+  const counts = parseFindingCounts(report);
+  assert.equal(counts.medium, 3);
+  assert.equal(counts.low, 3);
+  assert.equal(counts.total, 6);
+  assert.equal(counts.unclassified, 0);
+  assert.equal(counts.parseReliable, true);
+});
+
+test('extracts bounded file inventory counts from the report table', () => {
+  const report = [
+    '## 2. Bounded file inventory',
+    '| Group | Files | Result |',
+    '|---|---|---|',
+    '| Docs | `README.md`, `package.json` | ✅ read |',
+    '| Application | `src/main.js`, `src/api.js` | ✅ read |',
+    '| Referenced (allowed) | `src/main.js` | ✅ read |',
+    '| Missing | `src/missing.js` | unavailable |',
+    '## 3. Tests',
+  ].join('\n');
+  assert.equal(extractInventorySummary(report), '4 read; 1 unavailable');
 });
 
 test('builds commit links only from a validated Actions run URL', () => {
