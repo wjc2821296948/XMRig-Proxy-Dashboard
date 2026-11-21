@@ -44,7 +44,6 @@ jobs:
     outputs:
       mode: ${{ steps.route.outputs.mode }}
       issue_number: ${{ steps.route.outputs.issue_number }}
-      checkout_ref: ${{ steps.route.outputs.checkout_ref }}
       context_json: ${{ steps.route.outputs.context_json }}
       comment_target: ${{ steps.route.outputs.comment_target }}
     steps:
@@ -74,14 +73,11 @@ jobs:
               task = context.payload.inputs?.task || '';
             }
             let issue = null;
-            let checkoutRef = context.payload.repository?.default_branch || 'main';
             if (issueNumber) {
               const response = await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber });
               issue = response.data;
               if (issue.pull_request) {
-                const pr = await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: issueNumber });
-                if (mode === 'issue') mode = 'pr';
-                checkoutRef = pr.data.head.sha;
+                if (mode === 'issue' || mode === 'regression' || mode === 'pr') mode = 'pr-report';
               } else if (mode === 'pr') {
                 core.setFailed(`#${issueNumber} is an Issue, not a Pull Request.`);
               }
@@ -90,7 +86,6 @@ jobs:
             if (mode === 'issue' && !issueNumber) core.setFailed('An issue number is required.');
             core.setOutput('mode', mode);
             core.setOutput('issue_number', issueNumber ? String(issueNumber) : '');
-            core.setOutput('checkout_ref', checkoutRef);
             core.setOutput('comment_target', issueNumber ? String(issueNumber) : '');
             core.setOutput('context_json', JSON.stringify({
               issue_number: issueNumber || null,
@@ -101,7 +96,7 @@ jobs:
 
   regression:
     needs: route
-    if: needs.route.outputs.mode == 'regression' || needs.route.outputs.mode == 'pr' || needs.route.outputs.mode == 'issue'
+    if: needs.route.outputs.mode == 'regression' || needs.route.outputs.mode == 'issue'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -109,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.route.outputs.checkout_ref }}
+          ref: ${{ github.event.repository.default_branch || 'main' }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -191,9 +186,44 @@ jobs:
           [ ! -f "$RUNNER_TEMP/dashboard.pid" ] || kill "$(cat "$RUNNER_TEMP/dashboard.pid")" 2>/dev/null || true
           [ ! -f "$RUNNER_TEMP/mock-proxy.pid" ] || kill "$(cat "$RUNNER_TEMP/mock-proxy.pid")" 2>/dev/null || true
 
+  pr-report:
+    needs: route
+    if: needs.route.outputs.mode == 'pr-report' && needs.route.outputs.comment_target != ''
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      pull-requests: read
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const number = Number('${{ needs.route.outputs.comment_target }}');
+            const pr = (await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: number })).data;
+            const result = await github.rest.checks.listForRef({ owner: context.repo.owner, repo: context.repo.repo, ref: pr.head.sha, per_page: 100 });
+            const runs = result.data.check_runs;
+            const rows = runs.map(run => `| [${run.name}](${run.html_url}) | ${run.status} | ${run.conclusion || 'pending'} |`);
+            const failures = runs.filter(run => run.status === 'completed' && run.conclusion !== 'success');
+            const pending = runs.filter(run => run.status !== 'completed');
+            const overall = failures.length ? 'Some checks failed' : pending.length ? 'Checks are still running' : runs.length ? 'All reported checks passed' : 'No checks found yet';
+            const body = [
+              `## PR #${number} QA status`,
+              '',
+              `**Overall:** ${overall}`,
+              '',
+              `**Head:** \`${pr.head.sha.slice(0, 12)}\``,
+              '',
+              '| Check | Status | Conclusion |',
+              '|---|---|---|',
+              ...(rows.length ? rows : ['| No check runs found | — | — |']),
+              '',
+              'PR code is tested by the automatic `pull_request` workflows; this command only reads check status and does not execute PR code.',
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: number, body });
+
   regression-report:
     needs: [route, regression]
-    if: always() && needs.route.outputs.comment_target != '' && (needs.route.outputs.mode == 'regression' || needs.route.outputs.mode == 'pr' || needs.route.outputs.mode == 'issue')
+    if: always() && needs.route.outputs.comment_target != '' && (needs.route.outputs.mode == 'regression' || needs.route.outputs.mode == 'issue')
     runs-on: ubuntu-latest
     permissions:
       issues: write

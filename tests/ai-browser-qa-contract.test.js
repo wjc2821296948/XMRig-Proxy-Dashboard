@@ -35,8 +35,11 @@ test("deterministic browser E2E uses read-only permissions and no model secrets"
 test("Browser Explorer is bounded, restricted to local hosts, and has no GitHub write permissions", () => {
   const workflow = read(".github/workflows/ai-browser-qa.yml");
   const runner = read(".github/qa/agent/run_explorer.py");
-  const exploreJob = workflow.slice(workflow.indexOf("  explore:"), workflow.indexOf("  regression-report:"));
+  const exploreJob = workflow.slice(workflow.indexOf("  explore:"), workflow.indexOf("  pr-report:"));
   assert.match(exploreJob, /contents:\s+read/);
+  assert.doesNotMatch(workflow, /needs\.route\.outputs\.checkout_ref/);
+  assert.match(workflow, /checks\.listForRef/);
+  assert.match(workflow, /pr-report:/);
   assert.doesNotMatch(exploreJob, /issues:\s+write|pull-requests:\s+write|GH_TOKEN|github\.token/);
   assert.match(exploreJob, /QA_EXPLORER_LITELLM_API_KEY/);
   assert.match(runner, /Browser\("chromium", allowed_domains=\["127\.0\.0\.1", "localhost"\]\)/);

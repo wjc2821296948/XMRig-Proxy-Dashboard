@@ -13,10 +13,10 @@ Run these commands as a repository owner in an Issue or PR comment:
 
 | Command | Behavior |
 |---|---|
-| `/qa regression` | Run deterministic Chromium E2E tests against the current Issue/PR revision (or default branch for an Issue) |
+| `/qa regression` | Run deterministic Chromium E2E against the trusted default branch; on a PR, report its automatic check status instead |
 | `/qa explore` | Ask Browser Use to explore the local dashboard using a mock Proxy API |
 | `/qa issue 140` | Explore the dashboard with Issue #140 as the QA target |
-| `/qa pr 123` | Run deterministic Chromium E2E tests against PR #123; no model key is used |
+| `/qa pr 123` | Report the current checks for PR #123; its code is tested automatically by the `pull_request` workflows |
 | `/qa report` | Link the latest AI exploration report on the current Issue |
 | `/qa fix` | Ask the separate Fix Agent for a constrained patch based on the latest AI QA report, run tests and CI, then open a PR if all checks pass |
 
