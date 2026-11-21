@@ -203,7 +203,7 @@ jobs:
             const result = await github.rest.checks.listForRef({ owner: context.repo.owner, repo: context.repo.repo, ref: pr.head.sha, per_page: 100 });
             const runs = result.data.check_runs;
             const rows = runs.map(run => `| [${run.name}](${run.html_url}) | ${run.status} | ${run.conclusion || 'pending'} |`);
-            const failures = runs.filter(run => run.status === 'completed' && run.conclusion !== 'success');
+            const failures = runs.filter(run => run.status === 'completed' && ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(run.conclusion));
             const pending = runs.filter(run => run.status !== 'completed');
             const overall = failures.length ? 'Some checks failed' : pending.length ? 'Checks are still running' : runs.length ? 'All reported checks passed' : 'No checks found yet';
             const body = [
