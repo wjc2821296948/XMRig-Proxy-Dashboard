@@ -62,3 +62,29 @@ jobs:
             .github/qa/playwright-report/
           if-no-files-found: ignore
           retention-days: 7
+
+  sandbox-security-smoke:
+    name: Browser Use container isolation smoke
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/ai-browser-qa' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout without a persisted GitHub token
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare non-sensitive smoke context
+        run: |
+          cat > qa-context.json <<'QA_CONTEXT'
+          {"task":"container isolation smoke only","issue_number":null}
+          QA_CONTEXT
+
+      - name: Build images and verify network isolation (no model call)
+        env:
+          QA_EXPLORER_LITELLM_API_KEY: sandbox-smoke-placeholder
+          QA_EXPLORER_MODEL: sandbox-smoke-model
+          QA_SANDBOX_SMOKE_ONLY: "true"
+        run: bash .github/qa/agent/run-sandbox.sh qa-context.json /tmp/unused-ai-browser-report.json

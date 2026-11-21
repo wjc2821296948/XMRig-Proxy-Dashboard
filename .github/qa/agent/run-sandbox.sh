@@ -140,6 +140,18 @@ if [ "$ready" != true ]; then
   echo "Isolated QA network did not become ready. Container output is intentionally not exposed."
   exit 1
 fi
+# Verify the agent process is non-root, has no capabilities/secrets/host mounts,
+# and can write only to the explicitly provided temporary filesystem.
+docker exec "$agent_name" python -c 'import os,pathlib; status=dict(line.split(":",1) for line in pathlib.Path("/proc/self/status").read_text().splitlines() if ":" in line); assert os.geteuid()==10001; assert int(status.get("CapEff","0").strip(),16)==0; assert status.get("NoNewPrivs","").strip()=="1"; assert "QA_EXPLORER_LITELLM_API_KEY" not in os.environ; assert not pathlib.Path("/workspace").exists(); assert not pathlib.Path("/var/run/docker.sock").exists(); pathlib.Path("/tmp/sandbox-write-probe").write_text("ok"); pathlib.Path("/tmp/sandbox-write-probe").unlink();
+try:
+ pathlib.Path("/app/sandbox-write-probe").write_text("should fail")
+except OSError:
+ pass
+else:
+ raise SystemExit("Browser Use root filesystem is unexpectedly writable")'
+# Verify the DNS sinkhole itself answers NXDOMAIN, then verify Docker's resolver
+# routes external names to that sinkhole rather than to an upstream DNS provider.
+docker exec "$agent_name" python -c 'import socket,sys,struct; q=b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01"; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(2); s.sendto(q,(sys.argv[1],53)); r,_=s.recvfrom(512); assert len(r)>=12 and (r[3]&15)==3, "DNS sinkhole did not return NXDOMAIN"' "$dns_ip"
 # Verify that even a direct-IP HTTPS connection cannot leave the internal network.
 docker exec "$agent_name" python -c 'import socket; s=socket.socket(); s.settimeout(2);
 try:
@@ -164,6 +176,22 @@ except OSError:
  pass
 else:
  raise SystemExit("Browser Use sandbox unexpectedly reached the runner host")' "$host_gateway_ip" "$host_test_port"
+
+if [ "${QA_SANDBOX_SMOKE_ONLY:-false}" = true ]; then
+  # Exercise the bundled Chromium and local dashboard without making any model call.
+  docker exec "$agent_name" python -c 'import asyncio; from playwright.async_api import async_playwright
+async def main():
+ async with async_playwright() as p:
+  browser=await p.chromium.launch()
+  page=await browser.new_page()
+  await page.goto("http://dashboard:18080", wait_until="domcontentloaded")
+  assert await page.title()
+  await browser.close()
+asyncio.run(main())'
+  docker exec "$agent_name" python -c 'import browser_use; from run_explorer import validate_relay_url; assert validate_relay_url("http://litellm-relay:8080/v1"); print("Browser Use and Chromium imports passed")'
+  echo "Sandbox isolation smoke passed; no model call was made."
+  exit 0
+fi
 
 mkdir -p "$(dirname "$report_file")"
 docker exec "$agent_name" python /app/run_explorer.py \

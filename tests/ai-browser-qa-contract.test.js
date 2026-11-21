@@ -34,6 +34,7 @@ test("deterministic browser E2E uses read-only permissions and no model secrets"
 
 test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM credentials in the relay", () => {
   const workflow = read(".github/workflows/ai-browser-qa.yml");
+  const browserWorkflow = read(".github/workflows/browser-e2e.yml");
   const runner = read(".github/qa/agent/run_explorer.py");
   const sandbox = read(".github/qa/agent/run-sandbox.sh");
   const browserDockerfile = read(".github/qa/agent/Dockerfile.browser");
@@ -42,7 +43,9 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   const relay = read(".github/qa/agent/litellm_relay.py");
   const dnsSinkhole = read(".github/qa/agent/dns_sinkhole.py");
   const exploreJob = workflow.slice(workflow.indexOf("  explore:"), workflow.indexOf("  pr-report:"));
-  const browserContainer = sandbox.slice(sandbox.indexOf('docker run -d --name "$agent_name"'));
+  const smokeJob = browserWorkflow.slice(browserWorkflow.indexOf("  sandbox-security-smoke:"));
+  const browserStart = sandbox.indexOf('docker run -d --name "$agent_name"');
+  const browserContainer = sandbox.slice(browserStart, sandbox.indexOf("\ndocker cp", browserStart));
   assert.match(exploreJob, /contents:\s+read/);
   assert.doesNotMatch(workflow, /needs\.route\.outputs\.checkout_ref/);
   assert.match(workflow, /checks\.listForRef/);
@@ -58,11 +61,20 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(sandbox, /--read-only/);
   assert.match(sandbox, /--env HOST=0\.0\.0\.0 --env PORT=18080/);
   assert.match(sandbox, /unexpectedly has direct egress/);
+  assert.match(sandbox, /NoNewPrivs/);
+  assert.match(sandbox, /DNS sinkhole did not return NXDOMAIN/);
   assert.match(sandbox, /unexpectedly has external DNS/);
   assert.match(sandbox, /sudo iptables -I INPUT 1 -i/);
   assert.match(sandbox, /sudo iptables -D INPUT -i/);
   assert.match(sandbox, /host-gateway isolation probe/);
   assert.match(sandbox, /unexpectedly reached the runner host/);
+  assert.match(sandbox, /QA_SANDBOX_SMOKE_ONLY/);
+  assert.match(sandbox, /playwright\.async_api/);
+  assert.match(sandbox, /Browser Use and Chromium imports passed/);
+  assert.match(sandbox, /no model call was made/);
+  assert.match(smokeJob, /github\.head_ref == 'feat\/ai-browser-qa'/);
+  assert.match(smokeJob, /QA_EXPLORER_LITELLM_API_KEY: sandbox-smoke-placeholder/);
+  assert.match(smokeJob, /QA_SANDBOX_SMOKE_ONLY: "true"/);
   assert.match(sandbox, /--pids-limit 128 --memory 2g --cpus 2/);
   assert.match(sandbox, /--env QA_EXPLORER_LITELLM_API_KEY --env QA_EXPLORER_MODEL/);
   assert.doesNotMatch(browserContainer, /QA_EXPLORER_LITELLM_API_KEY|LITELLM_API_KEY/);
