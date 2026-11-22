@@ -12,6 +12,7 @@ const {
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
+  getReportIssueState,
   parseFindingCounts,
   shouldDispatchAutoFix,
   upsertRerunSummary,
@@ -235,7 +236,7 @@ test('builds an open Issue for findings and a closed historical Issue for a clea
     '',
     '## 4. Findings',
     '### Medium',
-    '- **M-1 · Security** raw response values reach innerHTML.',
+    '- **M-1 · Security** raw response values reach innerHTML in `src/api.js:42`.',
     '',
     '## 5. Next steps',
     '- Fix M-1.',
@@ -263,7 +264,11 @@ test('builds an open Issue for findings and a closed historical Issue for a clea
   assert.match(data.title, /2026-11-21.*123456/);
   assert.equal(data.needsAttention, true);
   assert.match(data.body, /M-1 · Security/);
+  assert.match(data.body, /src\/api\.js:42/);
   assert.match(data.body, /glm-5.3-flash/);
+  assert.match(data.body, /10\/10 passed/);
+  assert.match(data.body, /19 read; 0 unavailable/);
+  assert.match(data.body, /https:\/\/github\.com\/example\/project\/actions\/runs\/123456/);
   assert.match(data.body, /ai-review-run:123456/);
   assert.match(data.body, /https:\/\/github\.com\/example\/project\/commit\/abcdef1234567890/);
 
@@ -316,6 +321,16 @@ test('extracts noop messages from both agent output and fallback safe-output rec
   assert.equal(message, 'fallback latest');
 });
 
+test('chooses state on creation but preserves human state on every rerun', () => {
+  assert.equal(getReportIssueState({ needsAttention: true }), 'open');
+  assert.equal(getReportIssueState({ needsAttention: false }), 'closed');
+
+  // A clean rerun must not close a report whose findings still need human handling.
+  assert.equal(getReportIssueState({ needsAttention: false }, { state: 'open' }), 'open');
+  // A rerun must not reopen an Issue that a human already closed.
+  assert.equal(getReportIssueState({ needsAttention: true }, { state: 'closed' }), 'closed');
+});
+
 test('dispatches automatic fixes only for successful, reliable, open review reports', () => {
   const report = {
     executionSucceeded: true,
@@ -350,17 +365,40 @@ test('keeps workflow dispatch permission isolated and trusts the reporter identi
     new URL('../.github/workflows/ai-review-auto-fix.md', import.meta.url),
     'utf8',
   );
+  const reporterScript = fs.readFileSync(
+    new URL('../.github/scripts/ai-review-issue-report.cjs', import.meta.url),
+    'utf8',
+  );
+  const bootstrapSource = fs.readFileSync(
+    new URL('../.github/workflows/ai-maintenance-bootstrap.md', import.meta.url),
+    'utf8',
+  );
+  const bootstrapLock = fs.readFileSync(
+    new URL('../.github/workflows/ai-maintenance-bootstrap.lock.yml', import.meta.url),
+    'utf8',
+  );
   const publishJob = reporterWorkflow.match(/  publish:\n([\s\S]*?)(?=\n  dispatch-auto-fix:)/)?.[1] || '';
   const dispatchJob = reporterWorkflow.match(/  dispatch-auto-fix:\n([\s\S]*)$/)?.[1] || '';
 
+  assert.match(reporterWorkflow, /group: ai-review-report-\$\{\{ github\.event\.workflow_run\.id \}\}/);
+  assert.match(reporterWorkflow, /cancel-in-progress: false/);
+  assert.match(reporterScript, /ai-review-run:\$\{runId\}/);
   assert.match(publishJob, /actions: read/);
   assert.match(publishJob, /contents: read/);
   assert.match(publishJob, /issues: write/);
-  assert.doesNotMatch(publishJob, /actions: write/);
+  assert.doesNotMatch(publishJob, /actions: write|contents: write|pull-requests: write/);
   assert.match(dispatchJob, /permissions:\n      actions: write/);
   assert.doesNotMatch(dispatchJob, /actions\/checkout|download-artifact|\n\s+run:/);
 
   assert.match(autoFixWorkflow, /min-integrity: approved/);
   assert.match(autoFixWorkflow, /trusted-users:\n\s+- "github-actions\[bot\]"/);
   assert.doesNotMatch(autoFixWorkflow, /approval-labels:/);
+
+  assert.match(bootstrapSource, /permissions:\n  contents: read/);
+  assert.doesNotMatch(bootstrapSource, /issues: write|pull-requests: write|contents: write/);
+  const agentJob = bootstrapLock.match(/^  agent:\n([\s\S]*?)(?=^  [a-zA-Z0-9_-]+:\n)/m)?.[1] || '';
+  assert.match(agentJob, /permissions:\n      contents: read/);
+  assert.doesNotMatch(agentJob, /issues: write|pull-requests: write|contents: write/);
+  assert.match(bootstrapLock, /\"tools\":\[\"get_file_contents\"\]/);
+  assert.doesNotMatch(bootstrapLock, /\"(?:create_issue|update_issue|add_issue_comment)\"/);
 });
