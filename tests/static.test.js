@@ -527,6 +527,39 @@ test("interactive history chart initializes after insertion and restores the clo
   assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
   assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
 });
+test("renderDashboard escapes unvalidated API-derived metric interpolations", () => {
+  const main = read("src/main.js");
+
+  // Numeric-by-contract fields returned by /1/summary must never be
+  // interpolated into the dashboard HTML template unescaped: a compromised
+  // proxy (or MITM on an http:// proxy) may return arbitrary strings in
+  // these fields. The class ternary around `data.upstreams?.error` only
+  // emits static class names, so the exact unescaped value form below must
+  // not exist anywhere in the source.
+  const guardedFields = [
+    "data.workers || 0",
+    'data.resources?.hardware_concurrency || "未知"',
+    "data.upstreams?.active || 0",
+    "data.upstreams?.sleep || 0",
+    "data.upstreams?.error || 0",
+    "data.upstreams?.total || 0",
+    "data.results?.latency || 0",
+    "data.results?.avg_time || 0",
+  ];
+
+  for (const field of guardedFields) {
+    assert.ok(
+      main.includes("${escapeHtml(" + field + ")}"),
+      `renderDashboard must escape API-derived value: ${field}`,
+    );
+    assert.equal(
+      main.includes("${" + field + "}"),
+      false,
+      `renderDashboard must not interpolate API-derived value unescaped: ${field}`,
+    );
+  }
+});
+
 test("document CSP blocks object and frame content", () => {
   const html = read("index.html");
   assert.match(html, /object-src 'none'/);

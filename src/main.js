@@ -1054,7 +1054,7 @@ function renderDashboard(data, { stale = false, cachedAt = null } = {}) {
 
       <div class="card">
         <div class="card-title">连接工人</div>
-        <div class="card-value highlight-blue">${data.workers || 0}</div>
+        <div class="card-value highlight-blue">${escapeHtml(data.workers || 0)}</div>
         <div class="card-label">比率: ${upstreamRatio} 矿工/上游</div>
       </div>
 
@@ -1101,15 +1101,15 @@ function renderDashboard(data, { stale = false, cachedAt = null } = {}) {
         <div class="progress-bar"><div class="progress-fill" style="width:${memPct}%"></div></div>
         <div class="stat-row" style="margin-top:0.75rem"><span class="stat-label">RSS 内存</span><span class="stat-value">${formatBytes(data.resources?.memory?.resident_set_memory || 0)}</span></div>
         <div class="stat-row"><span class="stat-label">负载均值</span><span class="stat-value">${formatLoadAverage(data.resources?.load_average)}</span></div>
-        <div class="stat-row"><span class="stat-label">CPU 核心</span><span class="stat-value">${data.resources?.hardware_concurrency || "未知"}</span></div>
+        <div class="stat-row"><span class="stat-label">CPU 核心</span><span class="stat-value">${escapeHtml(data.resources?.hardware_concurrency || "未知")}</span></div>
       </div>
 
       <div class="card">
         <div class="card-title">上游矿池</div>
-        <div class="stat-row"><span class="stat-label">活跃</span><span class="stat-value highlight-green">${data.upstreams?.active || 0}</span></div>
-        <div class="stat-row"><span class="stat-label">休眠</span><span class="stat-value">${data.upstreams?.sleep || 0}</span></div>
-        <div class="stat-row"><span class="stat-label">错误</span><span class="stat-value ${(data.upstreams?.error || 0) > 0 ? "highlight-red" : ""}">${data.upstreams?.error || 0}</span></div>
-        <div class="stat-row"><span class="stat-label">总计</span><span class="stat-value">${data.upstreams?.total || 0}</span></div>
+        <div class="stat-row"><span class="stat-label">活跃</span><span class="stat-value highlight-green">${escapeHtml(data.upstreams?.active || 0)}</span></div>
+        <div class="stat-row"><span class="stat-label">休眠</span><span class="stat-value">${escapeHtml(data.upstreams?.sleep || 0)}</span></div>
+        <div class="stat-row"><span class="stat-label">错误</span><span class="stat-value ${(data.upstreams?.error || 0) > 0 ? "highlight-red" : ""}">${escapeHtml(data.upstreams?.error || 0)}</span></div>
+        <div class="stat-row"><span class="stat-label">总计</span><span class="stat-value">${escapeHtml(data.upstreams?.total || 0)}</span></div>
         <div class="stat-row"><span class="stat-label">平均矿工/池</span><span class="stat-value">${upstreamRatio}</span></div>
       </div>
     </div>
@@ -1123,10 +1123,10 @@ function renderDashboard(data, { stale = false, cachedAt = null } = {}) {
           <div class="metric-item"><div class="metric-value highlight-yellow">${formatNumber(data.results?.invalid || 0)}</div><div class="metric-label">无效</div></div>
           <div class="metric-item"><div class="metric-value">${formatNumber(data.results?.expired || 0)}</div><div class="metric-label">过期</div></div>
           <div class="metric-item"><div class="metric-value highlight-blue">${acceptance}%</div><div class="metric-label">接受率</div></div>
-          <div class="metric-item"><div class="metric-value">${data.results?.latency || 0} ms</div><div class="metric-label">延迟</div></div>
+          <div class="metric-item"><div class="metric-value">${escapeHtml(data.results?.latency || 0)} ms</div><div class="metric-label">延迟</div></div>
         </div>
         <div class="stat-row" style="margin-top:1rem"><span class="stat-label">总哈希数</span><span class="stat-value">${formatNumber(data.results?.hashes_total || 0)}</span></div>
-        <div class="stat-row"><span class="stat-label">平均提交时间</span><span class="stat-value">${data.results?.avg_time || 0} 秒</span></div>
+        <div class="stat-row"><span class="stat-label">平均提交时间</span><span class="stat-value">${escapeHtml(data.results?.avg_time || 0)} 秒</span></div>
       </div>
     </div>
   `;
