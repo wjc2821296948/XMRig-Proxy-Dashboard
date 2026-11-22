@@ -148,9 +148,13 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.match(fixAgent, /def extract_patch/);
   assert.match(fixAgent, /def validate_patch_text/);
   assert.match(fixAgent, /def tracked_regular_files/);
+  assert.match(fixAgent, /def is_existing_regular_file/);
+  assert.match(fixAgent, /missing or non-regular working-tree file/);
   assert.match(fixAgent, /new or untracked file/);
   assert.match(read("tests/qa_fix_agent_test.py"), /test_reports_http_status_without_echoing_response_body/);
   assert.match(read("tests/qa_fix_agent_test.py"), /test_rejects_nonexistent_tracked_files/);
+  assert.match(read("tests/qa_fix_agent_test.py"), /test_rejects_tracked_but_missing_working_tree_file/);
+  assert.match(read("tests/qa_fix_agent_test.py"), /test_requires_existing_regular_working_tree_file/);
   assert.match(fixAgent, /def redirect_request/);
   assert.match(fixAgent, /HTTPError as exc/);
   assert.ok(patchValidator.includes('"src/ui.js"'));

@@ -1,11 +1,12 @@
 import importlib.util
 import io
 import json
+import os
 import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / ".github/scripts/qa-fix-agent.py"
 SPEC = importlib.util.spec_from_file_location("qa_fix_agent", SCRIPT)
@@ -92,6 +93,26 @@ class FixAgentTests(unittest.TestCase):
         patch = "diff --git a/src/definitely-not-tracked.js b/src/definitely-not-tracked.js\n+++ b/src/definitely-not-tracked.js\n"
         with self.assertRaisesRegex(SystemExit, "new or untracked file"):
             FIX_AGENT.validate_patch_text(patch)
+
+    def test_requires_existing_regular_working_tree_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            regular = Path(directory) / "regular.js"
+            regular.write_text("const value = 1;\\n", encoding="utf-8")
+            self.assertTrue(FIX_AGENT.is_existing_regular_file(regular))
+            self.assertFalse(FIX_AGENT.is_existing_regular_file(regular.with_name("missing.js")))
+            link = Path(directory) / "link.js"
+            try:
+                os.symlink(regular, link)
+            except (OSError, NotImplementedError):
+                self.skipTest("Symlinks are unavailable on this runner")
+            self.assertFalse(FIX_AGENT.is_existing_regular_file(link))
+
+    def test_rejects_tracked_but_missing_working_tree_file(self):
+        patch_text = "diff --git a/src/keyboard-shortcuts.js b/src/keyboard-shortcuts.js\n+++ b/src/keyboard-shortcuts.js\n"
+        with patch.object(FIX_AGENT, "tracked_regular_files", return_value={"src/keyboard-shortcuts.js"}):
+            with patch.object(FIX_AGENT, "is_existing_regular_file", return_value=False):
+                with self.assertRaisesRegex(SystemExit, "missing or non-regular"):
+                    FIX_AGENT.validate_patch_text(patch_text)
 
 
 if __name__ == "__main__":

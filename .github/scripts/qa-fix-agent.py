@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import stat
 import sys
 import urllib.error
 import urllib.request
@@ -99,6 +100,14 @@ def tracked_regular_files():
     return tracked
 
 
+def is_existing_regular_file(path):
+    """Require a real regular file in the checkout, not merely an index entry."""
+    try:
+        return stat.S_ISREG(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
 def validate_patch_text(patch):
     if len(patch.encode("utf-8")) > MAX_PATCH_BYTES:
         fail("The generated patch exceeded the 1 MB safety limit.")
@@ -121,6 +130,8 @@ def validate_patch_text(patch):
             fail(f"Refusing patch outside the allowlist: {path}")
         if path not in tracked:
             fail(f"Refusing a patch for a new or untracked file: {path}")
+        if not is_existing_regular_file(path):
+            fail(f"Refusing a patch for a missing or non-regular working-tree file: {path}")
         if path in seen:
             fail(f"Refusing duplicate patch entries for: {path}")
         seen.add(path)

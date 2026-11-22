@@ -23,7 +23,7 @@ push_trigger_ignore_merge_commits = true
 push_trigger_ignore_bot_commits = true
 review_states = ["changes_requested"]
 review_author_types = ["User"]
-review_commands = ["/improve"]
+review_commands = []
 
 [pr_reviewer]
 require_score_review = true
