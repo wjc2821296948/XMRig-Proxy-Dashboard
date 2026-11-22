@@ -12,6 +12,10 @@ jobs:
       ${{
         github.event.sender.type != 'Bot' &&
         (
+          github.event_name != 'pull_request_review' ||
+          github.event.review.state == 'changes_requested'
+        ) &&
+        (
           github.event_name != 'issue_comment' ||
           (
             github.event.issue.pull_request &&
