@@ -37,6 +37,9 @@ export const PUBLIC_ASSET_PATHS = Object.freeze([
   "src/advanced-history-chart.js",
   "vendor/uplot/uPlot.iife.min.js",
   "vendor/uplot/uPlot.min.css",
+  "src/alert-notifications.js",
+  "src/alert-preferences.js",
+  "src/alert-rules.js",
   "src/ui.js",
 ]);
 

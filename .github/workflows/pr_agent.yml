@@ -7,10 +7,14 @@ on:
 
 jobs:
   pr_agent_job:
-    # Ignore bot events and only allow read-only slash commands. Commands that commit changes are disabled.
+    # Ignore bot events; review commands are explicitly allowlisted below.
     if: >-
       ${{
         github.event.sender.type != 'Bot' &&
+        (
+          github.event_name != 'pull_request_review' ||
+          github.event.review.state == 'changes_requested'
+        ) &&
         (
           github.event_name != 'issue_comment' ||
           (
@@ -76,4 +80,4 @@ jobs:
       github_action_config.push_trigger_ignore_bot_commits: "true"
       github_action_config.review_states: '["changes_requested"]'
       github_action_config.review_author_types: '["User"]'
-      github_action_config.review_commands: '[]'
+      github_action_config.review_commands: '["/improve"]'

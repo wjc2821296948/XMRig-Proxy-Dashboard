@@ -1,0 +1,283 @@
+name: AI Browser QA
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: QA command (explore, regression, issue, pr, report)
+        required: true
+        default: explore
+        type: choice
+        options: [explore, regression, issue, pr, report, test-explorer-key, test-fixer-key]
+      issue_number:
+        description: Issue or PR number (required for issue/pr/report)
+        required: false
+        type: string
+      task:
+        description: Optional exploration objective
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: ai-browser-qa-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  route:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.comment.user.login == github.repository_owner &&
+       startsWith(github.event.comment.body, '/qa') &&
+       !startsWith(github.event.comment.body, '/qa fix'))
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.route.outputs.mode }}
+      issue_number: ${{ steps.route.outputs.issue_number }}
+      context_json: ${{ steps.route.outputs.context_json }}
+      comment_target: ${{ steps.route.outputs.comment_target }}
+    steps:
+      - name: Parse command and resolve target context
+        id: route
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isDispatch = context.eventName === 'workflow_dispatch';
+            if (isDispatch && context.actor !== context.repo.owner) {
+              core.setFailed('Manual AI QA runs are restricted to the repository owner.');
+            }
+            const raw = isDispatch ? (context.payload.inputs?.command || 'explore') : context.payload.comment.body.trim();
+            let mode = 'explore';
+            let issueNumber = isDispatch ? Number(context.payload.inputs?.issue_number || 0) : Number(context.payload.issue?.number || 0);
+            let task = isDispatch ? (context.payload.inputs?.task || '') : '';
+            if (!isDispatch) {
+              const match = /^\/qa(?:\s+(.*))?$/i.exec(raw);
+              if (!match) core.setFailed('Unsupported QA command.');
+              const arg = (match?.[1] || '').trim();
+              if (!arg) mode = issueNumber ? 'issue' : 'explore';
+              else if (/^regression$/i.test(arg)) mode = 'regression';
+              else if (/^explore$/i.test(arg)) mode = 'explore';
+              else if (/^report$/i.test(arg)) mode = 'report';
+              else if (/^issue\s+\d+$/i.test(arg)) { mode = 'issue'; issueNumber = Number(arg.split(/\s+/)[1]); }
+              else if (/^pr\s+\d+$/i.test(arg)) { mode = 'pr'; issueNumber = Number(arg.split(/\s+/)[1]); }
+              else core.setFailed('Use /qa, /qa explore, /qa issue 140, /qa pr 123, /qa regression, or /qa report.');
+            } else {
+              mode = context.payload.inputs?.command || 'explore';
+              task = context.payload.inputs?.task || '';
+            }
+            let issue = null;
+            if (issueNumber) {
+              const response = await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber });
+              issue = response.data;
+              if (issue.pull_request) {
+                if (mode === 'issue' || mode === 'regression' || mode === 'pr') mode = 'pr-report';
+              } else if (mode === 'pr') {
+                core.setFailed(`#${issueNumber} is an Issue, not a Pull Request.`);
+              }
+            }
+            if (mode === 'pr' && !issueNumber) core.setFailed('A PR number is required.');
+            if (mode === 'issue' && !issueNumber) core.setFailed('An issue number is required.');
+            core.setOutput('mode', mode);
+            core.setOutput('issue_number', issueNumber ? String(issueNumber) : '');
+            core.setOutput('comment_target', issueNumber ? String(issueNumber) : '');
+            core.setOutput('context_json', JSON.stringify({
+              issue_number: issueNumber || null,
+              task,
+            }));
+
+  test-explorer-key:
+    needs: route
+    if: needs.route.outputs.mode == 'test-explorer-key'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test only the Browser Explorer key
+        env:
+          LITELLM_API_KEY: ${{ secrets.QA_EXPLORER_LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
+          LITELLM_MODEL: ${{ vars.QA_EXPLORER_MODEL }}
+        run: python .github/scripts/test-litellm-key.py
+
+  test-fixer-key:
+    needs: route
+    if: needs.route.outputs.mode == 'test-fixer-key'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test only the QA Fixer key
+        env:
+          LITELLM_API_KEY: ${{ secrets.QA_FIXER_LITELLM_API_KEY }}
+          LITELLM_API_BASE: ${{ vars.LITELLM_API_BASE || 'https://litellm.lrate.top/v1' }}
+          LITELLM_MODEL: ${{ vars.QA_FIXER_MODEL }}
+        run: python .github/scripts/test-litellm-key.py
+
+  regression:
+    needs: route
+    if: needs.route.outputs.mode == 'regression' || needs.route.outputs.mode == 'issue'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix .github/qa
+      - run: npx --prefix .github/qa playwright install --with-deps chromium
+      - run: npm --prefix .github/qa test
+
+
+  explore:
+    needs: route
+    if: needs.route.outputs.mode == 'explore' || needs.route.outputs.mode == 'issue'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+          persist-credentials: false
+      - name: Prepare QA context
+        env:
+          QA_CONTEXT: ${{ needs.route.outputs.context_json }}
+          QA_MODE: ${{ needs.route.outputs.mode }}
+        run: |
+          python3 - <<'PY_CONTEXT'
+          import json, os
+          context=json.loads(os.environ['QA_CONTEXT'])
+          if not context.get('task'):
+              context['task'] = 'Explore the Dashboard UI and validate the local alert workflow, settings persistence, notification permission UX, and any obvious functional regressions.'
+          context['mode']=os.environ['QA_MODE']
+          open('qa-context.json','w',encoding='utf-8').write(json.dumps(context,ensure_ascii=False))
+          PY_CONTEXT
+      - name: Run Browser Use in an isolated no-egress container
+        env:
+          QA_EXPLORER_LITELLM_API_KEY: ${{ secrets.QA_EXPLORER_LITELLM_API_KEY }}
+          QA_EXPLORER_MODEL: ${{ vars.QA_EXPLORER_MODEL }}
+        run: bash .github/qa/agent/run-sandbox.sh qa-context.json .github/qa/reports/ai-browser-qa.json
+      - name: Upload AI exploration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-browser-qa-${{ github.run_id }}
+          path: .github/qa/reports/ai-browser-qa.json
+          if-no-files-found: ignore
+          retention-days: 14
+  pr-report:
+    needs: route
+    if: needs.route.outputs.mode == 'pr-report' && needs.route.outputs.comment_target != ''
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      pull-requests: read
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const number = Number('${{ needs.route.outputs.comment_target }}');
+            const pr = (await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: number })).data;
+            const result = await github.rest.checks.listForRef({ owner: context.repo.owner, repo: context.repo.repo, ref: pr.head.sha, per_page: 100 });
+            const runs = result.data.check_runs;
+            const rows = runs.map(run => `| [${run.name}](${run.html_url}) | ${run.status} | ${run.conclusion || 'pending'} |`);
+            const failures = runs.filter(run => run.status === 'completed' && ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(run.conclusion));
+            const pending = runs.filter(run => run.status !== 'completed');
+            const overall = failures.length ? 'Some checks failed' : pending.length ? 'Checks are still running' : runs.length ? 'All reported checks passed' : 'No checks found yet';
+            const body = [
+              `## PR #${number} QA status`,
+              '',
+              `**Overall:** ${overall}`,
+              '',
+              `**Head:** \`${pr.head.sha.slice(0, 12)}\``,
+              '',
+              '| Check | Status | Conclusion |',
+              '|---|---|---|',
+              ...(rows.length ? rows : ['| No check runs found | — | — |']),
+              '',
+              'PR code is tested by the automatic `pull_request` workflows; this command only reads check status and does not execute PR code.',
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: number, body });
+
+  regression-report:
+    needs: [route, regression]
+    if: always() && needs.route.outputs.comment_target != '' && (needs.route.outputs.mode == 'regression' || needs.route.outputs.mode == 'issue')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const result = '${{ needs.regression.result }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: Number('${{ needs.route.outputs.comment_target }}'),
+              body: `**QA regression:** ${result}\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+
+  publish-report:
+    needs: [route, explore]
+    if: success() && (needs.route.outputs.mode == 'explore' || needs.route.outputs.mode == 'issue') && needs.route.outputs.comment_target != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-browser-qa-${{ github.run_id }}
+          path: report
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('report/ai-browser-qa.json', 'utf8'));
+            const body = `<!-- AI_BROWSER_QA_REPORT -->\n## AI Browser QA exploration\n\n**Status:** ${report.status}\n\n${report.result}\n\n---\n${report.disclaimer}\n\n[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: Number('${{ needs.route.outputs.comment_target }}'), body });
+
+  report:
+    needs: route
+    if: needs.route.outputs.mode == 'report' && needs.route.outputs.comment_target != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const number = Number('${{ needs.route.outputs.comment_target }}');
+            const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: number, per_page: 100 });
+            const latest = comments.filter(c => c.body?.includes('<!-- AI_BROWSER_QA_REPORT -->')).at(-1);
+            const summary = latest ? `Latest AI QA report: ${latest.html_url}` : 'No AI QA report found yet. Run `/qa issue ' + number + '` first.';
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: number, body: summary });
