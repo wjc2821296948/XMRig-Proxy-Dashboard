@@ -189,6 +189,27 @@ async function upsertRerunSummary({ github, owner, repo, issueNumber, report }) 
   return 'created';
 }
 
+function shouldDispatchAutoFix(report, issue) {
+  const isReporterBot = issue?.user?.login === 'github-actions[bot]';
+  const hasReviewLabel = Array.isArray(issue?.labels)
+    && issue.labels.some((label) => (typeof label === 'string' ? label : label?.name) === 'ai-review');
+  const body = String(issue?.body || '');
+  const isReportIssue = typeof issue?.title === 'string'
+    && issue.title.startsWith('AI Review Report')
+    && /<!-- ai-review-run:\d+ -->/.test(body)
+    && body.includes('## Full AI review report');
+  return Boolean(
+    isReporterBot
+    && isReportIssue
+    && report?.executionSucceeded
+    && report?.counts?.parseReliable
+    && report.counts.total > 0
+    && report.counts.unclassified === 0
+    && issue?.state === 'open'
+    && hasReviewLabel,
+  );
+}
+
 function firstExisting(...paths) {
   return paths.find((candidate) => candidate && fs.existsSync(candidate));
 }
@@ -367,5 +388,6 @@ module.exports = {
   extractInventorySummary,
   extractNoopMessage,
   parseFindingCounts,
+  shouldDispatchAutoFix,
   upsertRerunSummary,
 };

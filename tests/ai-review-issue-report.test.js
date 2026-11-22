@@ -13,6 +13,7 @@ const {
   extractInventorySummary,
   extractNoopMessage,
   parseFindingCounts,
+  shouldDispatchAutoFix,
   upsertRerunSummary,
 } = require('../.github/scripts/ai-review-issue-report.cjs');
 
@@ -313,4 +314,53 @@ test('extracts noop messages from both agent output and fallback safe-output rec
     JSON.stringify({ type: 'noop', message: 'fallback latest' }),
   );
   assert.equal(message, 'fallback latest');
+});
+
+test('dispatches automatic fixes only for successful, reliable, open review reports', () => {
+  const report = {
+    executionSucceeded: true,
+    counts: { parseReliable: true, total: 2, unclassified: 0 },
+  };
+  const issue = {
+    number: 170,
+    title: 'AI Review Report — 2026-11-21 — Run #123456',
+    body: '<!-- ai-review-run:123456 -->\n## Full AI review report\nFindings',
+    state: 'open',
+    user: { login: 'github-actions[bot]' },
+    labels: [{ name: 'ai-review' }],
+  };
+  assert.equal(shouldDispatchAutoFix(report, issue), true);
+  assert.equal(shouldDispatchAutoFix({ ...report, executionSucceeded: false }, issue), false);
+  assert.equal(shouldDispatchAutoFix({ ...report, counts: { parseReliable: false, total: 2 } }, issue), false);
+  assert.equal(shouldDispatchAutoFix({ ...report, counts: { parseReliable: true, total: 0, unclassified: 0 } }, issue), false);
+  assert.equal(shouldDispatchAutoFix({ ...report, counts: { parseReliable: true, total: 2, unclassified: 1 } }, issue), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, state: 'closed' }), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, labels: [] }), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, user: { login: 'some-contributor' } }), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, user: { login: 'github-actions[bot]' }, body: 'forged report' }), false);
+  assert.equal(shouldDispatchAutoFix(report, { ...issue, title: 'Unrelated issue' }), false);
+});
+
+test('keeps workflow dispatch permission isolated and trusts the reporter identity, not labels', () => {
+  const reporterWorkflow = fs.readFileSync(
+    new URL('../.github/workflows/ai-review-issue-reporter.yml', import.meta.url),
+    'utf8',
+  );
+  const autoFixWorkflow = fs.readFileSync(
+    new URL('../.github/workflows/ai-review-auto-fix.md', import.meta.url),
+    'utf8',
+  );
+  const publishJob = reporterWorkflow.match(/  publish:\n([\s\S]*?)(?=\n  dispatch-auto-fix:)/)?.[1] || '';
+  const dispatchJob = reporterWorkflow.match(/  dispatch-auto-fix:\n([\s\S]*)$/)?.[1] || '';
+
+  assert.match(publishJob, /actions: read/);
+  assert.match(publishJob, /contents: read/);
+  assert.match(publishJob, /issues: write/);
+  assert.doesNotMatch(publishJob, /actions: write/);
+  assert.match(dispatchJob, /permissions:\n      actions: write/);
+  assert.doesNotMatch(dispatchJob, /actions\/checkout|download-artifact|\n\s+run:/);
+
+  assert.match(autoFixWorkflow, /min-integrity: approved/);
+  assert.match(autoFixWorkflow, /trusted-users:\n\s+- "github-actions\[bot\]"/);
+  assert.doesNotMatch(autoFixWorkflow, /approval-labels:/);
 });
