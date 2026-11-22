@@ -230,6 +230,5 @@ test("PR Agent only starts on actionable review submissions", () => {
   assert.match(workflow, /github_action_config\.review_states: '\["changes_requested"\]'/);
   assert.match(workflow, /github_action_config\.review_commands: '\[\]'/);
   assert.match(config, /review_states = \["changes_requested"\]/);
-  assert.match(config, /review_commands = \[\]/);
-  assert.doesNotMatch(config, /review_commands = \["\/improve"\]/);
+  assert.match(config, /review_commands = \["\/improve"\]/);
 });

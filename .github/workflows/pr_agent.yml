@@ -80,4 +80,4 @@ jobs:
       github_action_config.push_trigger_ignore_bot_commits: "true"
       github_action_config.review_states: '["changes_requested"]'
       github_action_config.review_author_types: '["User"]'
-      github_action_config.review_commands: '[]'
+      github_action_config.review_commands: '["/improve"]'
