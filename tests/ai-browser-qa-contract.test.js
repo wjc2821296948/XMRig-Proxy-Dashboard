@@ -228,7 +228,7 @@ test("PR Agent only starts on actionable review submissions", () => {
   const config = read(".pr_agent.toml");
   assert.match(workflow, /github\.event_name != 'pull_request_review'[\s\S]*?github\.event\.review\.state == 'changes_requested'/);
   assert.match(workflow, /github_action_config\.review_states: '\["changes_requested"\]'/);
-  assert.match(workflow, /github_action_config\.review_commands: '\[\]'/);
+  assert.match(workflow, /github_action_config\.review_commands: '\[\"\/improve\"\]'/);
   assert.match(config, /review_states = \["changes_requested"\]/);
   assert.match(config, /review_commands = \["\/improve"\]/);
 });
