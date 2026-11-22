@@ -73,7 +73,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { buildReviewData, shouldDispatchAutoFix, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
+            const { buildReviewData, getReportIssueState, shouldDispatchAutoFix, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
             const run = context.payload.workflow_run;
             const report = buildReviewData({
               agentDir: 'report-agent',
@@ -135,7 +135,10 @@ jobs:
               }
             }
 
-            const desiredState = report.needsAttention ? 'open' : 'closed';
+            // Only the first publication chooses open/closed from the report.
+            // Reruns preserve the existing Issue state so automation cannot close
+            // findings awaiting human handling or reopen an Issue closed by a person.
+            const desiredState = getReportIssueState(report, existing);
             if (!existing && desiredState === 'closed') {
               const closed = await github.rest.issues.update({
                 owner,
@@ -145,15 +148,6 @@ jobs:
                 state_reason: 'completed',
               });
               issue = closed.data;
-            } else if (existing && existing.state !== desiredState) {
-              const updated = await github.rest.issues.update({
-                owner,
-                repo,
-                issue_number: existing.number,
-                state: desiredState,
-                ...(desiredState === 'closed' ? { state_reason: 'completed' } : {}),
-              });
-              issue = updated.data;
             }
 
             core.info(`AI review report recorded in ${issue.html_url} (${desiredState}).`);

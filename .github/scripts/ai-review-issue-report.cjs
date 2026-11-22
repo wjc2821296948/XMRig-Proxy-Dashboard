@@ -189,6 +189,15 @@ async function upsertRerunSummary({ github, owner, repo, issueNumber, report }) 
   return 'created';
 }
 
+function getReportIssueState(report, existingIssue = null) {
+  // A rerun must never override a human's decision to keep a report open or close it.
+  // Only the initial creation chooses state from the report contents.
+  if (existingIssue?.state === 'open' || existingIssue?.state === 'closed') {
+    return existingIssue.state;
+  }
+  return report?.needsAttention ? 'open' : 'closed';
+}
+
 function shouldDispatchAutoFix(report, issue) {
   const isReporterBot = issue?.user?.login === 'github-actions[bot]';
   const hasReviewLabel = Array.isArray(issue?.labels)
@@ -387,6 +396,7 @@ module.exports = {
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
+  getReportIssueState,
   parseFindingCounts,
   shouldDispatchAutoFix,
   upsertRerunSummary,
