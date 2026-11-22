@@ -72,6 +72,8 @@ http://mock-proxy:18081. Do not use any other endpoint."""
     )
     browser = Browser(
         "chromium",
+        # Browser Use 1.0.2 matches scheme, host, and explicit port in URL patterns.
+        # Keep the exact HTTP origins so HTTPS and every other host/port are rejected.
         allowed_domains=["http://dashboard:18080", "http://mock-proxy:18081"],
     )
     agent = Agent(task=request, llm=llm, browser=browser)

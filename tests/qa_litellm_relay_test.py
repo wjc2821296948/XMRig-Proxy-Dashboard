@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / ".github/qa/agent/litellm_relay.py"
@@ -52,6 +53,18 @@ class LiteLLMRelayTests(unittest.TestCase):
         raw = b" " * (RELAY.MAX_REQUEST_BYTES + 1)
         with self.assertRaisesRegex(RELAY.RelayError, "request too large"):
             RELAY.prepare_payload("/v1/chat/completions", raw, "model")
+
+    def test_request_budget_is_atomic_under_concurrent_calls(self):
+        handler = RELAY.RelayHandler
+        original_count = handler.request_count
+        try:
+            handler.request_count = RELAY.MAX_REQUESTS_PER_RUN - 7
+            with ThreadPoolExecutor(max_workers=32) as pool:
+                claimed = list(pool.map(lambda _index: handler.claim_request_slot(), range(64)))
+            self.assertEqual(sum(claimed), 7)
+            self.assertEqual(handler.request_count, RELAY.MAX_REQUESTS_PER_RUN)
+        finally:
+            handler.request_count = original_count
 
     def test_upstream_is_fixed_and_redirects_are_rejected(self):
         self.assertEqual(RELAY.UPSTREAM_URL, "https://litellm.lrate.top/v1/chat/completions")

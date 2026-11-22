@@ -103,6 +103,8 @@ test("Browser Explorer runs in a no-egress Docker sandbox and keeps LiteLLM cred
   assert.match(dnsSinkhole, /QuietUDPServer/);
   assert.match(relay, /https:\/\/litellm\.lrate\.top\/v1\/chat\/completions/);
   assert.match(relay, /MAX_REQUESTS_PER_RUN = 60/);
+  assert.match(relay, /request_count_lock = Lock\(\)/);
+  assert.match(relay, /def claim_request_slot/);
   assert.match(relay, /MAX_OUTPUT_TOKENS = 2048/);
   assert.match(relay, /NoRedirectHandler/);
   assert.ok(runner.includes('"http://dashboard:18080"'));
@@ -145,7 +147,10 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.match(fixAgent, /def load_context/);
   assert.match(fixAgent, /def extract_patch/);
   assert.match(fixAgent, /def validate_patch_text/);
+  assert.match(fixAgent, /def tracked_regular_files/);
+  assert.match(fixAgent, /new or untracked file/);
   assert.match(read("tests/qa_fix_agent_test.py"), /test_reports_http_status_without_echoing_response_body/);
+  assert.match(read("tests/qa_fix_agent_test.py"), /test_rejects_nonexistent_tracked_files/);
   assert.match(fixAgent, /def redirect_request/);
   assert.match(fixAgent, /HTTPError as exc/);
   assert.ok(patchValidator.includes('"src/ui.js"'));
@@ -154,7 +159,13 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
     "index.html", "src/api.js", "src/storage.js", "src/public-assets.js", "src/ui.js",
     "src/escape-html.js", "src/background-upload-guard.js", "src/alert-rules.js",
     "src/alert-preferences.js", "src/alert-notifications.js", "tests/alert-rules.test.js",
-    ".github/scripts/validate-qa-fix-patch.py",
+    ".github/scripts/validate-qa-fix-patch.py", ".github/scripts/qa-fix-agent.py",
+    ".github/qa/agent/run_explorer.py", ".github/qa/agent/litellm_relay.py",
+    ".github/qa/agent/dns_sinkhole.py", ".github/qa/agent/mock_proxy.py",
+    ".github/qa/agent/run-sandbox.sh", ".github/workflows/ai-browser-qa.yml",
+    ".github/workflows/ai-fix-pr.yml", "tests/ai-browser-qa-contract.test.js",
+    "tests/qa_dns_sinkhole_test.py", "tests/qa_fix_agent_test.py",
+    "tests/qa_fix_patch_validator_test.py", "tests/qa_litellm_relay_test.py",
   ]) {
     assert.ok(patchValidator.includes(JSON.stringify(file)), `${file} must remain protected`);
   }
@@ -184,6 +195,8 @@ test("AI QA documentation lists independent agent keys and slash commands", () =
   assert.match(docs, /test-fixer-key/);
   assert.match(docs, /no-egress Docker sandbox/);
   assert.match(docs, /fixed LiteLLM relay/);
+  assert.match(docs, /exact URL patterns/);
+  assert.match(docs, /Both generation-time validation and the independent PR-job validator/);
 });
 
 

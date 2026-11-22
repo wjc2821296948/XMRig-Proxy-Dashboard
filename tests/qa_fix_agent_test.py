@@ -88,6 +88,11 @@ class FixAgentTests(unittest.TestCase):
         patch = "diff --git a/src/keyboard-shortcuts.js b/src/keyboard-shortcuts.js\n+++ b/src/keyboard-shortcuts.js\n"
         self.assertEqual(FIX_AGENT.validate_patch_text(patch), patch)
 
+    def test_rejects_nonexistent_tracked_files(self):
+        patch = "diff --git a/src/definitely-not-tracked.js b/src/definitely-not-tracked.js\n+++ b/src/definitely-not-tracked.js\n"
+        with self.assertRaisesRegex(SystemExit, "new or untracked file"):
+            FIX_AGENT.validate_patch_text(patch)
+
 
 if __name__ == "__main__":
     unittest.main()

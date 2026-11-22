@@ -6,6 +6,7 @@ from urllib.request import HTTPSHandler, HTTPRedirectHandler, ProxyHandler, Requ
 import json
 import os
 import ssl
+from threading import Lock
 
 UPSTREAM_URL = "https://litellm.lrate.top/v1/chat/completions"
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
@@ -51,7 +52,17 @@ class NoRedirectHandler(HTTPRedirectHandler):
 
 class RelayHandler(BaseHTTPRequestHandler):
     request_count = 0
+    request_count_lock = Lock()
     opener = build_opener(ProxyHandler({}), HTTPSHandler(context=ssl.create_default_context()), NoRedirectHandler())
+
+    @classmethod
+    def claim_request_slot(cls) -> bool:
+        """Atomically reserve one of the per-run upstream request slots."""
+        with cls.request_count_lock:
+            if cls.request_count >= MAX_REQUESTS_PER_RUN:
+                return False
+            cls.request_count += 1
+            return True
 
     def respond(self, status: int, body: bytes, content_type: str = "application/json") -> None:
         self.send_response(status)
@@ -86,8 +97,7 @@ class RelayHandler(BaseHTTPRequestHandler):
             self.respond(400, json.dumps({"error": str(error)}).encode("utf-8"))
             return
 
-        RelayHandler.request_count += 1
-        if RelayHandler.request_count > MAX_REQUESTS_PER_RUN:
+        if not RelayHandler.claim_request_slot():
             self.respond(429, b'{"error":"QA model request limit reached"}')
             return
 

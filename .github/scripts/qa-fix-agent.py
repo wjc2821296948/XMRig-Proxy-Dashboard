@@ -4,6 +4,7 @@ import http.client
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -82,6 +83,22 @@ def request_patch(request, opener=None):
     return extract_patch(response_body)
 
 
+def tracked_regular_files():
+    try:
+        output = subprocess.check_output(["git", "ls-files", "--stage", "-z"])
+    except (OSError, subprocess.CalledProcessError):
+        fail("Unable to verify tracked repository files; refusing the patch.")
+    tracked = set()
+    for entry in output.decode("utf-8", "surrogateescape").split("\0"):
+        if not entry:
+            continue
+        metadata, path = entry.split("\t", 1)
+        mode = metadata.split(" ", 1)[0]
+        if mode in {"100644", "100755"}:
+            tracked.add(path)
+    return tracked
+
+
 def validate_patch_text(patch):
     if len(patch.encode("utf-8")) > MAX_PATCH_BYTES:
         fail("The generated patch exceeded the 1 MB safety limit.")
@@ -90,6 +107,7 @@ def validate_patch_text(patch):
     file_pairs = re.findall(r"^diff --git a/(.+?) b/(.+?)$", patch, flags=re.MULTILINE)
     if not file_pairs:
         fail("No changed file paths were found in the patch.")
+    tracked = tracked_regular_files()
     seen = set()
     for old_path, new_path in file_pairs:
         if old_path != new_path:
@@ -101,6 +119,8 @@ def validate_patch_text(patch):
             fail(f"Refusing unsafe patch path: {path}")
         if not (path.startswith(("src/", "tests/", "docs/")) or path in {"README.md", "README.en.md"}):
             fail(f"Refusing patch outside the allowlist: {path}")
+        if path not in tracked:
+            fail(f"Refusing a patch for a new or untracked file: {path}")
         if path in seen:
             fail(f"Refusing duplicate patch entries for: {path}")
         seen.add(path)

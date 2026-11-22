@@ -20,6 +20,19 @@ PROTECTED_FILES = {
     "src/alert-notifications.js",
     "tests/alert-rules.test.js",
     ".github/scripts/validate-qa-fix-patch.py",
+    ".github/scripts/qa-fix-agent.py",
+    ".github/qa/agent/run_explorer.py",
+    ".github/qa/agent/litellm_relay.py",
+    ".github/qa/agent/dns_sinkhole.py",
+    ".github/qa/agent/mock_proxy.py",
+    ".github/qa/agent/run-sandbox.sh",
+    ".github/workflows/ai-browser-qa.yml",
+    ".github/workflows/ai-fix-pr.yml",
+    "tests/ai-browser-qa-contract.test.js",
+    "tests/qa_dns_sinkhole_test.py",
+    "tests/qa_fix_agent_test.py",
+    "tests/qa_fix_patch_validator_test.py",
+    "tests/qa_litellm_relay_test.py",
 }
 
 
