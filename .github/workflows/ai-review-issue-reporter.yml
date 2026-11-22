@@ -19,10 +19,14 @@ jobs:
       github.event.workflow_run.head_branch == github.event.repository.default_branch &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    # Publishing cannot dispatch workflows; the dispatch permission is isolated below.
     permissions:
-      actions: write
+      actions: read
       contents: read
       issues: write
+    outputs:
+      auto_fix_enabled: ${{ steps.publish-report.outputs.auto_fix_enabled }}
+      auto_fix_issue_number: ${{ steps.publish-report.outputs.auto_fix_issue_number }}
     steps:
       - name: Check out the trusted default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,11 +68,12 @@ jobs:
           path: usage-artifact
 
       - name: Create or update the review report Issue
+        id: publish-report
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { buildReviewData, dispatchAutoFix, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
+            const { buildReviewData, shouldDispatchAutoFix, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
             const run = context.payload.workflow_run;
             const report = buildReviewData({
               agentDir: 'report-agent',
@@ -120,12 +125,13 @@ jobs:
               }
               const hasLabel = (existing.labels || []).some((label) => label.name === 'ai-review');
               if (!hasLabel) {
-                await github.rest.issues.addLabels({
+                const labeled = await github.rest.issues.addLabels({
                   owner,
                   repo,
                   issue_number: existing.number,
                   labels: ['ai-review'],
                 });
+                issue = { ...existing, labels: labeled.data };
               }
             }
 
@@ -153,14 +159,14 @@ jobs:
             core.info(`AI review report recorded in ${issue.html_url} (${desiredState}).`);
             core.info(`Findings: critical=${report.counts.critical}, high=${report.counts.high}, medium=${report.counts.medium}, low=${report.counts.low}, unclassified=${report.counts.unclassified}.`);
 
-            // Dispatch the isolated, least-privilege fixer only for a successful and reliably parsed report.
-            try {
-              const dispatched = await dispatchAutoFix({ github, owner, repo, issue, run, report });
-              if (dispatched) core.info(`Dispatched AI Review Auto Fix for issue #${issue.number}.`);
-              else core.info('Automatic fixes were not dispatched: report is incomplete, unreliable, closed, or has no findings.');
-            } catch (error) {
-              core.warning(`Could not dispatch AI Review Auto Fix for issue #${issue.number}: ${error.message}`);
-            }
+            // Pass only validated scalar outputs to a separate job with actions:write.
+            // That job performs no checkout, artifact download, or repository-code execution.
+            const autoFixEnabled = shouldDispatchAutoFix(report, issue);
+            core.setOutput('auto_fix_enabled', autoFixEnabled ? 'true' : 'false');
+            core.setOutput('auto_fix_issue_number', autoFixEnabled ? String(issue.number) : '');
+            core.info(autoFixEnabled
+              ? `Queued AI Review Auto Fix dispatch for trusted report Issue #${issue.number}.`
+              : 'Automatic fixes were not dispatched: report is incomplete, unreliable, closed, untrusted, or has no findings.');
             await core.summary
               .addHeading('AI review report published')
               .addLink(`#${issue.number} — ${report.title}`, issue.html_url)
@@ -169,3 +175,37 @@ jobs:
                 [desiredState, String(report.counts.total), report.aic],
               ])
               .write();
+
+  dispatch-auto-fix:
+    name: Dispatch trusted AI review fix
+    needs: publish
+    if: needs.publish.outputs.auto_fix_enabled == 'true'
+    runs-on: ubuntu-latest
+    # This job receives only a validated issue number and has no access to repository contents or issues.
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the auto-fix workflow on the default branch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ needs.publish.outputs.auto_fix_issue_number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = process.env.ISSUE_NUMBER || '';
+            const defaultBranch = process.env.DEFAULT_BRANCH || '';
+            if (!/^[1-9]\d*$/.test(issueNumber)) {
+              throw new Error('Refusing to dispatch: invalid report issue number.');
+            }
+            if (!defaultBranch || defaultBranch.startsWith('-')) {
+              throw new Error('Refusing to dispatch: repository default branch is unavailable or invalid.');
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ai-review-auto-fix.lock.yml',
+              ref: defaultBranch,
+              inputs: { issue_number: issueNumber },
+            });
+            core.info(`Dispatched AI Review Auto Fix for trusted report Issue #${issueNumber}.`);

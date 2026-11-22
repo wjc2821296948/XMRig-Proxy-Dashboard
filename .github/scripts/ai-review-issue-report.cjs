@@ -190,28 +190,24 @@ async function upsertRerunSummary({ github, owner, repo, issueNumber, report }) 
 }
 
 function shouldDispatchAutoFix(report, issue) {
+  const isReporterBot = issue?.user?.login === 'github-actions[bot]';
   const hasReviewLabel = Array.isArray(issue?.labels)
     && issue.labels.some((label) => (typeof label === 'string' ? label : label?.name) === 'ai-review');
+  const body = String(issue?.body || '');
+  const isReportIssue = typeof issue?.title === 'string'
+    && issue.title.startsWith('AI Review Report')
+    && /<!-- ai-review-run:\d+ -->/.test(body)
+    && body.includes('## Full AI review report');
   return Boolean(
-    report?.executionSucceeded
+    isReporterBot
+    && isReportIssue
+    && report?.executionSucceeded
     && report?.counts?.parseReliable
     && report.counts.total > 0
     && report.counts.unclassified === 0
     && issue?.state === 'open'
     && hasReviewLabel,
   );
-}
-
-async function dispatchAutoFix({ github, owner, repo, issue, run, report }) {
-  if (!shouldDispatchAutoFix(report, issue)) return false;
-  await github.rest.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: 'ai-review-auto-fix.lock.yml',
-    ref: run.head_branch,
-    inputs: { issue_number: String(issue.number) },
-  });
-  return true;
 }
 
 function firstExisting(...paths) {
@@ -388,7 +384,6 @@ function buildReviewData({ agentDir, fallbackDir, usageDir, run }) {
 module.exports = {
   buildCommitUrl,
   buildReviewData,
-  dispatchAutoFix,
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
