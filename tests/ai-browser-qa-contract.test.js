@@ -221,7 +221,8 @@ test("every browser entrypoint module and its local imports are in the static se
       pending.push(path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1].slice(2))));
     }
   }
-});\n\n
+});
+
 test("PR Agent only starts on actionable review submissions", () => {
   const workflow = read(".github/workflows/pr_agent.yml");
   const config = read(".pr_agent.toml");
