@@ -160,7 +160,7 @@ test("Fix Agent and PR creator use separate jobs and distinct API key names", ()
   assert.ok(patchValidator.includes('"src/ui.js"'));
   assert.match(patchValidator, /untracked or new file/);
   for (const file of [
-    "index.html", "src/api.js", "src/storage.js", "src/public-assets.js", "src/ui.js",
+    "index.html", "src/api.js", "src/storage.js", "src/public-assets.js", "src/main.js", "src/ui.js",
     "src/escape-html.js", "src/background-upload-guard.js", "src/alert-rules.js",
     "src/alert-preferences.js", "src/alert-notifications.js", "tests/alert-rules.test.js",
     ".github/scripts/validate-qa-fix-patch.py", ".github/scripts/qa-fix-agent.py",

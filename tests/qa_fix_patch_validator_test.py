@@ -53,6 +53,7 @@ index 1111111..2222222 100644
 
     def test_rejects_alert_engine_tests_and_security_helpers(self):
         protected = [
+            "src/main.js",
             "src/alert-rules.js",
             "src/alert-preferences.js",
             "src/alert-notifications.js",
