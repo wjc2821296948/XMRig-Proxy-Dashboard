@@ -75,9 +75,10 @@ Use only the explicit file paths below and paths referenced directly by those fi
 2. Read `CLAUDE.md`, `README.md`, `package.json`, and `index.html`; summarize the architecture, development constraints, scripts, and supported Node.js versions.
 3. Inspect these application files: `src/main.js`, `src/api.js`, `src/storage.js`, `src/ui.js`, `src/status.js`, and `service-worker.js`.
 4. Inspect these representative tests: `tests/api.test.js`, `tests/storage.test.js`, `tests/status.test.js`, `tests/static.test.js`, and `tests/server.test.js`. Identify test coverage gaps without claiming these are all tests.
-5. Assess CI configuration from these workflow files only: `.github/workflows/pr_agent.yml`, `.github/workflows/publish-package.yml`, `.github/workflows/release-smoke.yml`, `.github/workflows/status-tests.yml`, and `.github/workflows/ai-maintenance-bootstrap.md`. Do not query workflow runs, job logs, or other Actions API data.
-6. Report only high-confidence correctness, security, reliability, and maintenance concerns. Distinguish confirmed findings from hypotheses; cite exact file paths and line ranges.
-7. Do not run shell commands. Do not edit or generate files. Do not use network access except the configured LiteLLM inference endpoint and GitHub tools already provided by the workflow. Batch independent file reads where possible to reduce model turns and repeated context.
+5. Assess CI and AI-maintenance orchestration from these explicit workflow files only: `.github/workflows/pr_agent.yml`, `.github/workflows/publish-package.yml`, `.github/workflows/release-smoke.yml`, `.github/workflows/status-tests.yml`, `.github/workflows/ai-maintenance-bootstrap.md`, `.github/workflows/ai-review-issue-reporter.yml`, and `.github/workflows/ai-review-auto-fix.md`. Do not query workflow runs, job logs, or other Actions API data.
+6. Audit the AI-maintenance control plane itself by reading `.github/scripts/ai-review-issue-report.cjs`, `tests/ai-review-issue-report.test.js`, and `tests/ai-review-auto-fix.test.js`. Verify that Reporter trust checks, artifact-to-Issue publication, Run ID idempotency, manual-trigger assignee provenance, permission separation, Auto Fix integrity checks, run-scoped branches, file allowlists, signed Draft PR outputs, and the no-auto-close/no-merge policy remain aligned. Treat generated `.lock.yml` files as compiler outputs covered by the dedicated Lock Checks workflow; do not read or modify them here.
+7. Report only high-confidence correctness, security, reliability, and maintenance concerns. Distinguish confirmed findings from hypotheses; cite exact file paths and line ranges.
+8. Do not run shell commands. Do not edit or generate files. Do not use network access except the configured LiteLLM inference endpoint and GitHub tools already provided by the workflow. Batch independent file reads where possible to reduce model turns and repeated context.
 
 ## Output
 
@@ -87,6 +88,6 @@ Return a concise Markdown report in the workflow run summary containing:
 - Bounded file inventory and architecture, including any unavailable paths
 - Representative tests and CI coverage
 - Findings grouped by severity with evidence and confidence
-- Recommended next steps for the daily reporting and safe-fix stages
+- Recommended next steps for reporting and safe-fix stages; do not enable or assume a schedule unless explicitly requested
 
 If the model cannot be reached or a required explicit file cannot be read, report the exact limitation and stop. Filtered directory listings are an expected limitation under the approved integrity policy; do not retry them or treat them as proof that individual files are unavailable. Do not claim exhaustive repository coverage.

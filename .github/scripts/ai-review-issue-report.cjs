@@ -261,7 +261,8 @@ function extractInventorySummary(report) {
     if (!/^\s*\|/.test(line)) continue;
     const cells = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
     if (!tableStarted) {
-      if (/^group$/i.test(cells[0] || '') && /^files$/i.test(cells[1] || '') && /^result$/i.test(cells[2] || '')) {
+      const hasOutcomeColumn = /^(?:result|status)$/i.test(cells[2] || '');
+      if (/^group$/i.test(cells[0] || '') && /^files$/i.test(cells[1] || '') && hasOutcomeColumn) {
         tableStarted = true;
       }
       continue;
