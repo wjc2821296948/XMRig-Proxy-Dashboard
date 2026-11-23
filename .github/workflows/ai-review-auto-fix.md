@@ -31,6 +31,8 @@ engine:
   env:
     OPENAI_BASE_URL: "https://litellm.lrate.top/v1"
     OPENAI_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+    AI_AUTO_FIX_RUN_ID: ${{ github.run_id }}
+    AI_AUTO_FIX_RUN_ATTEMPT: ${{ github.run_attempt }}
 
 network:
   allowed:
@@ -45,7 +47,7 @@ safe-outputs:
     max: 6
     base-branch: main
     allowed-branches:
-      - ai-review-fix/*
+      - ai-auto-fix/*/*
     fallback-as-issue: false
     auto-close-issue: false
     preserve-branch-name: true
@@ -91,6 +93,7 @@ tools:
     - git log
     - git show
     - git rev-parse
+    - date
     - cat
     - sed
     - grep
@@ -125,14 +128,14 @@ Process findings independently, with a hard maximum of six PRs in one run. Prefe
 
 For each candidate finding:
 
-1. Derive a stable lowercase slug from the normalized finding title (not the report-local finding number), using short kebab-case words. Search pull requests across open, closed, and merged states by that slug in the title and by the stable marker `<!-- ai-review-finding:<slug> -->` in the body. Also check the deterministic branch `ai-review-fix/<slug>` with `list_branches`. If any matching PR or branch already exists, do not recreate it. Inspect the relevant code on `main`; do not repeat a fix that has already landed.
+1. Derive a stable lowercase slug from the normalized finding title (not the report-local finding number), using short kebab-case words. Search pull requests across open, closed, and merged states by that slug in the title and by the stable marker `<!-- ai-review-finding:<slug> -->` in the body. Also derive the exact run-scoped branch for this finding and check that exact branch with `list_branches`. If a matching PR already exists in any state, or the exact current run-scoped branch already exists, do not recreate it. An orphan branch from a different run or attempt must not block this run, because each invocation intentionally receives a unique branch. Inspect the relevant code on `main`; do not repeat a fix that has already landed.
 2. Only auto-fix a clear, local correctness or documentation issue with a testable expected result. Skip findings that require product decisions, broad refactors, uncertain behavior changes, or privileged/security-sensitive judgment.
 3. Never modify `.github/workflows/**`, `.github/actions/**`, repository secrets, permissions, authentication/authorization boundaries, release/publish configuration, dependency manifests or lockfiles, deployment/infra configuration, or generated/vendor files. If a finding requires one of these paths, skip it and explain why. The safe-output `allowed-files` list is an additional hard boundary: only `src/**`, `tests/**`, `bin/**`, `docs/**`, `index.html`, and `styles.css` may enter an auto-fix PR. All other paths (including `renovate.json`, release/deployment scripts, `_headers`, and `service-worker.js`) are rejected. The default protected-files policy also blocks the entire `.github/` path, including workflow YAML/Markdown, Dependabot configuration, and repository security settings.
-4. Start a fresh branch from `main` named `ai-review-fix/<slug>`. Make changes for this finding only. Do not carry another finding's uncommitted or committed changes into the branch.
+4. Start a fresh branch from `main` using this exact format: `ai-auto-fix/<UTC-date>/<run-id>-<run-attempt>-<slug>`. Obtain the trusted run ID and attempt only from the workflow-provided environment variables `AI_AUTO_FIX_RUN_ID` and `AI_AUTO_FIX_RUN_ATTEMPT`, never from the Issue body. Derive `<UTC-date>` using `date -u +%F` on the GitHub-hosted Linux runner; validate it matches `YYYY-MM-DD`, and validate run ID and attempt are positive decimal integers. The slug is the stable lowercase finding slug from step 1. Example: `ai-auto-fix/2026-11-23/45042781769-2-html-injection-unvalidated-api-values-renderdashboard`. The run ID separates different workflow runs, the attempt separates retries of one run, and the finding slug allows multiple independent PRs in a single run. Make changes for this finding only. Do not carry another finding's uncommitted or committed changes into the branch.
 5. Run the full `npm test` suite and `git diff --check` for this finding. If either fails, do not create a PR for it; stop the run rather than hiding a failure. Do not weaken, delete, or skip tests to make a change pass.
 6. Inspect `git diff` and stage only the exact files required for this finding. Create one focused commit, then emit exactly one `create_pull_request` safe output for this branch. Include the stable slug in the PR title (the configured `[ai] ` prefix is added automatically). The body must contain: the finding ID/title, evidence and root cause, exact fix, tests run/results, and `Reported in #<issue_number>`. Include both markers `<!-- ai-review-finding:<slug> -->` and `<!-- ai-review-issue:<issue_number> -->` in the PR body.
 7. Do not include `Fixes #`, `Closes #`, or `Resolves #` for the report issue. The report Issue must remain open until a human verifies all findings and closes it.
-8. Return to `main` before starting the next finding. Each PR must have a distinct branch and only one finding's changes. Never push directly; use only the `create_pull_request` safe output.
+8. Return to `main` before starting the next finding. Each PR must have a distinct run-scoped branch and only one finding's changes. Never push directly; use only the `create_pull_request` safe output.
 
 ## Completion behavior
 
