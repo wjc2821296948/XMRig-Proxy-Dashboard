@@ -15,6 +15,13 @@ test('AI Auto Fix uses trusted workflow metadata for unique dated branches', () 
   assert.match(source, /run ID separates different workflow runs, the attempt separates retries/);
 });
 
+test('AI Auto Fix assigns PRs only from the optional trusted reporter input', () => {
+  assert.match(source, /assignee:\n\s+description:.*manually started/);
+  assert.match(source, /assignees: \$\{\{ inputs\.assignee \}\}/);
+  assert.match(source, /empty value means leave the PR unassigned/i);
+  assert.match(lock, /assignees.*inputs\.assignee/);
+});
+
 test('AI Auto Fix safe output allowlist only accepts the dated run-scoped branch layout', () => {
   assert.match(source, /allowed-branches:\s*\n\s*- ai-auto-fix\/\*\/\*/);
   assert.match(lock, /allowed_branches.*ai-auto-fix\/\*\/\*/);

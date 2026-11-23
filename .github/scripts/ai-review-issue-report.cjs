@@ -198,6 +198,24 @@ function getReportIssueState(report, existingIssue = null) {
   return report?.needsAttention ? 'open' : 'closed';
 }
 
+function getAutoFixAssignee(run) {
+  // A scheduled or otherwise unattended run must never inherit an account merely
+  // because GitHub records the workflow editor/owner as its actor.
+  if (run?.event !== 'workflow_dispatch') return '';
+
+  // On reruns, triggering_actor identifies the person who clicked Re-run.
+  // On the initial attempt, actor identifies the person who clicked Run workflow.
+  const attempt = Number(run?.run_attempt || 1);
+  const actor = attempt > 1 && run?.triggering_actor ? run.triggering_actor : run?.actor;
+  if (actor?.type !== 'User') return '';
+
+  const login = typeof actor.login === 'string' ? actor.login.trim() : '';
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login) || /\[bot\]$/i.test(login)) {
+    return '';
+  }
+  return login;
+}
+
 function shouldDispatchAutoFix(report, issue) {
   const isReporterBot = issue?.user?.login === 'github-actions[bot]';
   const hasReviewLabel = Array.isArray(issue?.labels)
@@ -396,6 +414,7 @@ module.exports = {
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
+  getAutoFixAssignee,
   getReportIssueState,
   parseFindingCounts,
   shouldDispatchAutoFix,

@@ -12,6 +12,7 @@ const {
   extractFinalReport,
   extractInventorySummary,
   extractNoopMessage,
+  getAutoFixAssignee,
   getReportIssueState,
   parseFindingCounts,
   shouldDispatchAutoFix,
@@ -331,6 +332,37 @@ test('chooses state on creation but preserves human state on every rerun', () =>
   assert.equal(getReportIssueState({ needsAttention: true }, { state: 'closed' }), 'closed');
 });
 
+test('assigns Auto Fix PRs only to the human who manually started the originating run', () => {
+  assert.equal(getAutoFixAssignee({
+    event: 'workflow_dispatch',
+    run_attempt: 1,
+    actor: { login: 'wjc2821296948', type: 'User' },
+  }), 'wjc2821296948');
+
+  // On a rerun, prefer the person who clicked Re-run over the original actor.
+  assert.equal(getAutoFixAssignee({
+    event: 'workflow_dispatch',
+    run_attempt: 2,
+    actor: { login: 'original-user', type: 'User' },
+    triggering_actor: { login: 'rerun-user', type: 'User' },
+  }), 'rerun-user');
+
+  // A scheduled workflow is unattended even if GitHub reports a human actor.
+  assert.equal(getAutoFixAssignee({
+    event: 'schedule',
+    actor: { login: 'workflow-editor', type: 'User' },
+  }), '');
+  assert.equal(getAutoFixAssignee({
+    event: 'workflow_dispatch',
+    actor: { login: 'github-actions[bot]', type: 'Bot' },
+  }), '');
+  assert.equal(getAutoFixAssignee({
+    event: 'workflow_dispatch',
+    actor: { login: 'bad/login', type: 'User' },
+  }), '');
+  assert.equal(getAutoFixAssignee({ event: 'workflow_dispatch' }), '');
+});
+
 test('dispatches automatic fixes only for successful, reliable, open review reports', () => {
   const report = {
     executionSucceeded: true,
@@ -388,11 +420,17 @@ test('keeps workflow dispatch permission isolated and trusts the reporter identi
   assert.match(publishJob, /issues: write/);
   assert.doesNotMatch(publishJob, /actions: write|contents: write|pull-requests: write/);
   assert.match(dispatchJob, /permissions:\n      actions: write/);
+  assert.match(publishJob, /auto_fix_assignee: \$\{\{ steps\.publish-report\.outputs\.auto_fix_assignee \}\}/);
+  assert.match(dispatchJob, /ASSIGNEE: \$\{\{ needs\.publish\.outputs\.auto_fix_assignee \}\}/);
+  assert.match(dispatchJob, /if \(assignee\) inputs\.assignee = assignee/);
+  assert.doesNotMatch(dispatchJob, /github\.actor/);
   assert.doesNotMatch(dispatchJob, /actions\/checkout|download-artifact|\n\s+run:/);
 
   assert.match(autoFixWorkflow, /min-integrity: approved/);
   assert.match(autoFixWorkflow, /trusted-users:\n\s+- "github-actions\[bot\]"/);
   assert.doesNotMatch(autoFixWorkflow, /approval-labels:/);
+  assert.match(autoFixWorkflow, /assignees: \$\{\{ inputs\.assignee \}\}/);
+  assert.match(autoFixWorkflow, /scheduled, bot, or otherwise unattended runs/);
 
   assert.match(bootstrapSource, /permissions:\n  contents: read/);
   assert.doesNotMatch(bootstrapSource, /issues: write|pull-requests: write|contents: write/);
