@@ -27,6 +27,7 @@ jobs:
     outputs:
       auto_fix_enabled: ${{ steps.publish-report.outputs.auto_fix_enabled }}
       auto_fix_issue_number: ${{ steps.publish-report.outputs.auto_fix_issue_number }}
+      auto_fix_assignee: ${{ steps.publish-report.outputs.auto_fix_assignee }}
     steps:
       - name: Check out the trusted default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,7 +74,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { buildReviewData, getReportIssueState, shouldDispatchAutoFix, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
+            const { buildReviewData, getAutoFixAssignee, getReportIssueState, shouldDispatchAutoFix, upsertRerunSummary } = require('./.github/scripts/ai-review-issue-report.cjs');
             const run = context.payload.workflow_run;
             const report = buildReviewData({
               agentDir: 'report-agent',
@@ -158,6 +159,11 @@ jobs:
             const autoFixEnabled = shouldDispatchAutoFix(report, issue);
             core.setOutput('auto_fix_enabled', autoFixEnabled ? 'true' : 'false');
             core.setOutput('auto_fix_issue_number', autoFixEnabled ? String(issue.number) : '');
+            const autoFixAssignee = autoFixEnabled ? getAutoFixAssignee(run) : '';
+            core.setOutput('auto_fix_assignee', autoFixAssignee);
+            core.info(autoFixAssignee
+              ? `The originating human actor @${autoFixAssignee} will be assigned to resulting draft PRs.`
+              : 'No automatic PR assignee: the originating run was not manually started by a human user.');
             core.info(autoFixEnabled
               ? `Queued AI Review Auto Fix dispatch for trusted report Issue #${issue.number}.`
               : 'Automatic fixes were not dispatched: report is incomplete, unreliable, closed, untrusted, or has no findings.');
@@ -175,7 +181,7 @@ jobs:
     needs: publish
     if: needs.publish.outputs.auto_fix_enabled == 'true'
     runs-on: ubuntu-latest
-    # This job receives only a validated issue number and has no access to repository contents or issues.
+    # This job receives only validated scalar outputs and has no access to repository contents or issues.
     permissions:
       actions: write
     steps:
@@ -184,6 +190,7 @@ jobs:
         env:
           ISSUE_NUMBER: ${{ needs.publish.outputs.auto_fix_issue_number }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          ASSIGNEE: ${{ needs.publish.outputs.auto_fix_assignee }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -195,11 +202,19 @@ jobs:
             if (!defaultBranch || defaultBranch.startsWith('-')) {
               throw new Error('Refusing to dispatch: repository default branch is unavailable or invalid.');
             }
+            const assignee = process.env.ASSIGNEE || '';
+            if (assignee && !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(assignee)) {
+              throw new Error('Refusing to dispatch: invalid validated human assignee login.');
+            }
+            const inputs = { issue_number: issueNumber };
+            if (assignee) inputs.assignee = assignee;
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'ai-review-auto-fix.lock.yml',
               ref: defaultBranch,
-              inputs: { issue_number: issueNumber },
+              inputs,
             });
-            core.info(`Dispatched AI Review Auto Fix for trusted report Issue #${issueNumber}.`);
+            core.info(assignee
+              ? `Dispatched AI Review Auto Fix for trusted report Issue #${issueNumber}; draft PRs will be assigned to @${assignee}.`
+              : `Dispatched AI Review Auto Fix for trusted report Issue #${issueNumber} without an automatic assignee.`);
