@@ -153,6 +153,21 @@ test('extracts bounded file inventory counts from the report table', () => {
   assert.equal(extractInventorySummary(report), '4 read; 1 unavailable');
 });
 
+test('extracts bounded file inventory when report tables use a Status column', () => {
+  const report = [
+    '## 2. Bounded file inventory (20/20 explicit paths available)',
+    '| Group | Files | Status |',
+    '|---|---|---|',
+    '| Docs | `README.md`, `package.json` | Read in full |',
+    '| Application | `src/main.js`, `src/api.js` | Read in full |',
+    '| Tests | `tests/api.test.js` | Read in full |',
+    '| Missing | `src/missing.js` | Unavailable |',
+    '## 3. Architecture',
+  ].join('\n');
+
+  assert.equal(extractInventorySummary(report), '5 read; 1 unavailable');
+});
+
 test('builds commit links only from a validated Actions run URL', () => {
   const run = {
     id: 123456,
@@ -386,6 +401,26 @@ test('dispatches automatic fixes only for successful, reliable, open review repo
   assert.equal(shouldDispatchAutoFix(report, { ...issue, user: { login: 'some-contributor' } }), false);
   assert.equal(shouldDispatchAutoFix(report, { ...issue, user: { login: 'github-actions[bot]' }, body: 'forged report' }), false);
   assert.equal(shouldDispatchAutoFix(report, { ...issue, title: 'Unrelated issue' }), false);
+});
+
+test('Bootstrap explicitly reviews its own AI maintenance control plane', () => {
+  const bootstrapSource = fs.readFileSync(
+    new URL('../.github/workflows/ai-maintenance-bootstrap.md', import.meta.url),
+    'utf8',
+  );
+
+  for (const file of [
+    '.github/workflows/ai-review-issue-reporter.yml',
+    '.github/workflows/ai-review-auto-fix.md',
+    '.github/scripts/ai-review-issue-report.cjs',
+    'tests/ai-review-issue-report.test.js',
+    'tests/ai-review-auto-fix.test.js',
+  ]) {
+    assert.ok(bootstrapSource.includes(file), `Bootstrap scope must include ${file}`);
+  }
+  assert.match(bootstrapSource, /Audit the AI-maintenance control plane itself/);
+  assert.match(bootstrapSource, /Treat generated `\.lock\.yml` files as compiler outputs/);
+  assert.match(bootstrapSource, /Do not query workflow runs, job logs, or other Actions API data/);
 });
 
 test('keeps workflow dispatch permission isolated and trusts the reporter identity, not labels', () => {
