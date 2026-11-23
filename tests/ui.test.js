@@ -132,6 +132,12 @@ test("escapeHtml escapes HTML metacharacters while preserving ordinary URL slash
   );
 });
 
+test("escapeHtml preserves numeric API metrics including zero", () => {
+  assert.equal(escapeHtml(0), "0");
+  assert.equal(escapeHtml(42), "42");
+  assert.equal(escapeHtml(-1.5), "-1.5");
+});
+
 test("escapeHtml handles null and undefined", () => {
   assert.equal(escapeHtml(null), "");
   assert.equal(escapeHtml(undefined), "");

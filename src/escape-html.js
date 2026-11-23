@@ -1,7 +1,7 @@
 /**
  * Escape untrusted text before interpolating it into HTML text or quoted
  * attribute contexts. Importing this module does not require a DOM.
- * @param {string|null|undefined} str
+ * @param {unknown} str
  * @returns {string}
  */
 export function escapeHtml(str) {
