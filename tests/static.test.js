@@ -161,10 +161,16 @@ test("all non-generated GitHub Actions workflow dependencies are pinned to commi
   const workflows = readdirSync(workflowsDir)
     .filter(file => file.endsWith(".yml") && !file.endsWith(".lock.yml"));
   const unpinned = [];
+  const actionUseLines = ["  uses: owner/action@v1", "    - uses: owner/action@v1"];
+  assert.equal(
+    actionUseLines.filter(line => [...line.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/gm)].length).length,
+    2,
+    "the scanner must recognize both mapping and sequence-item uses syntax",
+  );
 
   for (const file of workflows) {
     const source = readFileSync(join(workflowsDir, file), "utf8");
-    for (const match of source.matchAll(/^\s*uses:\s*([^\s#]+)/gm)) {
+    for (const match of source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/gm)) {
       const reference = match[1];
       if (reference.startsWith("./") || reference.startsWith("docker://")) continue;
       if (!/^.+@[0-9a-f]{40}$/.test(reference)) {
