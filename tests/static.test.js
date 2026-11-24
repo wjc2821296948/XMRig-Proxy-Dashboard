@@ -156,6 +156,37 @@ test("dangerous dynamic-code primitives are absent from application sources", ()
 });
 
 
+test("all non-generated GitHub Actions workflow dependencies are pinned to commit SHAs", () => {
+  const workflowsDir = join(root, ".github/workflows");
+  const workflows = readdirSync(workflowsDir)
+    .filter(file => file.endsWith(".yml") && !file.endsWith(".lock.yml"));
+  const unpinned = [];
+  const actionUseLines = ["  uses: owner/action@v1", "    - uses: owner/action@v1"];
+  assert.equal(
+    actionUseLines.filter(line => [...line.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/gm)].length).length,
+    2,
+    "the scanner must recognize both mapping and sequence-item uses syntax",
+  );
+
+  for (const file of workflows) {
+    const source = readFileSync(join(workflowsDir, file), "utf8");
+    for (const match of source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/gm)) {
+      const reference = match[1];
+      if (reference.startsWith("./") || reference.startsWith("docker://")) continue;
+      if (!/^.+@[0-9a-f]{40}$/.test(reference)) {
+        unpinned.push(`${file}: ${reference}`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    unpinned,
+    [],
+    `workflow actions must use immutable 40-character commit SHAs:\n${unpinned.join("\n")}`,
+  );
+});
+
+
 test("PR Agent action is immutable-pinned and cannot write repository content", () => {
   const workflow = read(".github/workflows/pr_agent.yml");
 
