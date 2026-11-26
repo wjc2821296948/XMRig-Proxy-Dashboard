@@ -69,6 +69,9 @@ jobs:
       # Keep critical PR-Agent settings in the workflow so they are available
       # even when .pr_agent.toml is introduced or changed by the current PR.
       config.custom_model_max_tokens: "131072"
+      # Separate repository variables let the primary and fallback tiers change independently.
+      config.model: ${{ vars.PR_AGENT_MODEL || 'openai/glm-5.3-flash' }}
+      config.fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS || '["openai/minimax-m3.1-flash", "openai/nvidia/nemotron-3-ultra-550b-a55b", "openai/glm-4.7-flash"]' }}
       OPENAI.API_BASE: "https://litellm.lrate.top/v1"
       github_action_config.auto_review: "true"
       github_action_config.auto_describe: "false"
