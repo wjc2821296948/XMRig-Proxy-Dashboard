@@ -21,6 +21,7 @@ engine:
       }
     }
   env:
+    GH_AW_PI_MODEL: ${{ vars.AI_MAINTENANCE_BOOTSTRAP_MODEL || 'openai/glm-5.3-flash' }}
     OPENAI_BASE_URL: "https://litellm.lrate.top/v1"
     OPENAI_API_KEY: ${{ secrets.LITELLM_API_KEY }}
 
