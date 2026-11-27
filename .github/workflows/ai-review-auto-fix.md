@@ -111,6 +111,7 @@ tools:
   cli-proxy: false
 
 max-turns: 40
+max-turn-cache-misses: 20
 max-tool-calls: 160
 max-ai-credits: 120
 timeout-minutes: 45
