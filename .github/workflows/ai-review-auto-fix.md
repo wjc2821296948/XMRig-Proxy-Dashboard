@@ -17,6 +17,10 @@ on:
 concurrency:
   job-discriminator: ${{ inputs.issue_number || github.run_id }}
 
+env:
+  AI_AUTO_FIX_RUN_ID: ${{ github.run_id }}
+  AI_AUTO_FIX_RUN_ATTEMPT: ${{ github.run_attempt }}
+
 # Reject decimals, zero, negative values, and non-numeric input before the AI agent starts.
 steps:
   - name: Validate issue number input
@@ -50,8 +54,6 @@ engine:
     GH_AW_PI_MODEL: ${{ vars.AI_REVIEW_AUTO_FIX_MODEL || 'openai/glm-5.3-flash' }}
     OPENAI_BASE_URL: "https://litellm.lrate.top/v1"
     OPENAI_API_KEY: ${{ secrets.LITELLM_API_KEY }}
-    AI_AUTO_FIX_RUN_ID: ${{ github.run_id }}
-    AI_AUTO_FIX_RUN_ATTEMPT: ${{ github.run_attempt }}
 
 network:
   allowed:
@@ -103,23 +105,33 @@ tools:
   bash:
     - npm test
     - node --check
+    - node --version
     - git status
+    - git status --short
     - git diff
     - git diff --check
     - git switch
     - git branch
+    - git branch --show-current
+    - git remote -v
     - git add
     - git commit
     - git log
+    - git log --oneline -5
+    - git log --oneline -3
     - git show
     - git rev-parse
+    - "date -u +%F"
     - date
     - cat
     - sed
     - grep
+    - "grep:*"
     - find
     - ls
+    - "ls:*"
     - head
+    - "head:*"
     - tail
   cli-proxy: false
 
@@ -137,6 +149,20 @@ This workflow receives an `issue_number` and an optional `assignee` from the tru
 ## Explicit target supplied by the workflow
 
 The sole target Issue for this run is **#${{ inputs.issue_number }}**. This value is interpolated directly into the Agent task prompt by gh-aw. Treat it as the authoritative target, not as a hint. Before using GitHub tools, validate that this injected value is a positive decimal integer. If it is absent or malformed, stop without searching for another Issue. You must never discover, guess, select, or fall back to a different Issue.
+
+## Trusted workflow run metadata
+
+- Workflow run ID: `${{ env.AI_AUTO_FIX_RUN_ID }}`
+- Workflow run attempt: `${{ env.AI_AUTO_FIX_RUN_ATTEMPT }}`
+
+These values are injected by GitHub Actions and are authoritative. Use them verbatim when constructing run-scoped branches; never try to retrieve them from shell environment variables or infer them from Issue content.
+
+## Bash command discipline
+
+- Run one simple command per Bash tool call. Do not chain commands with `&&`, `||`, `;`, or pipes.
+- Do not use redirects, command substitution, shell variable expansion, or compound shell syntax.
+- Use the `read` tool to inspect file contents. Use a single `grep` or `find` call for searches.
+- If a command is denied, do not retry it with alternate shell syntax; use the appropriate read/search tool or stop.
 
 ## Mandatory preflight
 
@@ -156,7 +182,7 @@ For each candidate finding:
 1. Derive a stable lowercase slug from the normalized finding title (not the report-local finding number), using short kebab-case words. Make one narrowly scoped PR search for this exact slug/marker across open, closed, and merged states, and one exact-branch existence check for the run-scoped branch. Do not run broad PR, branch, commit, or Issue searches. Reuse each result; never repeat an identical query. If a matching PR exists in any state, or the exact current run-scoped branch already exists, do not recreate it. An orphan branch from a different run or attempt must not block this run, because each invocation intentionally receives a unique branch. Inspect only the relevant code on `main`; do not repeat a fix that has already landed.
 2. Only auto-fix a clear, local correctness or documentation issue with a testable expected result. Skip findings that require product decisions, broad refactors, uncertain behavior changes, or privileged/security-sensitive judgment.
 3. Never modify `.github/workflows/**`, `.github/actions/**`, repository secrets, permissions, authentication/authorization boundaries, release/publish configuration, dependency manifests or lockfiles, deployment/infra configuration, or generated/vendor files. If a finding requires one of these paths, skip it and explain why. The safe-output `allowed-files` list is an additional hard boundary: only `src/**`, `tests/**`, `bin/**`, `docs/**`, `index.html`, and `styles.css` may enter an auto-fix PR. All other paths (including `renovate.json`, release/deployment scripts, `_headers`, and `service-worker.js`) are rejected. The default protected-files policy also blocks the entire `.github/` path, including workflow YAML/Markdown, Dependabot configuration, and repository security settings.
-4. Start a fresh branch from `main` using this exact format: `ai-auto-fix/<UTC-date>/<run-id>-<run-attempt>-<slug>`. Obtain the trusted run ID and attempt only from the workflow-provided environment variables `AI_AUTO_FIX_RUN_ID` and `AI_AUTO_FIX_RUN_ATTEMPT`, never from the Issue body. Derive `<UTC-date>` using `date -u +%F` on the GitHub-hosted Linux runner; validate it matches `YYYY-MM-DD`, and validate run ID and attempt are positive decimal integers. The slug is the stable lowercase finding slug from step 1. Example: `ai-auto-fix/2026-11-23/45042781769-2-html-injection-unvalidated-api-values-renderdashboard`. The run ID separates different workflow runs, the attempt separates retries of one run, and the finding slug allows multiple independent PRs in a single run. Make changes for this finding only. Do not carry another finding's uncommitted or committed changes into the branch.
+4. Start a fresh branch from `main` using this exact format: `ai-auto-fix/<UTC-date>/<run-id>-<run-attempt>-<slug>`. Use the trusted Workflow run ID and Workflow run attempt injected above verbatim; never retrieve them from shell environment variables or infer them from the Issue body. Derive `<UTC-date>` using `date -u +%F` on the GitHub-hosted Linux runner; validate it matches `YYYY-MM-DD`, and validate run ID and attempt are positive decimal integers. The slug is the stable lowercase finding slug from step 1. Example: `ai-auto-fix/2026-11-23/45042781769-2-html-injection-unvalidated-api-values-renderdashboard`. The run ID separates different workflow runs, the attempt separates retries of one run, and the finding slug allows multiple independent PRs in a single run. Make changes for this finding only. Do not carry another finding's uncommitted or committed changes into the branch.
 5. Run the full `npm test` suite and `git diff --check` for this finding. If either fails, do not create a PR for it; stop the run rather than hiding a failure. Do not weaken, delete, or skip tests to make a change pass.
 6. Inspect `git diff` and stage only the exact files required for this finding. Create one focused commit, then emit exactly one `create_pull_request` safe output for this branch. Include the stable slug in the PR title (the configured `[ai] ` prefix is added automatically). The body must contain: the finding ID/title, evidence and root cause, exact fix, tests run/results, and `Reported in #<issue_number>`. Include both markers `<!-- ai-review-finding:<slug> -->` and `<!-- ai-review-issue:<issue_number> -->` in the PR body.
 7. Do not include `Fixes #`, `Closes #`, or `Resolves #` for the report issue. The report Issue must remain open until a human verifies all findings and closes it.
