@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: "Open ai-review report Issue to process"
+        description: "Positive integer issue number to process"
         required: true
-        type: string
+        type: number
       assignee:
         description: "Validated human who manually started the originating Bootstrap run (leave empty for scheduled/bot runs)"
         required: false
@@ -16,6 +16,19 @@ on:
 
 concurrency:
   job-discriminator: ${{ inputs.issue_number || github.run_id }}
+
+# Reject decimals, zero, negative values, and non-numeric input before the AI agent starts.
+steps:
+  - name: Validate issue number input
+    id: validate-issue-number
+    shell: bash
+    env:
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
+    run: |
+      if [[ ! "$ISSUE_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+        echo "::error::issue_number must be a positive integer (received an invalid value)."
+        exit 1
+      fi
 
 permissions:
   contents: read
