@@ -5,7 +5,6 @@
  *  - Toast notifications
  *  - Skeleton loading placeholders
  *  - Formatting utilities (hashrate, bytes, uptime, numbers)
- *  - Status classification helpers
  */
 
 import { setLocalizedText } from "./i18n-ui.js";
@@ -125,17 +124,4 @@ export function formatUptime(seconds) {
 export function formatNumber(num) {
   if (!Number.isFinite(num) || num < 0) return "—";
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-/**
- * Determine status class and text.
- */
-export function getStatusInfo(miners) {
-  if (!miners || miners.now === 0) {
-    return { cls: "status-offline", text: "离线" };
-  }
-  if (miners.now < miners.max * 0.5) {
-    return { cls: "status-warning", text: "预警" };
-  }
-  return { cls: "status-online", text: "在线" };
 }

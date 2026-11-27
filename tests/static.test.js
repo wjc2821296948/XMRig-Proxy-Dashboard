@@ -558,6 +558,13 @@ test("interactive history chart initializes after insertion and restores the clo
   assert.doesNotMatch(chart, /measuredWidth > 0 \? measuredWidth : 280/);
   assert.doesNotMatch(chart, /getBoundingClientRect\(\)\.width \|\| 720/);
 });
+test("status classification only lives in status.js", () => {
+  const ui = read("src/ui.js");
+  const status = read("src/status.js");
+  assert.doesNotMatch(ui, /export function getStatusInfo/);
+  assert.match(status, /export function getStatusInfo/);
+});
+
 test("renderDashboard escapes unvalidated API-derived metric interpolations", () => {
   const main = read("src/main.js");
 

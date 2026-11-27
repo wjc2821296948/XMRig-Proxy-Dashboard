@@ -6,7 +6,6 @@ import {
   formatHashrate,
   formatNumber,
   formatUptime,
-  getStatusInfo,
 } from "../src/ui.js";
 import { escapeHtml } from "../src/escape-html.js";
 
@@ -35,22 +34,6 @@ test("number formatting inserts thousands separators", () => {
   assert.equal(formatNumber(999), "999");
   assert.equal(formatNumber(1234567), "1,234,567");
 });
-
-test("basic UI status helper preserves offline and warning boundaries", () => {
-  assert.deepEqual(
-    getStatusInfo({ now: 0, max: 10 }),
-    { cls: "status-offline", text: "离线" },
-  );
-  assert.deepEqual(
-    getStatusInfo({ now: 4, max: 10 }),
-    { cls: "status-warning", text: "预警" },
-  );
-  assert.deepEqual(
-    getStatusInfo({ now: 5, max: 10 }),
-    { cls: "status-online", text: "在线" },
-  );
-});
-
 
 test("toast notifications announce status and have a removal fallback", async () => {
   const { showToast } = await import("../src/ui.js");
