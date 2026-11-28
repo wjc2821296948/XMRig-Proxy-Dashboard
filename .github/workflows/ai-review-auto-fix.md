@@ -127,7 +127,7 @@ max-turns: 40
 max-turn-cache-misses: 200
 max-tool-calls: 160
 max-ai-credits: 10000
-timeout-minutes: 45
+timeout-minutes: 120
 ---
 
 # AI Review Auto Fix — One Finding, One Draft PR
