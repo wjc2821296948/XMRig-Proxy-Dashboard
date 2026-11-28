@@ -126,12 +126,9 @@ tools:
     - cat
     - sed
     - grep
-    - "grep:*"
     - find
     - ls
-    - "ls:*"
     - head
-    - "head:*"
     - tail
   cli-proxy: false
 
@@ -161,7 +158,8 @@ These values are injected by GitHub Actions and are authoritative. Use them verb
 
 - Run one simple command per Bash tool call. Do not chain commands with `&&`, `||`, `;`, or pipes.
 - Do not use redirects, command substitution, shell variable expansion, or compound shell syntax.
-- Use the `read` tool to inspect file contents. Use a single `grep` or `find` call for searches.
+- Use the GitHub `search_code` tool for repository code searches, scoped to this repository and a precise symbol or phrase. Use the `read` tool to inspect the exact matching file and relevant lines.
+- Do not use Bash `grep`, `find`, `ls`, or `head` to search or inspect repository files. Their unrestricted argument forms are intentionally not allowlisted.
 - If a command is denied, do not retry it with alternate shell syntax; use the appropriate read/search tool or stop.
 
 ## Mandatory preflight
