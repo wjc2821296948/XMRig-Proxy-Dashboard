@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const source = fs.readFileSync('.github/workflows/ai-review-auto-fix.md', 'utf8');
-const lock = fs.readFileSync('.github/workflows/ai-review-auto-fix.lock.yml', 'utf8');
+const source = fs.readFileSync(new URL('../.github/workflows/ai-review-auto-fix.md', import.meta.url), 'utf8');
+const lock = fs.readFileSync(new URL('../.github/workflows/ai-review-auto-fix.lock.yml', import.meta.url), 'utf8');
 
 test('AI Auto Fix allows the agent execution step up to 120 minutes', () => {
   assert.match(source, /^timeout-minutes:\s*120\s*$/m);
