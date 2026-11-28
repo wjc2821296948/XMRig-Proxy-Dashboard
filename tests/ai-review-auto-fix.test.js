@@ -91,3 +91,13 @@ test('AI Auto Fix safe output allowlist only accepts the dated run-scoped branch
   assert.match(lock, /allowed_branches.*ai-auto-fix\/\*\/\*/);
   assert.doesNotMatch(source, /ai-review-fix\//);
 });
+
+
+test('AI Auto Fix links each generated PR to its report Issue without auto-closing it', () => {
+  assert.match(source, /standalone `Closes #<issue_number>` line/);
+  assert.match(source, /Development section/);
+  assert.match(source, /Auto-close issues with merged linked pull requests.*disabled/s);
+  assert.match(source, /auto-close-issue: false/);
+  assert.match(source, /If the repository setting is ever re-enabled, this guarantee no longer holds/);
+  assert.ok(lock.includes('auto_close_issue\\":false'));
+});
